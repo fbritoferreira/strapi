@@ -4,15 +4,15 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![npm downloads](https://img.shields.io/npm/dm/@fbritoferreira/strapi.svg)](https://www.npmjs.com/package/@fbritoferreira/strapi)
 
-A lightweight, generic TypeScript client for Strapi CMS v5, supporting CRUD operations, query parameters (filters, populate, pagination), and internationalization (i18n) with locale-specific creates/updates [web:13]. Built with modern ES modules and Fetch API, it handles error responses and nested filters via `qs` serialization [web:39].
+A lightweight, generic TypeScript client for Strapi CMS v5, supporting CRUD operations, query parameters (filters, populate, pagination), and internationalization (i18n) with locale-specific creates/updates. Built with modern ES modules and Fetch API, it handles error responses and nested filters via `qs` serialization.
 
 ## Features
 
-- **Generic TypeScript Support**: Define your entity types (e.g., `{ id: number; name: string; documentId?: string }`) for full type safety on requests/responses [web:32].
+- **Generic TypeScript Support**: Define your entity types (e.g., `{ id: number; name: string; documentId?: string }`) for full type safety on requests/responses.
 - **CRUD Operations**: `findMany`, `find`, `create`, `update`, `delete`.
 - **Upsert**: Atomic create-or-update based on filters.
-- **i18n Handling**: Automatic default locale creation and localization linking using numeric IDs [web:34].
-- **Query Params**: Supports Strapi's filters (e.g., `{ name: { $eq: 'foo' } }`), populate (`*`), pagination, and locale [web:35].
+- **i18n Handling**: Automatic default locale creation and localization linking using numeric IDs.
+- **Query Params**: Supports Strapi's filters (e.g., `{ name: { $eq: 'foo' } }`), populate (`*`), pagination, and locale.
 - **Error Handling**: Returns `[ServiceError | null, Data | null]` tuples for async operations.
 - **No Dependencies**: Only `qs` for query stringification; polyfills Fetch if needed.
 
@@ -39,50 +39,50 @@ Import and instantiate the client with your Strapi base URL, optional auth token
 ```ts
 import { StrapiClient } from "@fbritoferreira/strapi";
 import type {
-  CreatePayload,
-  QueryParams,
-  StrapiFilters,
+	CreatePayload,
+	QueryParams,
+	StrapiFilters,
 } from "@fbritoferreira/strapi/types";
 
 interface Article {
-  id: number;
-  documentId?: string;
-  title: string;
-  content: string;
+	id: number;
+	documentId?: string;
+	title: string;
+	content: string;
 }
 
 const client = new StrapiClient<Article>(
-  "http://localhost:1337", // Strapi API base
-  "your-jwt-token", // Optional for auth
-  "articles" // UID for /api/articles
+	"http://localhost:1337", // Strapi API base
+	"your-jwt-token", // Optional for auth
+	"articles" // UID for /api/articles
 );
 
 // Find multiple
 const [err1, articles] = await client.findMany({ populate: ["*"] });
 if (!err1 && articles) {
-  console.log(articles); // Article[]
+	console.log(articles); // Article[]
 }
 
 // Find one by ID
 const [err2, article] = await client.find({ id: 1 });
 if (!err2 && article) {
-  console.log(article); // Article | null
+	console.log(article); // Article | null
 }
 
 // Create (default locale 'en')
 const payload: CreatePayload<Article> = {
-  data: { title: "New Article", content: "Hello World" },
+	data: { title: "New Article", content: "Hello World" },
 };
 const [err3, newArticle] = await client.create({ payload });
 if (!err3 && newArticle) {
-  console.log(newArticle); // Article
+	console.log(newArticle); // Article
 }
 
 // Upsert with filters (create if not exists)
 const filters: StrapiFilters<Article> = { title: { $eq: "Existing Title" } };
 const [err4, upserted] = await client.upsert({ payload, filters });
 if (!err4 && upserted) {
-  console.log(upserted); // Article
+	console.log(upserted); // Article
 }
 ```
 
@@ -116,10 +116,10 @@ Pass `QueryParams<Article>` for filters, populate, etc. Nested filters use `$eq`
 
 ```ts
 const params: QueryParams<Article> = {
-  filters: { title: { $eq: "Exact Title" } },
-  populate: ["category", "author"],
-  pagination: { pageSize: 10 },
-  locale: "fr",
+	filters: { title: { $eq: "Exact Title" } },
+	populate: ["category", "author"],
+	pagination: { pageSize: 10 },
+	locale: "fr",
 };
 const [err, paginated] = await client.findMany(params);
 ```
@@ -131,7 +131,7 @@ Methods return `[ServiceError | null, Data | null]`. Check `err` for issues like
 ```ts
 const [err, data] = await client.find({ id: 999 });
 if (err) {
-  console.error(err.message, err.status); // e.g., "Strapi API error: 404 Not Found"
+	console.error(err.message, err.status); // e.g., "Strapi API error: 404 Not Found"
 }
 ```
 
