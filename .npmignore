@@ -1,0 +1,64 @@
+# Source code (don't publish TS/JS sources; only built)
+src/
+*.ts
+*.tsx
+!*.d.ts
+!*.d.mts
+!types/
+
+# Tests and dev files
+test/
+tests/
+__tests__/
+*.spec.ts
+*.test.ts
+*.spec.tsx
+*.test.tsx
+vitest.config.ts
+coverage/
+jest.config.js
+
+# Build configs and tools
+vite.config.ts
+tsconfig.json
+tsconfig*.json
+eslint.config.js
+*.eslint*
+.prettierrc
+.nycrc
+.nycrc.json
+npm-shrinkwrap.json
+
+# Docs and examples (optional; include README but ignore others)
+docs/
+examples/
+CHANGELOG.md
+CONTRIBUTING.md
+TODO.md
+
+# Dependencies (npm handles this)
+node_modules/
+pnpm-lock.yaml
+yarn.lock
+package-lock.json
+
+# Logs and temp
+*.log
+.DS_Store
+tmp/
+*.tmp
+
+# IDE
+.vscode/
+.idea/
+
+# Git
+.git/
+.gitignore
+
+# Include these explicitly for the package
+!dist/
+!README.md
+!LICENSE
+!package.json
+!CHANGELOG.md  # If you want versionrsion history
