@@ -38,17 +38,17 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-pnpm-store-
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
         with:
-          node-version: "24"
-          cache: "pnpm"
-          registry-url: "https://registry.npmjs.org"
+          run_install: false
 
-      - name: Enable pnpm with Corepack
-        run: |
-          corepack enable
-          corepack prepare pnpm@latest --activate
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+          registry-url: "https://registry.npmjs.org"
 
       - name: Update npm for pnpm's OIDC support
         if: steps.changesets.outputs.changesets == 'true'
