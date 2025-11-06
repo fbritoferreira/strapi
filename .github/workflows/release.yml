@@ -75,14 +75,14 @@ jobs:
         run: pnpm changeset version
 
       - name: Commit and push version changes
-        needs: [steps.changesets-version]
+        if: steps.changesets.outputs.changesets == 'true'
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
 
           NEW_VERSION=$(jq -r .version package.json)
 
-          git add package.json CHANGELOG.md
+          git add -A
           git commit -m "Version Packages (v${NEW_VERSION}) [skip ci]" || echo "No changes to commit"
           git push origin main
         env:
