@@ -45,6 +45,11 @@ jobs:
           cache: "pnpm"
           registry-url: "https://registry.npmjs.org"
 
+      - name: Enable pnpm with Corepack
+        run: |
+          corepack enable
+          corepack prepare pnpm@latest --activate
+
       - name: Update npm for pnpm's OIDC support
         if: steps.changesets.outputs.changesets == 'true'
         run: npm install -g npm@latest
@@ -67,20 +72,16 @@ jobs:
       - name: Version and changelog with pnpm (if changesets exist)
         if: steps.changesets.outputs.changesets == 'true'
         run: |
-          # Run Changesets version (updates package.json and CHANGELOG.md locally)
           pnpm changeset version
 
       - name: Commit and push version changes
         if: steps.changesets.outputs.changesets == 'true'
         run: |
-          # Stage the updated files
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
 
-          # Get new version from package.json
           NEW_VERSION=$(jq -r .version package.json)
 
-          # Commit with [skip ci] to avoid re-triggering
           git add package.json CHANGELOG.md
           git commit -m "Version Packages (v${NEW_VERSION}) [skip ci]" || echo "No changes to commit"
           git push origin main
@@ -93,7 +94,8 @@ jobs:
 
       - name: Publish to npm with pnpm (using OIDC/Trusted Publishing)
         if: steps.changesets.outputs.changesets == 'true'
-        run: pnpm publish --access public --no-git-checks
+        run: |
+          pnpm publish --access public --no-git-checks
 
       - name: Extract version for release
         if: steps.changesets.outputs.changesets == 'true'
@@ -101,7 +103,7 @@ jobs:
         run: |
           NEW_VERSION=$(jq -r .version package.json)
           echo "tag=v${NEW_VERSION}" >> $GITHUB_OUTPUT
-          # Extract changelog summary (last entry from CHANGELOG.md)
+
           CHANGELOG_SECTION=$(grep -A 20 "^## ${NEW_VERSION}$" CHANGELOG.md || echo "No detailed changes available.")
           echo "changelog<<EOF" >> $GITHUB_OUTPUT
           echo "$CHANGELOG_SECTION" >> $GITHUB_OUTPUT
