@@ -71,11 +71,11 @@ jobs:
 
       - name: Version and changelog with pnpm (if changesets exist)
         if: steps.changesets.outputs.changesets == 'true'
-        run: |
-          pnpm changeset version
+        id: changesets-version
+        run: pnpm changeset version
 
       - name: Commit and push version changes
-        if: steps.changesets.outputs.changesets == 'true'
+        needs: [steps.changesets-version]
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
