@@ -35,17 +35,16 @@ export type StrapiFilters<T> = {
 	$or?: StrapiFilters<T>[];
 	$not?: StrapiFilters<T>;
 };
-//@ts-expect-error This is because populate can reference it self
+
 export type PopulateValue<T> =
 	| true
 	| "*"
 	| { populate: Populate<T> }
-	//@ts-expect-error This is because populate can reference it self
-	| Partial<Record<string, PopulateValue<T>>>;
+	| Partial<Record<keyof T, PopulateValue<T[keyof T]>>>;
 
 export type Populate<T> =
 	| "*"
-	| Partial<Record<keyof T, PopulateValue>>
+	| Partial<Record<keyof T, PopulateValue<T[keyof T]>>>
 	| string[];
 
 export type SortDirection = "asc" | "desc";
