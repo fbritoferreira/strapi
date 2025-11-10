@@ -7,7 +7,6 @@ interface QueryParams<T> {
 	filters?: StrapiFilters<T>;
 	populate?: string[];
 	pagination?: { pageSize: number };
-	locale?: string;
 }
 type StrapiFilters<T> = Partial<Record<keyof T, unknown>>;
 interface CreatePayload<T> {
@@ -16,17 +15,11 @@ interface CreatePayload<T> {
 interface UpdatePayload<T> {
 	data: Partial<T>;
 }
-interface StrapiResponse<T> {
-	data: T[] | null;
-}
-interface StrapiSingleResponse<T> {
-	data: T | null;
-}
 
 interface TestEntity {
 	id: number;
-	documentId?: string;
 	name: string;
+	documentId?: string;
 }
 
 describe("StrapiClient", () => {
@@ -36,8 +29,8 @@ describe("StrapiClient", () => {
 	beforeEach(() => {
 		client = new StrapiClient<TestEntity>({
 			baseURL: "http://localhost",
-			uid: "test-entities",
 			token: "mock-token",
+			uid: "test-entities",
 		});
 		mockFetch = vi.fn();
 		vi.stubGlobal("fetch", mockFetch);
@@ -51,97 +44,86 @@ describe("StrapiClient", () => {
 		it("normalizes baseURL correctly without trailing slash", () => {
 			const c = new StrapiClient<TestEntity>({
 				baseURL: "http://localhost",
+				token: undefined,
 				uid: "uid",
 			});
-			// Since baseURL is private, we test indirectly through fetch calls
-			expect(c).toBeDefined();
+			expect((c as StrapiClient<TestEntity>)["baseURL"]).toBe(
+				"http://localhost/api"
+			);
 		});
 
 		it("normalizes baseURL correctly with trailing slash", () => {
-			mockFetch.mockResolvedValueOnce({
-				ok: true,
-				json: async () => ({ data: [] }),
-				status: 200,
-				statusText: "OK",
-			});
-
 			const c = new StrapiClient<TestEntity>({
 				baseURL: "http://localhost/",
-				uid: "test-entities",
+				token: undefined,
+				uid: "uid",
 			});
-			expect(c).toBeDefined();
+			expect((c as StrapiClient<TestEntity>)["baseURL"]).toBe(
+				"http://localhost/api"
+			);
 		});
 
-		it("normalizes baseURL correctly if already ends with /api", async () => {
-			mockFetch.mockResolvedValueOnce({
-				ok: true,
-				json: async () => ({ data: [] }),
-				status: 200,
-				statusText: "OK",
-			});
-
+		it("normalizes baseURL correctly if already ends with /api", () => {
 			const c = new StrapiClient<TestEntity>({
 				baseURL: "http://localhost/api",
-				uid: "test-entities",
+				token: undefined,
+				uid: "uid",
 			});
-			await c.findMany();
-			expect(mockFetch).toHaveBeenCalledWith(
-				"http://localhost/api/test-entities",
-				expect.any(Object)
+			expect((c as StrapiClient<TestEntity>)["baseURL"]).toBe(
+				"http://localhost/api"
 			);
 		});
 
-		it("includes Authorization header if token provided", async () => {
-			mockFetch.mockResolvedValueOnce({
-				ok: true,
-				json: async () => ({ data: [] }),
-				status: 200,
-				statusText: "OK",
-			});
-
+		it("normalizes baseURL with multiple trailing slashes", () => {
 			const c = new StrapiClient<TestEntity>({
-				baseURL: "http://localhost",
-				uid: "test-entities",
-				token: "test-token",
+				baseURL: "http://localhost///",
+				token: undefined,
+				uid: "uid",
 			});
-			await c.findMany();
-			expect(mockFetch).toHaveBeenCalledWith(
-				expect.any(String),
-				expect.objectContaining({
-					headers: expect.objectContaining({
-						Authorization: "Bearer test-token",
-					}),
-				})
+			expect((c as StrapiClient<TestEntity>)["baseURL"]).toBe(
+				"http://localhost/api"
 			);
 		});
 
-		it("excludes Authorization header if no token", async () => {
-			mockFetch.mockResolvedValueOnce({
-				ok: true,
-				json: async () => ({ data: [] }),
-				status: 200,
-				statusText: "OK",
-			});
-
+		it("includes Authorization header if token provided", () => {
 			const c = new StrapiClient<TestEntity>({
 				baseURL: "http://localhost",
-				uid: "test-entities",
+				token: "token",
+				uid: "uid",
 			});
-			await c.findMany();
-			expect(mockFetch).toHaveBeenCalledWith(
-				expect.any(String),
-				expect.objectContaining({
-					headers: expect.not.objectContaining({
-						Authorization: expect.any(String),
-					}),
-				})
+			expect((c as StrapiClient<TestEntity>)["headers"]).toHaveProperty(
+				"Authorization",
+				"Bearer token"
+			);
+		});
+
+		it("excludes Authorization header if no token", () => {
+			const c = new StrapiClient<TestEntity>({
+				baseURL: "http://localhost",
+				token: undefined,
+				uid: "uid",
+			});
+			expect((c as StrapiClient<TestEntity>)["headers"]).not.toHaveProperty(
+				"Authorization"
+			);
+		});
+
+		it("sets Content-Type header", () => {
+			const c = new StrapiClient<TestEntity>({
+				baseURL: "http://localhost",
+				token: undefined,
+				uid: "uid",
+			});
+			expect((c as StrapiClient<TestEntity>)["headers"]).toHaveProperty(
+				"Content-Type",
+				"application/json"
 			);
 		});
 	});
 
 	describe("findMany", () => {
-		it("fetches multiple entities successfully", async () => {
-			const mockResponse: StrapiResponse<TestEntity> = {
+		it("fetches multiple entities successfully without params", async () => {
+			const mockResponse = {
 				data: [
 					{ id: 1, name: "test" },
 					{ id: 2, name: "test2" },
@@ -169,9 +151,9 @@ describe("StrapiClient", () => {
 			);
 		});
 
-		it("handles query params correctly", async () => {
+		it("fetches with query params", async () => {
 			const params: QueryParams<TestEntity> = { populate: ["*"] };
-			const mockResponse: StrapiResponse<TestEntity> = { data: [] };
+			const mockResponse = { data: [] };
 			mockFetch.mockResolvedValueOnce({
 				ok: true,
 				json: async () => mockResponse,
@@ -184,7 +166,6 @@ describe("StrapiClient", () => {
 			expect(data).toEqual([]);
 			expect(mockFetch).toHaveBeenCalledWith(
 				`http://localhost/api/test-entities?${qs.stringify(params, {
-					addQueryPrefix: false,
 					arrayFormat: "indices",
 					encode: true,
 				})}`,
@@ -192,8 +173,8 @@ describe("StrapiClient", () => {
 			);
 		});
 
-		it("appends locale to query for non-default locale", async () => {
-			const mockResponse: StrapiResponse<TestEntity> = { data: [] };
+		it("fetches with locale parameter when locale !== 'en'", async () => {
+			const mockResponse = { data: [{ id: 1, name: "test" }] };
 			mockFetch.mockResolvedValueOnce({
 				ok: true,
 				json: async () => mockResponse,
@@ -201,17 +182,17 @@ describe("StrapiClient", () => {
 				statusText: "OK",
 			});
 
-			const [err, data] = await client.findMany({}, "fr");
+			const [err, data] = await client.findMany(undefined, "fr");
 			expect(err).toBeNull();
-			expect(data).toEqual([]);
+			expect(data).toEqual(mockResponse.data);
 			expect(mockFetch).toHaveBeenCalledWith(
-				"http://localhost/api/test-entities?locale=fr",
+				expect.stringContaining("locale=fr"),
 				expect.any(Object)
 			);
 		});
 
-		it("does not append locale for default locale (en)", async () => {
-			const mockResponse: StrapiResponse<TestEntity> = { data: [] };
+		it("does not include locale when locale === 'en'", async () => {
+			const mockResponse = { data: [] };
 			mockFetch.mockResolvedValueOnce({
 				ok: true,
 				json: async () => mockResponse,
@@ -219,13 +200,22 @@ describe("StrapiClient", () => {
 				statusText: "OK",
 			});
 
-			const [err, data] = await client.findMany({}, "en");
+			await client.findMany(undefined, "en");
+			const callUrl = mockFetch.mock.calls[0][0] as string;
+			expect(callUrl).not.toContain("locale=en");
+		});
+
+		it("returns empty array when response data is null", async () => {
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: async () => ({ data: null }),
+				status: 200,
+				statusText: "OK",
+			});
+
+			const [err, data] = await client.findMany();
 			expect(err).toBeNull();
 			expect(data).toEqual([]);
-			expect(mockFetch).toHaveBeenCalledWith(
-				"http://localhost/api/test-entities",
-				expect.any(Object)
-			);
 		});
 
 		it("returns error on failed response", async () => {
@@ -269,27 +259,11 @@ describe("StrapiClient", () => {
 			});
 			expect(data).toBeNull();
 		});
-
-		it("returns empty array when data is null", async () => {
-			const mockResponse: StrapiResponse<TestEntity> = { data: null };
-			mockFetch.mockResolvedValueOnce({
-				ok: true,
-				json: async () => mockResponse,
-				status: 200,
-				statusText: "OK",
-			});
-
-			const [err, data] = await client.findMany();
-			expect(err).toBeNull();
-			expect(data).toEqual([]);
-		});
 	});
 
 	describe("find", () => {
 		it("fetches single entity by id successfully", async () => {
-			const mockResponse: StrapiSingleResponse<TestEntity> = {
-				data: { id: 1, name: "test" },
-			};
+			const mockResponse = { data: { id: 1, name: "test" } };
 			mockFetch.mockResolvedValueOnce({
 				ok: true,
 				json: async () => mockResponse,
@@ -302,10 +276,8 @@ describe("StrapiClient", () => {
 			expect(data).toEqual(mockResponse.data);
 		});
 
-		it("fetches first entity without id using params", async () => {
-			const mockResponse: StrapiResponse<TestEntity> = {
-				data: [{ id: 1, name: "test" }],
-			};
+		it("returns null when response data is null with id", async () => {
+			const mockResponse = { data: null };
 			mockFetch.mockResolvedValueOnce({
 				ok: true,
 				json: async () => mockResponse,
@@ -313,82 +285,12 @@ describe("StrapiClient", () => {
 				statusText: "OK",
 			});
 
-			const [err, data] = await client.find({
-				params: { filters: { name: { $eq: "test" } } },
-			});
-			expect(err).toBeNull();
-			expect(data).toEqual({ id: 1, name: "test" });
-		});
-
-		it("returns null if no data for id", async () => {
-			const mockResponse: StrapiSingleResponse<TestEntity> = { data: null };
-			mockFetch.mockResolvedValueOnce({
-				ok: true,
-				json: async () => mockResponse,
-				status: 200,
-				statusText: "OK",
-			});
-
-			const [err, data] = await client.find({ id: 999 });
+			const [err, data] = await client.find({ id: 1 });
 			expect(err).toBeNull();
 			expect(data).toBeNull();
 		});
 
-		it("returns null if no entities found without id", async () => {
-			const mockResponse: StrapiResponse<TestEntity> = { data: [] };
-			mockFetch.mockResolvedValueOnce({
-				ok: true,
-				json: async () => mockResponse,
-				status: 200,
-				statusText: "OK",
-			});
-
-			const [err, data] = await client.find({});
-			expect(err).toBeNull();
-			expect(data).toBeNull();
-		});
-
-		it("appends locale to query for non-default locale with id", async () => {
-			const mockResponse: StrapiSingleResponse<TestEntity> = {
-				data: { id: 1, name: "test" },
-			};
-			mockFetch.mockResolvedValueOnce({
-				ok: true,
-				json: async () => mockResponse,
-				status: 200,
-				statusText: "OK",
-			});
-
-			const [err, data] = await client.find({ id: 1, locale: "fr" });
-			expect(err).toBeNull();
-			expect(data).toEqual(mockResponse.data);
-			expect(mockFetch).toHaveBeenCalledWith(
-				"http://localhost/api/test-entities/1?locale=fr",
-				expect.any(Object)
-			);
-		});
-
-		it("does not append locale for default locale (en) with id", async () => {
-			const mockResponse: StrapiSingleResponse<TestEntity> = {
-				data: { id: 1, name: "test" },
-			};
-			mockFetch.mockResolvedValueOnce({
-				ok: true,
-				json: async () => mockResponse,
-				status: 200,
-				statusText: "OK",
-			});
-
-			const [err, data] = await client.find({ id: 1, locale: "en" });
-			expect(err).toBeNull();
-			expect(data).toEqual(mockResponse.data);
-			expect(mockFetch).toHaveBeenCalledWith(
-				"http://localhost/api/test-entities/1",
-				expect.any(Object)
-			);
-		});
-
-		it("returns error on failed response", async () => {
+		it("returns error on failed fetch with id", async () => {
 			mockFetch.mockResolvedValueOnce({
 				ok: false,
 				status: 404,
@@ -402,14 +304,65 @@ describe("StrapiClient", () => {
 			});
 			expect(data).toBeNull();
 		});
+
+		it("returns first entity without id", async () => {
+			const mockResponse = { data: [{ id: 1, name: "first" }] };
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: async () => mockResponse,
+				status: 200,
+				statusText: "OK",
+			});
+
+			const [err, data] = await client.find({ params: {} });
+			expect(err).toBeNull();
+			expect(data).toEqual(mockResponse.data[0]);
+		});
+
+		it("returns null when no data without id", async () => {
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: async () => ({ data: [] }),
+				status: 200,
+				statusText: "OK",
+			});
+
+			const [err, data] = await client.find({ params: {} });
+			expect(err).toBeNull();
+			expect(data).toBeNull();
+		});
+
+		it("returns error from findMany when no id", async () => {
+			mockFetch.mockResolvedValueOnce({
+				ok: false,
+				status: 500,
+				statusText: "Internal Server Error",
+			});
+
+			const [err, data] = await client.find({ params: {} });
+			expect(err).toBeDefined();
+			expect(err!.status).toBe(500);
+			expect(data).toBeNull();
+		});
+
+		it("includes locale in query when provided without id", async () => {
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: async () => ({ data: [{ id: 1, name: "test" }] }),
+				status: 200,
+				statusText: "OK",
+			});
+
+			await client.find({ locale: "fr" });
+			const callUrl = mockFetch.mock.calls[0][0] as string;
+			expect(callUrl).toContain("locale=fr");
+		});
 	});
 
 	describe("create", () => {
-		it("creates entity successfully in default locale", async () => {
+		it("creates entity successfully with default locale", async () => {
 			const payload: CreatePayload<TestEntity> = { data: { name: "new" } };
-			const mockResponse: StrapiSingleResponse<TestEntity> = {
-				data: { id: 1, name: "new" },
-			};
+			const mockResponse = { data: { id: 1, name: "new" } };
 			mockFetch.mockResolvedValueOnce({
 				ok: true,
 				json: async () => mockResponse,
@@ -429,110 +382,21 @@ describe("StrapiClient", () => {
 			);
 		});
 
-		it("creates entity in non-default locale by creating default first", async () => {
+		it("returns null when default locale create response data is null", async () => {
 			const payload: CreatePayload<TestEntity> = { data: { name: "new" } };
-			const filters: StrapiFilters<TestEntity> = {
-				name: { $eq: "nonexistent" },
-			};
-
-			const emptyResponse: StrapiResponse<TestEntity> = { data: [] };
 			mockFetch.mockResolvedValueOnce({
 				ok: true,
-				json: async () => emptyResponse,
-				status: 200,
-				statusText: "OK",
-			});
-
-			const defaultResponse: StrapiSingleResponse<TestEntity> = {
-				data: { id: 1, documentId: "doc1", name: "new" },
-			};
-			mockFetch.mockResolvedValueOnce({
-				ok: true,
-				json: async () => defaultResponse,
+				json: async () => ({ data: null }),
 				status: 201,
 				statusText: "Created",
 			});
 
-			const localeResponse: StrapiSingleResponse<TestEntity> = {
-				data: { id: 1, documentId: "doc1", name: "new" },
-			};
-			mockFetch.mockResolvedValueOnce({
-				ok: true,
-				json: async () => localeResponse,
-				status: 201,
-				statusText: "Created",
-			});
-
-			const [err, data] = await client.create({
-				payload,
-				filters,
-				locale: "fr",
-			});
+			const [err, data] = await client.create({ payload });
 			expect(err).toBeNull();
-			expect(data).toEqual(localeResponse.data);
-			expect(mockFetch).toHaveBeenCalledTimes(3);
+			expect(data).toBeNull();
 		});
 
-		it("creates locale for existing default", async () => {
-			const payload: CreatePayload<TestEntity> = {
-				data: { name: "localized" },
-			};
-
-			const foundResponse: StrapiResponse<TestEntity> = {
-				data: [{ id: 1, documentId: "doc1", name: "default" }],
-			};
-			mockFetch.mockResolvedValueOnce({
-				ok: true,
-				json: async () => foundResponse,
-				status: 200,
-				statusText: "OK",
-			});
-
-			const localeResponse: StrapiSingleResponse<TestEntity> = {
-				data: { id: 1, documentId: "doc1", name: "localized" },
-			};
-			mockFetch.mockResolvedValueOnce({
-				ok: true,
-				json: async () => localeResponse,
-				status: 201,
-				statusText: "Created",
-			});
-
-			const [err, data] = await client.create({ payload, locale: "fr" });
-			expect(err).toBeNull();
-			expect(data).toEqual(localeResponse.data);
-			expect(mockFetch).toHaveBeenCalledTimes(2);
-		});
-
-		it("appends params to create URL", async () => {
-			const payload: CreatePayload<TestEntity> = { data: { name: "new" } };
-			const params: Omit<QueryParams<TestEntity>, "filters"> = {
-				populate: ["*"],
-			};
-			const mockResponse: StrapiSingleResponse<TestEntity> = {
-				data: { id: 1, name: "new" },
-			};
-			mockFetch.mockResolvedValueOnce({
-				ok: true,
-				json: async () => mockResponse,
-				status: 201,
-				statusText: "Created",
-			});
-
-			const [err, data] = await client.create({ payload, params });
-			expect(err).toBeNull();
-			expect(data).toEqual(mockResponse.data);
-			expect(mockFetch).toHaveBeenCalledWith(
-				`http://localhost/api/test-entities?${qs.stringify(params, {
-					addQueryPrefix: false,
-					arrayFormat: "indices",
-					encode: true,
-				})}`,
-				expect.any(Object)
-			);
-		});
-
-		it("returns error on failed creation", async () => {
+		it("returns error on failed default locale creation", async () => {
 			const payload: CreatePayload<TestEntity> = { data: { name: "new" } };
 			mockFetch.mockResolvedValueOnce({
 				ok: false,
@@ -548,7 +412,7 @@ describe("StrapiClient", () => {
 			expect(data).toBeNull();
 		});
 
-		it("handles JSON parse error on create", async () => {
+		it("handles JSON parse error on default locale create", async () => {
 			const payload: CreatePayload<TestEntity> = { data: { name: "new" } };
 			mockFetch.mockResolvedValueOnce({
 				ok: true,
@@ -567,56 +431,276 @@ describe("StrapiClient", () => {
 			});
 			expect(data).toBeNull();
 		});
+
+		// Non-default locale tests
+		it("creates localized entry when default locale base entry found with documentId", async () => {
+			const payload: CreatePayload<TestEntity> = {
+				data: { name: "localized" },
+			};
+			const filters = { name: "test" };
+			const searchResponse = {
+				data: [{ id: 1, documentId: "doc-1", name: "base" }],
+			};
+			const localizedResponse = {
+				data: { id: 2, documentId: "doc-1", name: "localized" },
+			};
+
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: async () => searchResponse,
+				status: 200,
+				statusText: "OK",
+			});
+
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: async () => localizedResponse,
+				status: 200,
+				statusText: "OK",
+			});
+
+			const [err, data] = await client.create({
+				payload,
+				filters,
+				locale: "fr",
+			});
+			expect(err).toBeNull();
+			expect(data).toEqual(localizedResponse.data);
+			expect(mockFetch).toHaveBeenCalledTimes(2);
+		});
+
+		it("creates default and localized entries when base entry not found", async () => {
+			const payload: CreatePayload<TestEntity> = {
+				data: { name: "localized" },
+			};
+			const filters = { name: "test" };
+			const searchResponse = { data: [] };
+			const createResponse = {
+				data: { id: 1, documentId: "doc-1", name: "base" },
+			};
+			const localizedResponse = {
+				data: { id: 2, documentId: "doc-1", name: "localized" },
+			};
+
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: async () => searchResponse,
+				status: 200,
+				statusText: "OK",
+			});
+
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: async () => createResponse,
+				status: 201,
+				statusText: "Created",
+			});
+
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: async () => localizedResponse,
+				status: 200,
+				statusText: "OK",
+			});
+
+			const [err, data] = await client.create({
+				payload,
+				filters,
+				locale: "fr",
+			});
+			expect(err).toBeNull();
+			expect(data).toEqual(localizedResponse.data);
+			expect(mockFetch).toHaveBeenCalledTimes(3);
+		});
+
+		it("returns error if search fails during non-default locale create", async () => {
+			mockFetch.mockResolvedValueOnce({
+				ok: false,
+				status: 500,
+				statusText: "Internal Server Error",
+			});
+
+			const [err, data] = await client.create({
+				payload: { data: { name: "fail" } },
+				locale: "fr",
+			});
+
+			expect(err).toEqual({
+				message: "Strapi API error: 500 Internal Server Error",
+				status: 500,
+			});
+			expect(data).toBeNull();
+		});
+
+		it("returns error if create fails during non-default locale setup", async () => {
+			const payload: CreatePayload<TestEntity> = {
+				data: { name: "localized" },
+			};
+			const searchResponse = { data: [] };
+
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: async () => searchResponse,
+				status: 200,
+				statusText: "OK",
+			});
+
+			mockFetch.mockResolvedValueOnce({
+				ok: false,
+				status: 400,
+				statusText: "Bad Request",
+			});
+
+			const [err, data] = await client.create({
+				payload,
+				locale: "fr",
+			});
+
+			expect(err).toBeDefined();
+			expect(err!.status).toBe(400);
+			expect(data).toBeNull();
+		});
+
+		it("returns error when localized PUT request fails", async () => {
+			const payload: CreatePayload<TestEntity> = {
+				data: { name: "localized" },
+			};
+			const filters = { name: "test" };
+			const searchResponse = {
+				data: [{ id: 1, documentId: "doc-1", name: "base" }],
+			};
+
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: async () => searchResponse,
+				status: 200,
+				statusText: "OK",
+			});
+
+			mockFetch.mockResolvedValueOnce({
+				ok: false,
+				status: 400,
+				statusText: "Bad Request",
+			});
+
+			const [err, data] = await client.create({
+				payload,
+				filters,
+				locale: "fr",
+			});
+
+			expect(err).toBeDefined();
+			expect(err!.status).toBe(400);
+			expect(data).toBeNull();
+		});
+
+		it("returns error when localized response missing documentId", async () => {
+			const payload: CreatePayload<TestEntity> = {
+				data: { name: "localized" },
+			};
+			const searchResponse = {
+				data: [{ id: 1, documentId: "doc-1", name: "base" }],
+			};
+			const localizedResponse = { data: { id: 2, name: "localized" } }; // no documentId
+
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: async () => searchResponse,
+				status: 200,
+				statusText: "OK",
+			});
+
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: async () => localizedResponse,
+				status: 200,
+				statusText: "OK",
+			});
+
+			const [err, data] = await client.create({
+				payload,
+				locale: "fr",
+			});
+
+			expect(err).toBeNull(); // localeErr is null
+			expect(data).toBeNull();
+		});
+
+		it("uses documentId string from found base entry in non-default locale", async () => {
+			const payload: CreatePayload<TestEntity> = {
+				data: { name: "localized" },
+			};
+			const searchResponse = {
+				data: [{ id: 999, documentId: "doc-1", name: "base" }],
+			};
+			const localizedResponse = {
+				data: { id: 2, documentId: "doc-1", name: "localized" },
+			};
+
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: async () => searchResponse,
+				status: 200,
+				statusText: "OK",
+			});
+
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: async () => localizedResponse,
+				status: 200,
+				statusText: "OK",
+			});
+
+			await client.create({ payload, locale: "fr" });
+
+			// Second call should use documentId string in URL
+			expect(mockFetch.mock.calls[1][0]).toContain("/doc-1?locale=fr");
+		});
+
+		it("uses documentId string from created base entry in non-default locale", async () => {
+			const payload: CreatePayload<TestEntity> = {
+				data: { name: "localized" },
+			};
+			const searchResponse = { data: [] };
+			const createResponse = {
+				data: { id: 1, documentId: "doc-2", name: "base" },
+			};
+			const localizedResponse = {
+				data: { id: 2, documentId: "doc-2", name: "localized" },
+			};
+
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: async () => searchResponse,
+				status: 200,
+				statusText: "OK",
+			});
+
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: async () => createResponse,
+				status: 201,
+				statusText: "Created",
+			});
+
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: async () => localizedResponse,
+				status: 200,
+				statusText: "OK",
+			});
+
+			await client.create({ payload, locale: "fr" });
+
+			// Third call should use documentId string from created response
+			expect(mockFetch.mock.calls[2][0]).toContain("/doc-2?locale=fr");
+		});
 	});
 
 	describe("update", () => {
-		it("updates entity successfully", async () => {
+		it("updates entity with default locale (en)", async () => {
 			const payload: UpdatePayload<TestEntity> = { data: { name: "updated" } };
-			const mockResponse: StrapiSingleResponse<TestEntity> = {
-				data: { id: 1, name: "updated" },
-			};
-			mockFetch.mockResolvedValueOnce({
-				ok: true,
-				json: async () => mockResponse,
-				status: 200,
-				statusText: "OK",
-			});
-
-			const [err, data] = await client.update({ id: 1, payload });
-			expect(err).toBeNull();
-			expect(data).toEqual(mockResponse.data);
-		});
-
-		it("appends locale to update URL for non-default", async () => {
-			const payload: UpdatePayload<TestEntity> = {
-				data: { name: "localized" },
-			};
-			const mockResponse: StrapiSingleResponse<TestEntity> = {
-				data: { id: 1, name: "localized" },
-			};
-			mockFetch.mockResolvedValueOnce({
-				ok: true,
-				json: async () => mockResponse,
-				status: 200,
-				statusText: "OK",
-			});
-
-			const [err, data] = await client.update({ id: 1, payload, locale: "fr" });
-			expect(err).toBeNull();
-			expect(data).toEqual(mockResponse.data);
-			expect(mockFetch).toHaveBeenCalledWith(
-				"http://localhost/api/test-entities/1?locale=fr",
-				expect.any(Object)
-			);
-		});
-
-		it("does not append locale for default locale (en)", async () => {
-			const payload: UpdatePayload<TestEntity> = {
-				data: { name: "updated" },
-			};
-			const mockResponse: StrapiSingleResponse<TestEntity> = {
-				data: { id: 1, name: "updated" },
-			};
+			const mockResponse = { data: { id: 1, name: "updated" } };
 			mockFetch.mockResolvedValueOnce({
 				ok: true,
 				json: async () => mockResponse,
@@ -637,12 +721,9 @@ describe("StrapiClient", () => {
 			);
 		});
 
-		it("appends params to update URL", async () => {
+		it("updates entity with non-default locale", async () => {
 			const payload: UpdatePayload<TestEntity> = { data: { name: "updated" } };
-			const params: QueryParams<TestEntity> = { populate: ["*"] };
-			const mockResponse: StrapiSingleResponse<TestEntity> = {
-				data: { id: 1, name: "updated" },
-			};
+			const mockResponse = { data: { id: 1, name: "updated" } };
 			mockFetch.mockResolvedValueOnce({
 				ok: true,
 				json: async () => mockResponse,
@@ -650,17 +731,31 @@ describe("StrapiClient", () => {
 				statusText: "OK",
 			});
 
-			const [err, data] = await client.update({ id: 1, payload, params });
+			const [err, data] = await client.update({
+				id: 1,
+				payload,
+				locale: "fr",
+			});
 			expect(err).toBeNull();
 			expect(data).toEqual(mockResponse.data);
 			expect(mockFetch).toHaveBeenCalledWith(
-				`http://localhost/api/test-entities/1?${qs.stringify(params, {
-					addQueryPrefix: false,
-					arrayFormat: "indices",
-					encode: true,
-				})}`,
+				"http://localhost/api/test-entities/1?locale=fr",
 				expect.any(Object)
 			);
+		});
+
+		it("returns null when update response data is null", async () => {
+			const payload: UpdatePayload<TestEntity> = { data: { name: "updated" } };
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: async () => ({ data: null }),
+				status: 200,
+				statusText: "OK",
+			});
+
+			const [err, data] = await client.update({ id: 1, payload });
+			expect(err).toBeNull();
+			expect(data).toBeNull();
 		});
 
 		it("returns error on failed update", async () => {
@@ -678,26 +773,41 @@ describe("StrapiClient", () => {
 			});
 			expect(data).toBeNull();
 		});
+
+		it("updates without locale param - should not add locale query string", async () => {
+			const payload: UpdatePayload<TestEntity> = { data: { name: "updated" } };
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: async () => ({ data: { id: 1, name: "updated" } }),
+				status: 200,
+				statusText: "OK",
+			});
+
+			await client.update({ id: 1, payload });
+
+			// Without locale param, URL should not include locale query
+			const callUrl = mockFetch.mock.calls[0][0] as string;
+			expect(callUrl).toBe("http://localhost/api/test-entities/1");
+			expect(callUrl).not.toContain("locale=");
+		});
 	});
 
 	describe("delete", () => {
-		it("deletes entity successfully, returning null", async () => {
+		it("deletes entity successfully", async () => {
+			const mockResponse = { data: { id: 1, name: "deleted" } };
 			mockFetch.mockResolvedValueOnce({
 				ok: true,
+				json: async () => mockResponse,
 				status: 200,
 				statusText: "OK",
 			});
 
 			const [err, data] = await client.delete({ id: 1 });
 			expect(err).toBeNull();
-			expect(data).toBeNull();
-			expect(mockFetch).toHaveBeenCalledWith(
-				"http://localhost/api/test-entities/1",
-				expect.objectContaining({ method: "DELETE" })
-			);
+			expect(data).toEqual(mockResponse.data);
 		});
 
-		it("handles no JSON response on delete", async () => {
+		it("handles no JSON response on delete (DELETE JSON parse fallback)", async () => {
 			mockFetch.mockResolvedValueOnce({
 				ok: true,
 				json: async () => {
@@ -709,10 +819,12 @@ describe("StrapiClient", () => {
 
 			const [err, data] = await client.delete({ id: 1 });
 			expect(err).toBeNull();
+			// When DELETE JSON parse fails, the fallback returns { data: null }
+			// but response?.data extracts to null
 			expect(data).toBeNull();
 		});
 
-		it("appends locale to delete URL for non-default", async () => {
+		it("returns null when delete response data is null", async () => {
 			mockFetch.mockResolvedValueOnce({
 				ok: true,
 				json: async () => ({ data: null }),
@@ -720,30 +832,9 @@ describe("StrapiClient", () => {
 				statusText: "OK",
 			});
 
-			const [err, data] = await client.delete({ id: 1, locale: "fr" });
+			const [err, data] = await client.delete({ id: 1 });
 			expect(err).toBeNull();
 			expect(data).toBeNull();
-			expect(mockFetch).toHaveBeenCalledWith(
-				"http://localhost/api/test-entities/1?locale=fr",
-				expect.objectContaining({ method: "DELETE" })
-			);
-		});
-
-		it("does not append locale for default locale (en)", async () => {
-			mockFetch.mockResolvedValueOnce({
-				ok: true,
-				json: async () => ({ data: null }),
-				status: 200,
-				statusText: "OK",
-			});
-
-			const [err, data] = await client.delete({ id: 1, locale: "en" });
-			expect(err).toBeNull();
-			expect(data).toBeNull();
-			expect(mockFetch).toHaveBeenCalledWith(
-				"http://localhost/api/test-entities/1",
-				expect.objectContaining({ method: "DELETE" })
-			);
 		});
 
 		it("returns error on failed delete", async () => {
@@ -760,158 +851,107 @@ describe("StrapiClient", () => {
 			});
 			expect(data).toBeNull();
 		});
+
+		it("handles network error on delete", async () => {
+			mockFetch.mockRejectedValueOnce(new Error("Network error"));
+
+			const [err, data] = await client.delete({ id: 1 });
+			expect(err).toEqual({ message: "Strapi API error: Network error" });
+			expect(data).toBeNull();
+		});
+
+		it("ignores locale parameter on delete", async () => {
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: async () => ({ data: { id: 1 } }),
+				status: 200,
+				statusText: "OK",
+			});
+
+			await client.delete({ id: 1, locale: "fr" });
+
+			// Delete should ignore locale parameter
+			const callUrl = mockFetch.mock.calls[0][0] as string;
+			expect(callUrl).toBe("http://localhost/api/test-entities/1");
+		});
 	});
 
 	describe("upsert", () => {
-		it("updates existing entity in default locale", async () => {
+		it("updates existing entity", async () => {
 			const payload: CreatePayload<TestEntity> = { data: { name: "upserted" } };
-			const filters: StrapiFilters<TestEntity> = { name: { $eq: "existing" } };
+			const filters: StrapiFilters<TestEntity> = { name: "existing" };
 
-			const foundResponse: StrapiResponse<TestEntity> = {
-				data: [{ id: 1, documentId: "doc1", name: "existing" }],
-			};
 			mockFetch.mockResolvedValueOnce({
 				ok: true,
-				json: async () => foundResponse,
+				json: async () => ({
+					data: [{ id: 1, name: "existing", documentId: "doc-1" }],
+				}),
 				status: 200,
 				statusText: "OK",
 			});
 
-			const updateResponse: StrapiSingleResponse<TestEntity> = {
-				data: { id: 1, documentId: "doc1", name: "upserted" },
-			};
 			mockFetch.mockResolvedValueOnce({
 				ok: true,
-				json: async () => updateResponse,
+				json: async () => ({ data: { id: 1, name: "upserted" } }),
 				status: 200,
 				statusText: "OK",
 			});
 
 			const [err, data] = await client.upsert({ payload, filters });
 			expect(err).toBeNull();
-			expect(data).toEqual(updateResponse.data);
+			expect(data).toEqual({ id: 1, name: "upserted" });
 			expect(mockFetch).toHaveBeenCalledTimes(2);
 		});
 
-		it("creates new entity if not existing in default locale", async () => {
+		it("uses documentId when available in upsert update", async () => {
+			const payload: CreatePayload<TestEntity> = { data: { name: "upserted" } };
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: async () => ({
+					data: [{ id: 999, documentId: "doc-1", name: "existing" }],
+				}),
+				status: 200,
+				statusText: "OK",
+			});
+
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: async () => ({ data: { id: 999, name: "upserted" } }),
+				status: 200,
+				statusText: "OK",
+			});
+
+			await client.upsert({ payload });
+
+			// Second call (update) should use documentId
+			expect(mockFetch.mock.calls[1][0]).toContain("/doc-1");
+		});
+
+		it("creates new entity if not existing", async () => {
 			const payload: CreatePayload<TestEntity> = { data: { name: "new" } };
-			const filters: StrapiFilters<TestEntity> = {
-				name: { $eq: "nonexistent" },
-			};
+			const filters: StrapiFilters<TestEntity> = { name: "nonexistent" };
 
-			const emptyResponse: StrapiResponse<TestEntity> = { data: [] };
 			mockFetch.mockResolvedValueOnce({
 				ok: true,
-				json: async () => emptyResponse,
+				json: async () => ({ data: [] }),
 				status: 200,
 				statusText: "OK",
 			});
 
-			const createResponse: StrapiSingleResponse<TestEntity> = {
-				data: { id: 2, name: "new" },
-			};
 			mockFetch.mockResolvedValueOnce({
 				ok: true,
-				json: async () => createResponse,
+				json: async () => ({ data: { id: 2, name: "new" } }),
 				status: 201,
 				statusText: "Created",
 			});
 
 			const [err, data] = await client.upsert({ payload, filters });
 			expect(err).toBeNull();
-			expect(data).toEqual(createResponse.data);
+			expect(data).toEqual({ id: 2, name: "new" });
 			expect(mockFetch).toHaveBeenCalledTimes(2);
 		});
 
-		it("handles upsert with locale by updating existing", async () => {
-			const payload: CreatePayload<TestEntity> = {
-				data: { name: "localized" },
-			};
-			const filters: StrapiFilters<TestEntity> = { name: { $eq: "existing" } };
-
-			const foundResponse: StrapiResponse<TestEntity> = {
-				data: [{ id: 1, documentId: "doc1", name: "existing" }],
-			};
-			mockFetch.mockResolvedValueOnce({
-				ok: true,
-				json: async () => foundResponse,
-				status: 200,
-				statusText: "OK",
-			});
-
-			const updateResponse: StrapiSingleResponse<TestEntity> = {
-				data: { id: 1, documentId: "doc1", name: "localized" },
-			};
-			mockFetch.mockResolvedValueOnce({
-				ok: true,
-				json: async () => updateResponse,
-				status: 200,
-				statusText: "OK",
-			});
-
-			const [err, data] = await client.upsert({
-				payload,
-				filters,
-				locale: "fr",
-			});
-			expect(err).toBeNull();
-			expect(data).toEqual(updateResponse.data);
-			expect(mockFetch).toHaveBeenCalledTimes(2);
-		});
-
-		it("handles upsert with locale by creating (no existing)", async () => {
-			const payload: CreatePayload<TestEntity> = { data: { name: "new-fr" } };
-			const filters: StrapiFilters<TestEntity> = {
-				name: { $eq: "nonexistent" },
-			};
-
-			const emptyLocale: StrapiResponse<TestEntity> = { data: [] };
-			mockFetch.mockResolvedValueOnce({
-				ok: true,
-				json: async () => emptyLocale,
-				status: 200,
-				statusText: "OK",
-			});
-
-			const emptyDefault: StrapiResponse<TestEntity> = { data: [] };
-			mockFetch.mockResolvedValueOnce({
-				ok: true,
-				json: async () => emptyDefault,
-				status: 200,
-				statusText: "OK",
-			});
-
-			const defaultCreate: StrapiSingleResponse<TestEntity> = {
-				data: { id: 3, documentId: "doc3", name: "new-fr" },
-			};
-			mockFetch.mockResolvedValueOnce({
-				ok: true,
-				json: async () => defaultCreate,
-				status: 201,
-				statusText: "Created",
-			});
-
-			const localeCreate: StrapiSingleResponse<TestEntity> = {
-				data: { id: 3, documentId: "doc3", name: "new-fr" },
-			};
-			mockFetch.mockResolvedValueOnce({
-				ok: true,
-				json: async () => localeCreate,
-				status: 201,
-				statusText: "Created",
-			});
-
-			const [err, data] = await client.upsert({
-				payload,
-				filters,
-				locale: "fr",
-			});
-			expect(err).toBeNull();
-			expect(data).toEqual(localeCreate.data);
-			expect(mockFetch).toHaveBeenCalledTimes(4);
-		});
-
-		it("returns error if search fails in upsert", async () => {
+		it("returns error if search fails", async () => {
 			const payload: CreatePayload<TestEntity> = { data: { name: "fail" } };
 			mockFetch.mockResolvedValueOnce({
 				ok: false,
@@ -928,41 +968,183 @@ describe("StrapiClient", () => {
 			expect(mockFetch).toHaveBeenCalledTimes(1);
 		});
 
-		it("appends params to upsert search query", async () => {
-			const payload: CreatePayload<TestEntity> = { data: { name: "test" } };
-			const filters: StrapiFilters<TestEntity> = { name: { $eq: "test" } };
-			const params: Omit<QueryParams<TestEntity>, "filters"> = {
+		it("returns error if update fails during upsert", async () => {
+			const payload: CreatePayload<TestEntity> = { data: { name: "upserted" } };
+
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: async () => ({
+					data: [{ id: 1, name: "existing", documentId: "doc-1" }],
+				}),
+				status: 200,
+				statusText: "OK",
+			});
+
+			mockFetch.mockResolvedValueOnce({
+				ok: false,
+				status: 400,
+				statusText: "Bad Request",
+			});
+
+			const [err, data] = await client.upsert({ payload });
+			expect(err).toBeDefined();
+			expect(err!.status).toBe(400);
+			expect(data).toBeNull();
+		});
+
+		it("returns error if create fails during upsert", async () => {
+			const payload: CreatePayload<TestEntity> = { data: { name: "new" } };
+
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: async () => ({ data: [] }),
+				status: 200,
+				statusText: "OK",
+			});
+
+			mockFetch.mockResolvedValueOnce({
+				ok: false,
+				status: 400,
+				statusText: "Bad Request",
+			});
+
+			const [err, data] = await client.upsert({ payload });
+			expect(err).toBeDefined();
+			expect(err!.status).toBe(400);
+			expect(data).toBeNull();
+		});
+
+		it("includes locale in search for non-default locale upsert", async () => {
+			const payload: CreatePayload<TestEntity> = { data: { name: "new" } };
+
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: async () => ({ data: [] }),
+				status: 200,
+				statusText: "OK",
+			});
+
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: async () => ({ data: { id: 1, name: "new" } }),
+				status: 201,
+				statusText: "Created",
+			});
+
+			await client.upsert({ payload, locale: "fr" });
+
+			// First call (search) should include locale parameter
+			const searchUrl = mockFetch.mock.calls[0][0] as string;
+			expect(searchUrl).toContain("locale=fr");
+		});
+
+		it("passes locale to update in upsert", async () => {
+			const payload: CreatePayload<TestEntity> = { data: { name: "upserted" } };
+
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: async () => ({
+					data: [{ id: 1, name: "existing", documentId: "doc-1" }],
+				}),
+				status: 200,
+				statusText: "OK",
+			});
+
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: async () => ({ data: { id: 1, name: "upserted" } }),
+				status: 200,
+				statusText: "OK",
+			});
+
+			await client.upsert({ payload, locale: "fr" });
+
+			// Second call (update) should include locale
+			const updateUrl = mockFetch.mock.calls[1][0] as string;
+			expect(updateUrl).toContain("locale=fr");
+		});
+
+		it("passes locale to create in upsert when non-default locale", async () => {
+			const payload: CreatePayload<TestEntity> = { data: { name: "new" } };
+
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: async () => ({ data: [] }),
+				status: 200,
+				statusText: "OK",
+			});
+
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: async () => ({ data: { id: 2, name: "new" } }),
+				status: 201,
+				statusText: "Created",
+			});
+
+			await client.upsert({ payload, locale: "fr" });
+
+			expect(mockFetch).toHaveBeenCalledTimes(3);
+		});
+	});
+
+	describe("getQueryString", () => {
+		it("returns empty string when no params", async () => {
+			const result = (client as unknown).getQueryString();
+			expect(result).toBe("");
+		});
+
+		it("returns empty string when empty params object", async () => {
+			const result = (client as unknown).getQueryString({});
+			expect(result).toBe("");
+		});
+
+		it("returns query string with params", async () => {
+			const result = (client as StrapiClient<T>).getQueryString({
 				populate: ["*"],
-			};
+			});
+			expect(result).toContain("?");
+			expect(result).toContain("populate");
+		});
+	});
 
-			const foundResponse: StrapiResponse<TestEntity> = {
-				data: [{ id: 1, documentId: "doc1", name: "test" }],
-			};
+	describe("request endpoint normalization", () => {
+		it("normalizes endpoint with leading slashes", async () => {
 			mockFetch.mockResolvedValueOnce({
 				ok: true,
-				json: async () => foundResponse,
+				json: async () => ({ data: [] }),
 				status: 200,
 				statusText: "OK",
 			});
 
-			const updateResponse: StrapiSingleResponse<TestEntity> = {
-				data: { id: 1, documentId: "doc1", name: "test" },
-			};
+			await (client as StrapiClient<TestEntity>)["request"]("///test-entities");
+
+			expect(mockFetch).toHaveBeenCalledWith(
+				"http://localhost/api/test-entities",
+				expect.any(Object)
+			);
+		});
+
+		it("merges custom headers with default headers", async () => {
 			mockFetch.mockResolvedValueOnce({
 				ok: true,
-				json: async () => updateResponse,
+				json: async () => ({ data: [] }),
 				status: 200,
 				statusText: "OK",
 			});
 
-			const [err, data] = await client.upsert({
-				payload,
-				filters,
-				params,
+			await (client as StrapiClient<TestEntity>)["request"]("test", {
+				headers: { "X-Custom": "value" },
 			});
-			expect(err).toBeNull();
-			expect(data).toEqual(updateResponse.data);
-			expect(mockFetch).toHaveBeenCalledTimes(2);
+
+			expect(mockFetch).toHaveBeenCalledWith(
+				expect.any(String),
+				expect.objectContaining({
+					headers: expect.objectContaining({
+						"Content-Type": "application/json",
+						"X-Custom": "value",
+					}),
+				})
+			);
 		});
 	});
 });

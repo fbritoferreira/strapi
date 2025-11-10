@@ -30,7 +30,7 @@ export class StrapiClient<
 		uid: string;
 		token?: string;
 	}) {
-		let apiUrl = baseURL.replace(/\/+$/, ""); // Remove trailing slashes
+		let apiUrl = baseURL.replace(/\/+$/, "");
 		if (!apiUrl.endsWith("/api")) {
 			apiUrl += "/api";
 		}
@@ -152,21 +152,25 @@ export class StrapiClient<
 	}): Promise<[ServiceError | null, T | null]> {
 		const { payload, params = {}, filters, locale = "en" } = options;
 		const isDefaultLocale = locale === "en";
-		const paramQuery = this.getQueryString(params);
 
 		if (isDefaultLocale) {
-			const url = `${this.uid}${paramQuery}`;
-			const [err, response] = await this.request<StrapiSingleResponse<T>>(url, {
-				method: "POST",
-				body: JSON.stringify(payload),
-			});
+			// Create default locale entry straightforwardly
+			const [err, response] = await this.request<StrapiSingleResponse<T>>(
+				this.uid,
+				{
+					method: "POST",
+					body: JSON.stringify(payload),
+				}
+			);
 			if (err) return [err, null];
 			return [null, response?.data ?? null];
 		}
 
+		// For non-default locales: ensure default locale entry exists first
 		const searchParams: QueryParams<T> = {
 			...params,
 			...(filters ? { filters } : {}),
+			locale: "en",
 		};
 		const searchQuery = this.getQueryString(searchParams);
 		const [searchErr, enResponse] = await this.request<StrapiResponse<T>>(
@@ -174,22 +178,22 @@ export class StrapiClient<
 		);
 		if (searchErr) return [searchErr, null];
 
-		let baseId: number | string;
-
+		let baseId: string | null = null;
 		if (
 			enResponse?.data &&
 			enResponse.data.length > 0 &&
-			enResponse?.data?.[0]?.documentId
+			enResponse.data[0].documentId
 		) {
 			baseId = enResponse.data[0].documentId;
 		} else {
-			// Create default first (without locale)
-			const defaultUrl = `${this.uid}${paramQuery}`;
 			const [createErr, createResponse] = await this.request<
 				StrapiSingleResponse<T>
-			>(defaultUrl, {
+			>(this.uid, {
 				method: "POST",
-				body: JSON.stringify(payload),
+				body: JSON.stringify({
+					...payload,
+					data: { ...payload.data, locale: "en" },
+				}),
 			});
 			if (createErr || !createResponse?.data.documentId) {
 				return [createErr, null];
@@ -197,15 +201,20 @@ export class StrapiClient<
 			baseId = createResponse.data.documentId;
 		}
 
-		// Create localization using base numeric ID
-		const localeQuery = this.getQueryString({ ...params, locale });
-		const url = `${this.uid}/${baseId}${localeQuery}`;
-		const [err, response] = await this.request<StrapiSingleResponse<T>>(url, {
-			method: "POST", // POST for new locale
+		// Create localized entry by POSTing to /localizations endpoint
+		// Include locale in the payload explicitly
+		const [localeErr, localeResponse] = await this.request<
+			StrapiSingleResponse<T>
+		>(`${this.uid}/${baseId}?locale=${locale}`, {
+			method: "PUT",
 			body: JSON.stringify(payload),
 		});
-		if (err) return [err, null];
-		return [null, response?.data ?? null];
+
+		if (localeErr || !localeResponse?.data.documentId) {
+			return [localeErr, null];
+		}
+
+		return [null, localeResponse.data];
 	}
 
 	async update(options: {
@@ -214,41 +223,42 @@ export class StrapiClient<
 		params?: QueryParams<T>;
 		locale?: string;
 	}): Promise<[ServiceError | null, T | null]> {
-		const { id, payload, params = {}, locale = "en" } = options;
-		const queryParams = {
-			...params,
-			...(locale && locale !== "en" ? { locale } : {}),
-		};
-		const queryString = this.getQueryString(queryParams);
-		const url = `${this.uid}/${id}${queryString}`;
+		const { id, payload, locale = "en" } = options;
+
+		const url =
+			locale === "en"
+				? `${this.uid}/${id}`
+				: `${this.uid}/${id}?locale=${locale}`;
+
 		const [err, response] = await this.request<StrapiSingleResponse<T>>(url, {
 			method: "PUT",
 			body: JSON.stringify(payload),
 		});
-		if (err) return [err, null];
+
+		if (err) {
+			return [err, null];
+		}
 		return [null, response?.data ?? null];
 	}
 
 	async delete(options: {
 		id: number | string;
-		locale?: string;
 	}): Promise<[ServiceError | null, T | null]> {
-		const { id, locale } = options;
-		const queryParams = { ...(locale && locale !== "en" ? { locale } : {}) };
-		const queryString = this.getQueryString(queryParams);
 		const [err, response] = await this.request<StrapiSingleResponse<T>>(
-			`${this.uid}/${id}${queryString}`,
+			`${this.uid}/${options.id}`,
 			{ method: "DELETE" }
 		);
-		if (err) return [err, null];
+		if (err) {
+			return [err, null];
+		}
 		return [null, response?.data ?? null];
 	}
 
 	async upsert(options: {
-		locale?: string;
 		payload: CreatePayload<T>;
 		filters?: StrapiFilters<T>;
 		params?: Omit<QueryParams<T>, "filters">;
+		locale?: string;
 	}): Promise<[ServiceError | null, T | null]> {
 		const { payload, filters, params = {}, locale = "en" } = options;
 
@@ -265,9 +275,7 @@ export class StrapiClient<
 		if (searchErr) return [searchErr, null];
 
 		if (searchResponse && searchResponse.length > 0) {
-			const existingId =
-				searchResponse?.[0]?.documentId ??
-				(searchResponse?.[0]?.documentId as string);
+			const existingId = searchResponse[0].documentId ?? searchResponse[0].id;
 
 			return this.update({
 				id: existingId,
