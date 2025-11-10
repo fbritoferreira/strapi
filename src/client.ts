@@ -182,6 +182,7 @@ export class StrapiClient<
 		if (
 			enResponse?.data &&
 			enResponse.data.length > 0 &&
+			enResponse.data[0] &&
 			enResponse.data[0].documentId
 		) {
 			baseId = enResponse.data[0].documentId;
@@ -274,8 +275,9 @@ export class StrapiClient<
 		);
 		if (searchErr) return [searchErr, null];
 
-		if (searchResponse && searchResponse.length > 0) {
-			const existingId = searchResponse[0].documentId ?? searchResponse[0].id;
+		if (searchResponse && searchResponse.length > 0 && searchResponse?.[0]) {
+			const existingId =
+				searchResponse?.[0].documentId ?? searchResponse?.[0].id;
 
 			return this.update({
 				id: existingId,

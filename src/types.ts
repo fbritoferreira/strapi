@@ -40,11 +40,21 @@ export type PopulateValue<T> =
 	| true
 	| "*"
 	| { populate: Populate<T> }
-	| Partial<Record<keyof T, PopulateValue<T[keyof T]>>>;
+	| Partial<
+			Record<
+				keyof T,
+				T[keyof T] extends object ? PopulateValue<T[keyof T]> : never
+			>
+	  >;
 
 export type Populate<T> =
 	| "*"
-	| Partial<Record<keyof T, PopulateValue<T[keyof T]>>>
+	| Partial<
+			Record<
+				keyof T,
+				T[keyof T] extends object ? PopulateValue<T[keyof T]> : never
+			>
+	  >
 	| string[];
 
 export type SortDirection = "asc" | "desc";
