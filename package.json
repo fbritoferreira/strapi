@@ -5,10 +5,16 @@
 	"main": "./dist/strapi.cjs.js",
 	"module": "./dist/strapi.es.js",
 	"types": "./dist/strapi.d.ts",
-	"type": "module",
+	"exports": {
+		".": {
+			"types": "./dist/strapi.d.ts",
+			"import": "./dist/strapi.es.js",
+			"require": "./dist/strapi.cjs.js"
+		}
+	},
 	"scripts": {
 		"dev": "vite",
-		"build": "tsc && vite build",
+		"build": "tsc && tsc --project tsconfig.cjs.json && vite build",
 		"lint": "eslint . --ext .ts",
 		"lint:fix": "eslint . --ext .ts --fix",
 		"preview": "vite preview",
