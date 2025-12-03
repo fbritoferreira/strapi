@@ -21,9 +21,13 @@ export default defineConfig({
     },
     rollupOptions: {
       external: externals,
+      output: {
+        preserveModules: false,
+      },
     },
     sourcemap: true,
     minify: true,
+    target: "node14",
   },
   define: {
     global: "globalThis",
