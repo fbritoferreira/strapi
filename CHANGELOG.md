@@ -1,5 +1,15 @@
 # @fbritoferreira/strapi
 
+## 0.3.1
+
+### Patch Changes
+
+- 456d542: - Remove type: module to enable CommonJS support
+  - Add exports field for proper dual package resolution
+  - Create separate tsconfig.cjs.json for CommonJS builds
+  - Update build script to generate both ESM and CJS outputs
+  - Configure Vite to target Node.js 14+ for broader compatibility
+
 ## 0.3.0
 
 ### Minor Changes
