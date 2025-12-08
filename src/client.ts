@@ -45,8 +45,9 @@ export class StrapiClient<
 	private async request<R>(
 		endpoint: string,
 		options: RequestInit = {},
-		{ all = false }: { all: boolean }
+		extraOptions: { all?: boolean } = {}
 	): Promise<[ServiceError | null, R | null]> {
+		const { all = false } = extraOptions;
 		const normalizedEndpoint = endpoint.replace(/^\/+/, "");
 		const url = `${this.baseURL}/${normalizedEndpoint}`;
 		if (all && options.method === "GET") {
@@ -172,15 +173,14 @@ export class StrapiClient<
 		})}`;
 	}
 
-	async findMany({
-		params,
-		locale,
-		all = false,
-	}: {
-		params?: QueryParams<T>;
-		locale?: string;
-		all?: boolean;
-	}): Promise<[ServiceError | null, T[] | null]> {
+	async findMany(
+		options: {
+			params?: QueryParams<T>;
+			locale?: string;
+			all?: boolean;
+		} = {}
+	): Promise<[ServiceError | null, T[] | null]> {
+		const { params, locale, all = false } = options;
 		const queryParams = {
 			...params,
 			...(locale && locale !== "en" ? { locale } : {}),
