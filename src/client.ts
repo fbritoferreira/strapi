@@ -51,6 +51,7 @@ export class StrapiClient<
 		const normalizedEndpoint = endpoint.replace(/^\/+/, "");
 		const url = `${this.baseURL}/${normalizedEndpoint}`;
 		if (all && options.method === "GET") {
+		try {
 			const firstPageResponse = await fetch(url, {
 				...options,
 				headers: { ...this.headers, ...options.headers },
@@ -161,7 +162,15 @@ export class StrapiClient<
 			};
 
 			return [null, combinedResponse as R];
+		} catch (error) {
+			return [
+				{
+					message: `Strapi API error: ${(error as Error).message}`,
+				},
+				null,
+			];
 		}
+	}
 		try {
 			const response = await fetch(url, {
 				...options,
