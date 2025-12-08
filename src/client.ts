@@ -141,10 +141,10 @@ export class StrapiClient<
 					];
 				}
 
-				allPageData.push(...pageData.data);
-			}
+			allPageData.push(...(pageData.data ?? []));
+		}
 
-			const combinedData = [...firstPageData.data, ...allPageData];
+		const combinedData = [...(firstPageData.data ?? []), ...allPageData];
 
 			const combinedResponse = {
 				...firstPageData,
