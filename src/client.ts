@@ -66,30 +66,55 @@ export class StrapiClient<
 				];
 			}
 
-			const firstPageData = await firstPageResponse.json();
+			let firstPageData;
+			try {
+				firstPageData = await firstPageResponse.json();
+			} catch (jsonError) {
+				return [
+					{
+						message: `Strapi API error: Failed to parse JSON response - ${
+							(jsonError as Error).message
+						}`,
+						status: firstPageResponse.status,
+					},
+					null,
+				];
+			}
 			const pagination = firstPageData.meta?.pagination;
 
 			if (!pagination) {
-				return [null, firstPageData as R];
+				return [null, firstPageData];
 			}
 
 			const { pageSize, pageCount } = pagination;
 
 			if (pageCount <= 1) {
-				return [null, firstPageData as R];
+				return [null, firstPageData];
 			}
 
-			const allData: T[] = [...firstPageData.data];
-
+			// Create requests for all remaining pages in parallel
+			const pageRequests: Promise<Response>[] = [];
 			for (let page = 2; page <= pageCount; page++) {
 				const pageUrl = new URL(url);
 				pageUrl.searchParams.set("pagination[page]", page.toString());
 				pageUrl.searchParams.set("pagination[pageSize]", pageSize.toString());
 
-				const pageResponse = await fetch(pageUrl.toString(), {
-					...options,
-					headers: { ...this.headers, ...options.headers },
-				});
+				pageRequests.push(
+					fetch(pageUrl.toString(), {
+						...options,
+						headers: { ...this.headers, ...options.headers },
+					})
+				);
+			}
+
+			// Wait for all page requests to complete
+			const pageResponses = await Promise.all(pageRequests);
+
+			// Check for any failed responses and parse them
+			const allPageData: T[] = [];
+			for (let i = 0; i < pageResponses.length; i++) {
+				const pageResponse = pageResponses[i]!;
+				const pageNumber = i + 2;
 
 				if (!pageResponse.ok) {
 					return [
@@ -101,20 +126,36 @@ export class StrapiClient<
 					];
 				}
 
-				const pageData = await pageResponse.json();
-				allData.push(...pageData.data);
+				let pageData;
+				try {
+					pageData = await pageResponse.json();
+				} catch (jsonError) {
+					return [
+						{
+							message: `Strapi API error: Failed to parse JSON response from page ${pageNumber} - ${
+								(jsonError as Error).message
+							}`,
+							status: pageResponse.status,
+						},
+						null,
+					];
+				}
+
+				allPageData.push(...pageData.data);
 			}
+
+			const combinedData = [...firstPageData.data, ...allPageData];
 
 			const combinedResponse = {
 				...firstPageData,
-				data: allData,
+				data: combinedData,
 				meta: {
 					...firstPageData.meta,
 					pagination: {
 						...pagination,
 						page: 1,
 						pageCount: 1,
-						total: allData.length,
+						total: combinedData.length,
 					},
 				},
 			};

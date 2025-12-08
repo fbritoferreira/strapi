@@ -4,17 +4,29 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![npm downloads](https://img.shields.io/npm/dm/@fbritoferreira/strapi.svg)](https://www.npmjs.com/package/@fbritoferreira/strapi)
 
-A lightweight, generic TypeScript client for Strapi CMS v5, supporting CRUD operations, query parameters (filters, populate, pagination), and internationalization (i18n) with locale-specific creates/updates. Built with modern ES modules and Fetch API, it handles error responses and nested filters via `qs` serialization.
+A lightweight, generic TypeScript client for Strapi CMS v5, supporting CRUD
+operations, query parameters (filters, populate, pagination), and
+internationalization (i18n) with locale-specific creates/updates. Built with
+modern ES modules and Fetch API, it handles error responses and nested filters
+via `qs` serialization.
 
 ## Features
 
-- **Generic TypeScript Support**: Define your entity types (e.g., `{ id: number; name: string; documentId?: string }`) for full type safety on requests/responses.
+- **Generic TypeScript Support**: Define your entity types (e.g.,
+  `{ id: number; name: string; documentId?: string }`) for full type safety on
+  requests/responses.
 - **CRUD Operations**: `findMany`, `find`, `create`, `update`, `delete`.
 - **Upsert**: Atomic create-or-update based on filters.
-- **i18n Handling**: Automatic default locale creation and localization linking using numeric IDs.
-- **Query Params**: Supports Strapi's filters (e.g., `{ name: { $eq: 'foo' } }`), populate (`*`), pagination, and locale.
-- **Error Handling**: Returns `[ServiceError | null, Data | null]` tuples for async operations.
-- **No Dependencies**: Only `qs` for query stringification; polyfills Fetch if needed.
+- **i18n Handling**: Automatic default locale creation and localization linking
+  using numeric IDs.
+- **Query Params**: Supports Strapi's filters (e.g.,
+  `{ name: { $eq: 'foo' } }`), populate (`*`), pagination, and locale.
+- **Parallel Pagination**: Use `all: true` to fetch all pages in parallel for
+  better performance.
+- **Error Handling**: Returns `[ServiceError | null, Data | null]` tuples for
+  async operations.
+- **No Dependencies**: Only `qs` for query stringification; polyfills Fetch if
+  needed.
 
 ## Installation
 
@@ -34,7 +46,8 @@ Requires Node.js >=18 for modern Fetch. For older environments, polyfill `fetch`
 
 ## Quick Start
 
-Import and instantiate the client with your Strapi base URL, optional auth token, and content-type UID (e.g., `articles` for `/api/articles`)
+Import and instantiate the client with your Strapi base URL, optional auth
+token, and content-type UID (e.g., `articles` for `/api/articles`)
 
 ```ts
 import { StrapiClient } from "@fbritoferreira/strapi";
@@ -88,31 +101,42 @@ if (!err4 && upserted) {
 
 ## i18n Usage
 
-Strapi i18n uses locales (default 'en'). For non-default locales, provide `locale` option; the client auto-creates default if needed and links via base ID.
+Strapi i18n uses locales (default 'en'). For non-default locales, provide
+`locale` option; the client auto-creates default if needed and links via base
+ID.
 
 ```ts
 // Create in French (searches/creates 'en' first if missing)
 const [err, frArticle] = await client.create({
-payload,
-locale: 'fr',
-filters: { title: { $eq: 'Article Français' } } // For existence check
+	payload,
+	locale: "fr",
+	filters: { title: { $eqi: "Article Français" } }, // For existence check
 });
 if (!err && frArticle) {
-console.log(frArticle.documentId); // Shared document ID for localizations
+	console.log(frArticle.documentId); // Shared document ID for localizations
 }
 
 // Update specific locale
-const updatePayload: UpdatePayload<Article> = { data: { content: 'Updated FR' } };
-const [err5, updated] = await client.update({ id: 1, payload: updatePayload, locale: 'fr' });
+const updatePayload: UpdatePayload<Article> = {
+	data: { content: "Updated FR" },
+};
+const [err5, updated] = await client.update({
+	id: 1,
+	payload: updatePayload,
+	locale: "fr",
+});
 
 // Find with locale
-const [err6, frArticles] = await client.findMany({ filters: { title: { $contains: 'Français' } }, locale: 'fr' });
-
+const [err6, frArticles] = await client.findMany({
+	filters: { title: { $contains: "Français" } },
+	locale: "fr",
+});
 ```
 
 ### Query Parameters
 
-Pass `QueryParams<Article>` for filters, populate, etc. Nested filters use `$eq`, `$contains`, etc.
+Pass `QueryParams<Article>` for filters, populate, etc. Nested filters use
+`$eq`, `$contains`, etc.
 
 ```ts
 const params: QueryParams<Article> = {
@@ -122,11 +146,18 @@ const params: QueryParams<Article> = {
 	locale: "fr",
 };
 const [err, paginated] = await client.findMany(params);
+
+// Fetch all pages in parallel (better performance for large datasets)
+const [err2, allArticles] = await client.findMany({
+	params,
+	all: true,
+});
 ```
 
 ## Error Handling
 
-Methods return `[ServiceError | null, Data | null]`. Check `err` for issues like 404 or network failures.
+Methods return `[ServiceError | null, Data | null]`. Check `err` for issues like
+404 or network failures.
 
 ```ts
 const [err, data] = await client.find({ id: 999 });
@@ -146,7 +177,8 @@ See `src/types.ts` for full types. Key methods:
 - `delete(options: { id: number | string }): Promise<[ServiceError | null, T | null]>`
 - `upsert(options: { payload: CreatePayload<T>; filters?: StrapiFilters<T>; params?: Omit<QueryParams<T>, 'filters'>; locale?: string }): Promise<[ServiceError | null, T | null]>`
 
-Constructor: `new StrapiClient<T>({ baseURL: string, uid: string, token?: string })`
+Constructor:
+`new StrapiClient<T>({ baseURL: string, uid: string, token?: string })`
 
 ## Development
 

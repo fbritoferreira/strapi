@@ -2,11 +2,11 @@ import qs from "qs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { StrapiClient } from "../client";
-import type { 
-	QueryParams, 
-	StrapiFilters, 
-	CreatePayload, 
-	UpdatePayload 
+import type {
+	QueryParams,
+	StrapiFilters,
+	CreatePayload,
+	UpdatePayload,
 } from "../types";
 
 interface TestEntity {
@@ -354,7 +354,9 @@ describe("StrapiClient", () => {
 
 	describe("create", () => {
 		it("creates entity successfully with default locale", async () => {
-			const payload: CreatePayload<TestEntity> = { data: { id: 1, name: "new" } };
+			const payload: CreatePayload<TestEntity> = {
+				data: { id: 1, name: "new" },
+			};
 			const mockResponse = { data: { id: 1, name: "new" } };
 			mockFetch.mockResolvedValueOnce({
 				ok: true,
@@ -861,7 +863,7 @@ describe("StrapiClient", () => {
 				statusText: "OK",
 			});
 
-			await client.delete({ id: 1, locale: "fr" });
+			await client.delete({ id: 1 });
 
 			// Delete should ignore locale parameter
 			const callUrl = mockFetch.mock.calls[0][0] as string;
@@ -1078,21 +1080,48 @@ describe("StrapiClient", () => {
 
 			expect(mockFetch).toHaveBeenCalledTimes(3);
 		});
+
+		it("uses id when documentId is not available in upsert", async () => {
+			const payload: CreatePayload<TestEntity> = { data: { name: "existing" } };
+
+			// Return entity without documentId
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: async () => ({
+					data: [{ id: 123, name: "existing" }], // no documentId
+				}),
+				status: 200,
+				statusText: "OK",
+			});
+
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: async () => ({ data: { id: 123, name: "updated" } }),
+				status: 200,
+				statusText: "OK",
+			});
+
+			await client.upsert({ payload });
+
+			// Should use id (123) instead of documentId for the update call
+			const updateCall = mockFetch.mock.calls[1];
+			expect(updateCall[0]).toContain("/123");
+		});
 	});
 
 	describe("getQueryString", () => {
 		it("returns empty string when no params", async () => {
-			const result = (client as unknown).getQueryString();
+			const result = client["getQueryString"]();
 			expect(result).toBe("");
 		});
 
 		it("returns empty string when empty params object", async () => {
-			const result = (client as unknown).getQueryString({});
+			const result = client["getQueryString"]({});
 			expect(result).toBe("");
 		});
 
 		it("returns query string with params", async () => {
-			const result = (client as StrapiClient<T>).getQueryString({
+			const result = client["getQueryString"]({
 				populate: ["*"],
 			});
 			expect(result).toContain("?");
@@ -1138,6 +1167,324 @@ describe("StrapiClient", () => {
 					}),
 				})
 			);
+		});
+	});
+
+	describe("request with all: true (pagination)", () => {
+		it("fetches all pages when pagination exists", async () => {
+			const firstPageResponse = {
+				data: [{ id: 1, name: "test1" }],
+				meta: {
+					pagination: {
+						page: 1,
+						pageSize: 1,
+						pageCount: 3,
+						total: 3,
+					},
+				},
+			};
+			const secondPageResponse = {
+				data: [{ id: 2, name: "test2" }],
+			};
+			const thirdPageResponse = {
+				data: [{ id: 3, name: "test3" }],
+			};
+
+			// First page
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: async () => firstPageResponse,
+				status: 200,
+				statusText: "OK",
+			});
+
+			// Second and third pages (parallel requests)
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: async () => secondPageResponse,
+				status: 200,
+				statusText: "OK",
+			});
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: async () => thirdPageResponse,
+				status: 200,
+				statusText: "OK",
+			});
+
+			const [err, response] = await (client as StrapiClient<TestEntity>)[
+				"request"
+			]("test-entities", { method: "GET" }, { all: true });
+
+			expect(err).toBeNull();
+			expect(response).toEqual({
+				...firstPageResponse,
+				data: [
+					{ id: 1, name: "test1" },
+					{ id: 2, name: "test2" },
+					{ id: 3, name: "test3" },
+				],
+				meta: {
+					...firstPageResponse.meta,
+					pagination: {
+						...firstPageResponse.meta!.pagination,
+						page: 1,
+						pageCount: 1,
+						total: 3,
+					},
+				},
+			});
+			expect(mockFetch).toHaveBeenCalledTimes(3);
+		});
+
+		it("returns first page when no pagination meta", async () => {
+			const response = { data: [{ id: 1, name: "test" }] };
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: async () => response,
+				status: 200,
+				statusText: "OK",
+			});
+
+			const [err, data] = await (client as StrapiClient<TestEntity>)["request"](
+				"test-entities",
+				{ method: "GET" },
+				{ all: true }
+			);
+
+			expect(err).toBeNull();
+			expect(data).toEqual(response);
+			expect(mockFetch).toHaveBeenCalledTimes(1);
+		});
+
+		it("returns first page when pageCount is 1", async () => {
+			const response = {
+				data: [{ id: 1, name: "test" }],
+				meta: {
+					pagination: {
+						page: 1,
+						pageSize: 10,
+						pageCount: 1,
+						total: 1,
+					},
+				},
+			};
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: async () => response,
+				status: 200,
+				statusText: "OK",
+			});
+
+			const [err, data] = await (client as StrapiClient<TestEntity>)["request"](
+				"test-entities",
+				{ method: "GET" },
+				{ all: true }
+			);
+
+			expect(err).toBeNull();
+			expect(data).toEqual(response);
+			expect(mockFetch).toHaveBeenCalledTimes(1);
+		});
+
+		it("handles error on first page request", async () => {
+			mockFetch.mockResolvedValueOnce({
+				ok: false,
+				status: 500,
+				statusText: "Internal Server Error",
+			});
+
+			const [err, data] = await (client as StrapiClient<TestEntity>)["request"](
+				"test-entities",
+				{ method: "GET" },
+				{ all: true }
+			);
+
+			expect(err).toEqual({
+				message: "Strapi API error: 500 Internal Server Error",
+				status: 500,
+			});
+			expect(data).toBeNull();
+			expect(mockFetch).toHaveBeenCalledTimes(1);
+		});
+
+		it("handles error on subsequent page request", async () => {
+			const firstPageResponse = {
+				data: [{ id: 1, name: "test1" }],
+				meta: {
+					pagination: {
+						page: 1,
+						pageSize: 1,
+						pageCount: 2,
+						total: 2,
+					},
+				},
+			};
+
+			// First page succeeds
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: async () => firstPageResponse,
+				status: 200,
+				statusText: "OK",
+			});
+
+			// Second page fails (parallel request)
+			mockFetch.mockResolvedValueOnce({
+				ok: false,
+				status: 404,
+				statusText: "Not Found",
+			});
+
+			const [err, data] = await (client as StrapiClient<TestEntity>)["request"](
+				"test-entities",
+				{ method: "GET" },
+				{ all: true }
+			);
+
+			expect(err).toEqual({
+				message: "Strapi API error: 404 Not Found",
+				status: 404,
+			});
+			expect(data).toBeNull();
+			expect(mockFetch).toHaveBeenCalledTimes(2);
+		});
+
+		it("does not use all pagination when method is not GET", async () => {
+			const response = { data: { id: 1, name: "test" } };
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: async () => response,
+				status: 200,
+				statusText: "OK",
+			});
+
+			const [err, data] = await (client as StrapiClient<TestEntity>)["request"](
+				"test-entities",
+				{ method: "POST" },
+				{ all: true }
+			);
+
+			expect(err).toBeNull();
+			expect(data).toEqual(response);
+			expect(mockFetch).toHaveBeenCalledTimes(1);
+		});
+
+		it("includes correct pagination parameters for subsequent pages", async () => {
+			const firstPageResponse = {
+				data: [{ id: 1, name: "test1" }],
+				meta: {
+					pagination: {
+						page: 1,
+						pageSize: 2,
+						pageCount: 2,
+						total: 3,
+					},
+				},
+			};
+			const secondPageResponse = {
+				data: [
+					{ id: 2, name: "test2" },
+					{ id: 3, name: "test3" },
+				],
+			};
+
+			// First page
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: async () => firstPageResponse,
+				status: 200,
+				statusText: "OK",
+			});
+
+			// Second page (parallel request)
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: async () => secondPageResponse,
+				status: 200,
+				statusText: "OK",
+			});
+
+			await client["request"](
+				"test-entities",
+				{ method: "GET" },
+				{ all: true }
+			);
+
+			// Check that second page request has correct pagination params (URL encoded)
+			const secondCallUrl = mockFetch.mock.calls[1][0] as string;
+			expect(secondCallUrl).toContain("pagination%5Bpage%5D=2");
+			expect(secondCallUrl).toContain("pagination%5BpageSize%5D=2");
+		});
+
+		it("handles JSON parse error on first page in pagination", async () => {
+			// First page response with invalid JSON
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: async () => {
+					throw new Error("Invalid JSON");
+				},
+				status: 200,
+				statusText: "OK",
+			});
+
+			const [err, data] = await client["request"](
+				"test-entities",
+				{ method: "GET" },
+				{ all: true }
+			);
+
+			expect(err).toEqual({
+				message:
+					"Strapi API error: Failed to parse JSON response - Invalid JSON",
+				status: 200,
+			});
+			expect(data).toBeNull();
+		});
+
+		it("handles JSON parse error on subsequent page in pagination", async () => {
+			const firstPageResponse = {
+				data: [{ id: 1, name: "test1" }],
+				meta: {
+					pagination: {
+						page: 1,
+						pageSize: 1,
+						pageCount: 2,
+						total: 2,
+					},
+				},
+			};
+
+			// First page succeeds
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: async () => firstPageResponse,
+				status: 200,
+				statusText: "OK",
+			});
+
+			// Second page has invalid JSON (parallel request)
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: async () => {
+					throw new Error("Invalid JSON on page 2");
+				},
+				status: 200,
+				statusText: "OK",
+			});
+
+			const [err, data] = await client["request"](
+				"test-entities",
+				{ method: "GET" },
+				{ all: true }
+			);
+
+			expect(err).toEqual({
+				message:
+					"Strapi API error: Failed to parse JSON response from page 2 - Invalid JSON on page 2",
+				status: 200,
+			});
+			expect(data).toBeNull();
 		});
 	});
 });
