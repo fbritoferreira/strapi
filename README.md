@@ -51,11 +51,11 @@ interface Article {
 	content: string;
 }
 
-const client = new StrapiClient<Article>(
-	"http://localhost:1337", // Strapi API base
-	"your-jwt-token", // Optional for auth
-	"articles" // UID for /api/articles
-);
+const client = new StrapiClient<Article>({
+	baseURL: "http://localhost:1337", // Strapi API base
+	uid: "articles", // UID for /api/articles
+	token: "your-jwt-token", // Optional for auth
+});
 
 // Find multiple
 const [err1, articles] = await client.findMany({ populate: ["*"] });
@@ -106,7 +106,7 @@ const updatePayload: UpdatePayload<Article> = { data: { content: 'Updated FR' } 
 const [err5, updated] = await client.update({ id: 1, payload: updatePayload, locale: 'fr' });
 
 // Find with locale
-const [err6, frArticles] = await client.findMany({ filters: { title: { $contains: 'Français' } }, 'fr'});
+const [err6, frArticles] = await client.findMany({ filters: { title: { $contains: 'Français' } }, locale: 'fr' });
 
 ```
 
@@ -139,14 +139,14 @@ if (err) {
 
 See `src/types.ts` for full types. Key methods:
 
-- `findMany(params?: QueryParams<T>, locale?: string): Promise<[ServiceError | null, T[] | null]>`
-- `find(options: { id?: number | string; params?: QueryParams<T>; locale?: string }): Promise<[ServiceError | null, T | null]>`
+- `findMany(options: { params?: QueryParams<T>; locale?: string; all?: boolean }): Promise<[ServiceError | null, T[] | null]>`
+- `find(options: { id?: number | string; params?: QueryParams<T>; locale?: string; all?: boolean }): Promise<[ServiceError | null, T | null]>`
 - `create(options: { payload: CreatePayload<T>; params?: Omit<QueryParams<T>, 'filters'>; locale?: string; filters?: StrapiFilters<T> }): Promise<[ServiceError | null, T | null]>`
 - `update(options: { id: number | string; payload: UpdatePayload<T>; params?: QueryParams<T>; locale?: string }): Promise<[ServiceError | null, T | null]>`
-- `delete(options: { id: number | string; locale?: string }): Promise<[ServiceError | null, T | null]>`
-- `upsert(options: { locale?: string; payload: CreatePayload<T>; filters?: StrapiFilters<T>; params?: Omit<QueryParams<T>, 'filters'> }): Promise<[ServiceError | null, T | null]>`
+- `delete(options: { id: number | string }): Promise<[ServiceError | null, T | null]>`
+- `upsert(options: { payload: CreatePayload<T>; filters?: StrapiFilters<T>; params?: Omit<QueryParams<T>, 'filters'>; locale?: string }): Promise<[ServiceError | null, T | null]>`
 
-Constructor: `new StrapiClient<T>(baseURL: string, token?: string, uid: string)`
+Constructor: `new StrapiClient<T>({ baseURL: string, uid: string, token?: string })`
 
 ## Development
 

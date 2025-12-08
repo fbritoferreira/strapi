@@ -44,10 +44,82 @@ export class StrapiClient<
 
 	private async request<R>(
 		endpoint: string,
-		options: RequestInit = {}
+		options: RequestInit = {},
+		{ all = false }: { all: boolean }
 	): Promise<[ServiceError | null, R | null]> {
 		const normalizedEndpoint = endpoint.replace(/^\/+/, "");
 		const url = `${this.baseURL}/${normalizedEndpoint}`;
+		if (all && options.method === "GET") {
+			const firstPageResponse = await fetch(url, {
+				...options,
+				headers: { ...this.headers, ...options.headers },
+			});
+
+			if (!firstPageResponse.ok) {
+				return [
+					{
+						message: `Strapi API error: ${firstPageResponse.status} ${firstPageResponse.statusText}`,
+						status: firstPageResponse.status,
+					},
+					null,
+				];
+			}
+
+			const firstPageData = await firstPageResponse.json();
+			const pagination = firstPageData.meta?.pagination;
+
+			if (!pagination) {
+				return [null, firstPageData as R];
+			}
+
+			const { pageSize, pageCount } = pagination;
+
+			if (pageCount <= 1) {
+				return [null, firstPageData as R];
+			}
+
+			const allData: T[] = [...firstPageData.data];
+
+			for (let page = 2; page <= pageCount; page++) {
+				const pageUrl = new URL(url);
+				pageUrl.searchParams.set("pagination[page]", page.toString());
+				pageUrl.searchParams.set("pagination[pageSize]", pageSize.toString());
+
+				const pageResponse = await fetch(pageUrl.toString(), {
+					...options,
+					headers: { ...this.headers, ...options.headers },
+				});
+
+				if (!pageResponse.ok) {
+					return [
+						{
+							message: `Strapi API error: ${pageResponse.status} ${pageResponse.statusText}`,
+							status: pageResponse.status,
+						},
+						null,
+					];
+				}
+
+				const pageData = await pageResponse.json();
+				allData.push(...pageData.data);
+			}
+
+			const combinedResponse = {
+				...firstPageData,
+				data: allData,
+				meta: {
+					...firstPageData.meta,
+					pagination: {
+						...pagination,
+						page: 1,
+						pageCount: 1,
+						total: allData.length,
+					},
+				},
+			};
+
+			return [null, combinedResponse as R];
+		}
 		try {
 			const response = await fetch(url, {
 				...options,
@@ -100,10 +172,15 @@ export class StrapiClient<
 		})}`;
 	}
 
-	async findMany(
-		params?: QueryParams<T>,
-		locale?: string
-	): Promise<[ServiceError | null, T[] | null]> {
+	async findMany({
+		params,
+		locale,
+		all = false,
+	}: {
+		params?: QueryParams<T>;
+		locale?: string;
+		all?: boolean;
+	}): Promise<[ServiceError | null, T[] | null]> {
 		const queryParams = {
 			...params,
 			...(locale && locale !== "en" ? { locale } : {}),
@@ -111,7 +188,8 @@ export class StrapiClient<
 		const queryString = this.getQueryString(queryParams);
 		const [err, response] = await this.request<StrapiResponse<T>>(
 			`${this.uid}${queryString}`,
-			{ method: "GET" }
+			{ method: "GET" },
+			{ all }
 		);
 		if (err) return [err, null];
 		return [null, response?.data ?? []];
@@ -121,8 +199,9 @@ export class StrapiClient<
 		id?: number | string;
 		params?: QueryParams<T>;
 		locale?: string;
+		all?: boolean;
 	}): Promise<[ServiceError | null, T | null]> {
-		const { id, params, locale } = options;
+		const { id, params, locale, all = false } = options;
 		const queryParams = {
 			...params,
 			...(locale && locale !== "en" ? { locale } : {}),
@@ -133,10 +212,18 @@ export class StrapiClient<
 		if (id) {
 			[err, response] = await this.request<StrapiSingleResponse<T>>(
 				`${this.uid}/${id}${queryString}`,
-				{ method: "GET" }
+				{ method: "GET" },
+				{ all: false }
 			);
 		} else {
-			const [findErr, findResponse] = await this.findMany(params, locale);
+			const findManyOptions: {
+				params?: QueryParams<T>;
+				locale?: string;
+				all: boolean;
+			} = { all };
+			if (params) findManyOptions.params = params;
+			if (locale) findManyOptions.locale = locale;
+			const [findErr, findResponse] = await this.findMany(findManyOptions);
 			if (findErr) return [findErr, null];
 			return [null, findResponse?.[0] ?? null];
 		}
@@ -160,7 +247,8 @@ export class StrapiClient<
 				{
 					method: "POST",
 					body: JSON.stringify(payload),
-				}
+				},
+				{ all: false }
 			);
 			if (err) return [err, null];
 			return [null, response?.data ?? null];
@@ -174,7 +262,9 @@ export class StrapiClient<
 		};
 		const searchQuery = this.getQueryString(searchParams);
 		const [searchErr, enResponse] = await this.request<StrapiResponse<T>>(
-			`${this.uid}${searchQuery}`
+			`${this.uid}${searchQuery}`,
+			{},
+			{ all: false }
 		);
 		if (searchErr) return [searchErr, null];
 
@@ -189,13 +279,17 @@ export class StrapiClient<
 		} else {
 			const [createErr, createResponse] = await this.request<
 				StrapiSingleResponse<T>
-			>(this.uid, {
-				method: "POST",
-				body: JSON.stringify({
-					...payload,
-					data: { ...payload.data, locale: "en" },
-				}),
-			});
+			>(
+				this.uid,
+				{
+					method: "POST",
+					body: JSON.stringify({
+						...payload,
+						data: { ...payload.data, locale: "en" },
+					}),
+				},
+				{ all: false }
+			);
 			if (createErr || !createResponse?.data.documentId) {
 				return [createErr, null];
 			}
@@ -206,10 +300,14 @@ export class StrapiClient<
 		// Include locale in the payload explicitly
 		const [localeErr, localeResponse] = await this.request<
 			StrapiSingleResponse<T>
-		>(`${this.uid}/${baseId}?locale=${locale}`, {
-			method: "PUT",
-			body: JSON.stringify(payload),
-		});
+		>(
+			`${this.uid}/${baseId}?locale=${locale}`,
+			{
+				method: "PUT",
+				body: JSON.stringify(payload),
+			},
+			{ all: false }
+		);
 
 		if (localeErr || !localeResponse?.data.documentId) {
 			return [localeErr, null];
@@ -231,10 +329,14 @@ export class StrapiClient<
 				? `${this.uid}/${id}`
 				: `${this.uid}/${id}?locale=${locale}`;
 
-		const [err, response] = await this.request<StrapiSingleResponse<T>>(url, {
-			method: "PUT",
-			body: JSON.stringify(payload),
-		});
+		const [err, response] = await this.request<StrapiSingleResponse<T>>(
+			url,
+			{
+				method: "PUT",
+				body: JSON.stringify(payload),
+			},
+			{ all: false }
+		);
 
 		if (err) {
 			return [err, null];
@@ -247,7 +349,8 @@ export class StrapiClient<
 	}): Promise<[ServiceError | null, T | null]> {
 		const [err, response] = await this.request<StrapiSingleResponse<T>>(
 			`${this.uid}/${options.id}`,
-			{ method: "DELETE" }
+			{ method: "DELETE" },
+			{ all: false }
 		);
 		if (err) {
 			return [err, null];
@@ -269,10 +372,11 @@ export class StrapiClient<
 			pagination: { pageSize: 1 },
 			...(locale && locale !== "en" ? { locale } : {}),
 		};
-		const [searchErr, searchResponse] = await this.findMany(
-			searchParams,
-			locale
-		);
+		const [searchErr, searchResponse] = await this.findMany({
+			params: searchParams,
+			locale,
+			all: false,
+		});
 		if (searchErr) return [searchErr, null];
 
 		if (searchResponse && searchResponse.length > 0 && searchResponse?.[0]) {

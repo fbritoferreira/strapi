@@ -2,19 +2,12 @@ import qs from "qs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { StrapiClient } from "../client";
-
-interface QueryParams<T> {
-	filters?: StrapiFilters<T>;
-	populate?: string[];
-	pagination?: { pageSize: number };
-}
-type StrapiFilters<T> = Partial<Record<keyof T, unknown>>;
-interface CreatePayload<T> {
-	data: T;
-}
-interface UpdatePayload<T> {
-	data: Partial<T>;
-}
+import type { 
+	QueryParams, 
+	StrapiFilters, 
+	CreatePayload, 
+	UpdatePayload 
+} from "../types";
 
 interface TestEntity {
 	id: number;
@@ -136,7 +129,7 @@ describe("StrapiClient", () => {
 				statusText: "OK",
 			});
 
-			const [err, data] = await client.findMany();
+			const [err, data] = await client.findMany({});
 			expect(err).toBeNull();
 			expect(data).toEqual(mockResponse.data);
 			expect(mockFetch).toHaveBeenCalledWith(
@@ -161,7 +154,7 @@ describe("StrapiClient", () => {
 				statusText: "OK",
 			});
 
-			const [err, data] = await client.findMany(params);
+			const [err, data] = await client.findMany({ params });
 			expect(err).toBeNull();
 			expect(data).toEqual([]);
 			expect(mockFetch).toHaveBeenCalledWith(
@@ -182,7 +175,7 @@ describe("StrapiClient", () => {
 				statusText: "OK",
 			});
 
-			const [err, data] = await client.findMany(undefined, "fr");
+			const [err, data] = await client.findMany({ locale: "fr" });
 			expect(err).toBeNull();
 			expect(data).toEqual(mockResponse.data);
 			expect(mockFetch).toHaveBeenCalledWith(
@@ -200,7 +193,7 @@ describe("StrapiClient", () => {
 				statusText: "OK",
 			});
 
-			await client.findMany(undefined, "en");
+			await client.findMany({ locale: "en" });
 			const callUrl = mockFetch.mock.calls[0][0] as string;
 			expect(callUrl).not.toContain("locale=en");
 		});
@@ -213,7 +206,7 @@ describe("StrapiClient", () => {
 				statusText: "OK",
 			});
 
-			const [err, data] = await client.findMany();
+			const [err, data] = await client.findMany({});
 			expect(err).toBeNull();
 			expect(data).toEqual([]);
 		});
@@ -225,7 +218,7 @@ describe("StrapiClient", () => {
 				statusText: "Not Found",
 			});
 
-			const [err, data] = await client.findMany();
+			const [err, data] = await client.findMany({});
 			expect(err).toEqual({
 				message: "Strapi API error: 404 Not Found",
 				status: 404,
@@ -361,7 +354,7 @@ describe("StrapiClient", () => {
 
 	describe("create", () => {
 		it("creates entity successfully with default locale", async () => {
-			const payload: CreatePayload<TestEntity> = { data: { name: "new" } };
+			const payload: CreatePayload<TestEntity> = { data: { id: 1, name: "new" } };
 			const mockResponse = { data: { id: 1, name: "new" } };
 			mockFetch.mockResolvedValueOnce({
 				ok: true,
