@@ -82,6 +82,13 @@ describe("CollectionClient", () => {
 			await articles.findMany({ init: { cache: "no-store" } });
 			expect(lastCall(fetchMock).init.cache).toBe("no-store");
 		});
+
+		it("passes locale and init through to fetchAll", async () => {
+			fetchMock.mockResolvedValueOnce(jsonResponse({ data: [doc("a")], meta: { pagination: { page: 1, pageSize: 1, pageCount: 1, total: 1 } } }));
+			await articles.findMany({ all: true, locale: "fr", init: { cache: "no-store" } });
+			expect(decoded(fetchMock)).toContain("locale=fr");
+			expect(lastCall(fetchMock).init.cache).toBe("no-store");
+		});
 	});
 
 	describe("find", () => {
@@ -106,6 +113,18 @@ describe("CollectionClient", () => {
 			const [err] = await articles.find({ documentId: "zzz" });
 			expect(err?.name).toBe("NotFoundError");
 		});
+
+		it("encodes documentId with special characters", async () => {
+			fetchMock.mockResolvedValueOnce(jsonResponse({ data: doc("a b/c") }));
+			await articles.find({ documentId: "a b/c" });
+			expect(lastCall(fetchMock).url).toContain("articles/a%20b%2Fc");
+		});
+
+		it("passes init through", async () => {
+			fetchMock.mockResolvedValueOnce(jsonResponse({ data: doc("abc") }));
+			await articles.find({ documentId: "abc", init: { cache: "no-store" } });
+			expect(lastCall(fetchMock).init.cache).toBe("no-store");
+		});
 	});
 
 	describe("findFirst", () => {
@@ -122,6 +141,12 @@ describe("CollectionClient", () => {
 			const [err, data] = await articles.findFirst();
 			expect(err).toBeNull();
 			expect(data).toBeNull();
+		});
+
+		it("passes init through", async () => {
+			fetchMock.mockResolvedValueOnce(jsonResponse({ data: [doc("a")] }));
+			await articles.findFirst({ init: { cache: "no-store" } });
+			expect(lastCall(fetchMock).init.cache).toBe("no-store");
 		});
 
 		it("returns errors", async () => {
@@ -145,6 +170,19 @@ describe("CollectionClient", () => {
 			fetchMock.mockResolvedValueOnce(jsonResponse({ data: [doc("a"), doc("b")] }));
 			const [, total] = await articles.count();
 			expect(total).toBe(2);
+		});
+
+		it("falls back to data length when meta has no pagination", async () => {
+			fetchMock.mockResolvedValueOnce(jsonResponse({ data: [doc("a"), doc("b")], meta: {} }));
+			const [, total] = await articles.count();
+			expect(total).toBe(2);
+		});
+
+		it("passes locale and init through", async () => {
+			fetchMock.mockResolvedValueOnce(jsonResponse({ data: [doc("a")], meta: { pagination: { page: 1, pageSize: 1, pageCount: 1, total: 1 } } }));
+			await articles.count({ locale: "fr", init: { cache: "no-store" } });
+			expect(decoded(fetchMock)).toContain("locale=fr");
+			expect(lastCall(fetchMock).init.cache).toBe("no-store");
 		});
 
 		it("returns errors", async () => {
@@ -175,6 +213,13 @@ describe("CollectionClient", () => {
 			expect(err?.details).toEqual({ errors: [] });
 		});
 
+		it("returns NotFoundError when the default-locale post response has no data", async () => {
+			fetchMock.mockResolvedValueOnce(jsonResponse({ data: null }, 201));
+			const [err, data] = await articles.create({ payload });
+			expect(err).toEqual({ status: 404, name: "NotFoundError", message: "Not Found" });
+			expect(data).toBeNull();
+		});
+
 		it("links a localization to an existing default-locale document", async () => {
 			fetchMock
 				.mockResolvedValueOnce(jsonResponse({ data: [doc("base")] }))
@@ -183,10 +228,26 @@ describe("CollectionClient", () => {
 			expect(err).toBeNull();
 			expect(data?.locale).toBe("fr");
 			const urls = fetchMock.mock.calls.map(([u]) => decodeURIComponent(String(u)));
-			expect(urls[0]).toBe("http://h/api/articles?filters[title][$eq]=New");
+			expect(urls[0]).toBe("http://h/api/articles?filters[title][$eq]=New&pagination[pageSize]=1");
 			expect(urls[1]).toBe("http://h/api/articles/base?locale=fr");
 			expect(lastCall(fetchMock).init.method).toBe("PUT");
 			expect(bodyOf(fetchMock)).toEqual(payload);
+		});
+
+		it("excludes caller params from the base-document search", async () => {
+			fetchMock
+				.mockResolvedValueOnce(jsonResponse({ data: [doc("base")] }))
+				.mockResolvedValueOnce(jsonResponse({ data: { ...doc("base", "Nouveau"), locale: "fr" } }));
+			await articles.create({
+				payload,
+				locale: "fr",
+				filters: { title: { $eq: "New" } },
+				params: { status: "published", sort: ["title:asc"] },
+				init: { cache: "no-store" },
+			});
+			const urls = fetchMock.mock.calls.map(([u]) => decodeURIComponent(String(u)));
+			expect(urls[0]).toBe("http://h/api/articles?filters[title][$eq]=New&pagination[pageSize]=1");
+			expect(lastCall(fetchMock).init.cache).toBe("no-store");
 		});
 
 		it("creates the default-locale document first when none exists", async () => {
@@ -194,12 +255,24 @@ describe("CollectionClient", () => {
 				.mockResolvedValueOnce(jsonResponse({ data: [] }))
 				.mockResolvedValueOnce(jsonResponse({ data: doc("fresh") }, 201))
 				.mockResolvedValueOnce(jsonResponse({ data: { ...doc("fresh"), locale: "de" } }));
-			const [err, data] = await articles.create({ payload, locale: "de" });
+			const [err, data] = await articles.create({ payload, locale: "de", params: { status: "published" } });
 			expect(err).toBeNull();
 			expect(data?.documentId).toBe("fresh");
 			const secondBody = JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body));
 			expect(secondBody).toEqual({ data: { title: "New", locale: "en" } });
-			expect(decoded(fetchMock)).toBe("http://h/api/articles/fresh?locale=de");
+			expect(decodeURIComponent(String(fetchMock.mock.calls[1]?.[0]))).toBe("http://h/api/articles?status=published");
+			expect(decoded(fetchMock)).toBe("http://h/api/articles/fresh?status=published&locale=de");
+		});
+
+		it("returns an error when the created base document has no documentId", async () => {
+			fetchMock
+				.mockResolvedValueOnce(jsonResponse({ data: [] }))
+				.mockResolvedValueOnce(jsonResponse({ data: { id: 1 } }, 201));
+			const [err, data] = await articles.create({ payload, locale: "fr" });
+			expect(err?.name).toBe("HTTPError");
+			expect(err?.message).toContain("documentId");
+			expect(data).toBeNull();
+			expect(fetchMock).toHaveBeenCalledTimes(2);
 		});
 
 		it("returns the search error for a non-default locale", async () => {
@@ -245,6 +318,19 @@ describe("CollectionClient", () => {
 			const [err, data] = await articles.update({ documentId: "abc", payload: { data: {} } });
 			expect(err?.status).toBe(404);
 			expect(data).toBeNull();
+		});
+
+		it("returns NotFoundError when the response has no data", async () => {
+			fetchMock.mockResolvedValueOnce(jsonResponse({ data: null }));
+			const [err, data] = await articles.update({ documentId: "abc", payload: { data: {} } });
+			expect(err).toEqual({ status: 404, name: "NotFoundError", message: "Not Found" });
+			expect(data).toBeNull();
+		});
+
+		it("passes init through", async () => {
+			fetchMock.mockResolvedValueOnce(jsonResponse({ data: doc("abc") }));
+			await articles.update({ documentId: "abc", payload: { data: {} }, init: { cache: "no-store" } });
+			expect(lastCall(fetchMock).init.cache).toBe("no-store");
 		});
 	});
 
@@ -299,6 +385,46 @@ describe("CollectionClient", () => {
 			const [err] = await articles.upsert({ payload });
 			expect(err?.status).toBe(500);
 			expect(fetchMock).toHaveBeenCalledTimes(1);
+		});
+
+		it("falls through to create for a non-default locale when nothing matches", async () => {
+			fetchMock
+				.mockResolvedValueOnce(jsonResponse({ data: [] }))
+				.mockResolvedValueOnce(jsonResponse({ data: [doc("base")] }))
+				.mockResolvedValueOnce(jsonResponse({ data: { ...doc("base", "T"), locale: "fr" } }));
+			const [err, data] = await articles.upsert({ payload, filters: { title: { $eq: "T" } }, locale: "fr" });
+			expect(err).toBeNull();
+			expect(data?.locale).toBe("fr");
+			const urls = fetchMock.mock.calls.map(([u]) => decodeURIComponent(String(u)));
+			expect(urls[0]).toBe("http://h/api/articles?filters[title][$eq]=T&pagination[pageSize]=1&locale=fr");
+			expect(urls[1]).toBe("http://h/api/articles?filters[title][$eq]=T&pagination[pageSize]=1");
+			expect(urls[2]).toBe("http://h/api/articles/base?locale=fr");
+			expect(lastCall(fetchMock).init.method).toBe("PUT");
+			expect(fetchMock).toHaveBeenCalledTimes(3);
+		});
+
+		it("passes params and init through when updating the found match", async () => {
+			fetchMock.mockResolvedValueOnce(jsonResponse({ data: [doc("found")] })).mockResolvedValueOnce(jsonResponse({ data: doc("found", "T") }));
+			await articles.upsert({
+				payload,
+				filters: { title: { $eq: "T" } },
+				params: { status: "published" },
+				init: { cache: "no-store" },
+			});
+			expect(lastCall(fetchMock).url).toContain("status=published");
+			expect(lastCall(fetchMock).init.cache).toBe("no-store");
+		});
+
+		it("passes params and init through when creating", async () => {
+			fetchMock.mockResolvedValueOnce(jsonResponse({ data: [] })).mockResolvedValueOnce(jsonResponse({ data: doc("new", "T") }, 201));
+			await articles.upsert({
+				payload,
+				filters: { title: { $eq: "T" } },
+				params: { status: "published" },
+				init: { cache: "no-store" },
+			});
+			expect(decoded(fetchMock)).toContain("status=published");
+			expect(lastCall(fetchMock).init.cache).toBe("no-store");
 		});
 	});
 });

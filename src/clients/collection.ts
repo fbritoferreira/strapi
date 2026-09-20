@@ -113,19 +113,23 @@ export class CollectionClient<T extends object> {
 		}
 
 		// Non-default locale: find or create the default-locale document, then add the localization.
-		const searchQuery = this.query({ ...params, ...(filters && { filters }) }, this.defaultLocale);
-		const [searchErr, found] = await this.http.request<StrapiResponse<T & { documentId?: string }>>(
-			`${this.uid}${searchQuery}`,
-			{ ...init, method: "GET" }
-		);
+		// The base-document lookup uses only `filters` (plus a forced pageSize of 1), never the
+		// caller's `params` — sort/pagination/status shape the response shape, not which document
+		// is the localization base.
+		const searchQuery = this.query({ ...(filters && { filters }), pagination: { pageSize: 1 } }, this.defaultLocale);
+		const [searchErr, found] = await this.http.request<StrapiResponse<T>>(`${this.uid}${searchQuery}`, {
+			...init,
+			method: "GET",
+		});
 		if (searchErr) return fail(searchErr);
 
-		let documentId = found?.data?.[0]?.documentId;
+		const firstFound = found?.data?.[0];
+		let documentId = firstFound ? documentIdOf(firstFound) : undefined;
 		if (!documentId) {
 			const basePayload = { ...payload, data: { ...payload.data, locale: this.defaultLocale } };
-			const [createErr, created] = await this.post<T & { documentId?: string }>(this.uid, basePayload, init);
+			const [createErr, created] = await this.post(`${this.uid}${this.query(params, undefined)}`, basePayload, init);
 			if (createErr) return fail(createErr);
-			documentId = created.documentId;
+			documentId = documentIdOf(created);
 			if (!documentId) return fail({ message: "Strapi API error: created document has no documentId", name: "HTTPError" });
 		}
 
@@ -174,14 +178,14 @@ export class CollectionClient<T extends object> {
 		});
 		if (searchErr) return fail(searchErr);
 
-		const documentId = (existing as { documentId?: string } | null)?.documentId;
+		const documentId = existing ? documentIdOf(existing) : undefined;
 		if (documentId) {
 			return this.update({ documentId, payload, ...(params && { params }), ...(locale !== undefined && { locale }), ...(init && { init }) });
 		}
 		return this.create({ payload, ...(params && { params }), ...(filters && { filters }), ...(locale !== undefined && { locale }), ...(init && { init }) });
 	}
 
-	private async post<R extends object = T>(path: string, payload: CreatePayload<T> | { data: unknown }, init?: FetchInit): Promise<Result<R>> {
+	protected async post<R extends object = T>(path: string, payload: CreatePayload<T> | { data: unknown }, init?: FetchInit): Promise<Result<R>> {
 		const [err, body] = await this.http.request<StrapiSingleResponse<R>>(path, {
 			...init,
 			method: "POST",
@@ -196,4 +200,9 @@ export class CollectionClient<T extends object> {
 function toMeta(body: { meta?: StrapiResponse<unknown>["meta"] } | null | undefined): StrapiMeta {
 	if (!body || body.meta === undefined) return null;
 	return body.meta;
+}
+
+/** Narrows a Strapi document's `documentId` without casting the whole object. */
+function documentIdOf(doc: object): string | undefined {
+	return "documentId" in doc && typeof doc.documentId === "string" ? doc.documentId : undefined;
 }
