@@ -5,6 +5,7 @@ export default defineConfig({
 		typecheck: {
 			enabled: true,
 			include: ["src/test/**/*.spec.ts"],
+			tsconfig: "./tsconfig.test.json",
 		},
 		coverage: {
 			reporter: ["json-summary", "json", "html-spa"],
