@@ -8,7 +8,8 @@ A TypeScript client for the Strapi 5 REST API. A root `Strapi` class wraps
 collection types, single types, the users-permissions plugin (`/api/users`)
 and the upload plugin (`/api/upload`); a `StrapiClient` shorthand covers a
 single collection. Every method returns a `[error, data, meta]` tuple instead
-of throwing.
+of throwing. The `strapi-client generate` CLI command writes TypeScript
+interfaces and the content-type registry from your Strapi schema.
 
 ## Installation
 
@@ -246,9 +247,41 @@ strapi.single("homepage"); // SingleTypeClient<Homepage>
 ```
 
 An explicit type argument still overrides the registry, and an unregistered
-uid falls back to `CollectionClient<object>` / `SingleTypeClient<object>`. A
-`generate` command planned for 0.7.0 will emit this augmentation from your
+uid falls back to `CollectionClient<object>` / `SingleTypeClient<object>`. See
+Generating types below for a command that emits this augmentation from your
 Strapi schema.
+
+## Generating types
+
+`strapi-client generate` writes the interfaces and the registry augmentation for you.
+
+```sh
+# From a Strapi project checked out next to your app
+npx @fbritoferreira/strapi generate --dir ../my-strapi -o src/strapi-types.ts
+
+# From a running instance (admin user credentials, not an API token)
+STRAPI_ADMIN_EMAIL=me@example.com STRAPI_ADMIN_PASSWORD=... \
+  npx @fbritoferreira/strapi generate --url https://cms.example.com -o src/strapi-types.ts
+
+# In CI: fail when the committed file is stale
+npx @fbritoferreira/strapi generate --dir ../my-strapi -o src/strapi-types.ts --check
+```
+
+The installed binary is named `strapi-client`, so `npx @fbritoferreira/strapi generate` and `strapi-client generate` from a local install run the same command.
+
+Import the generated file once anywhere in your app (`import "./strapi-types";`) and `strapi.collection("articles")` returns `CollectionClient<Article>`.
+
+What is generated:
+
+- One `interface` per `api::` content type, extending `StrapiDocument`; localized types get a required `locale`.
+- One `interface` per component, with `id: number`.
+- Relations, media, components and dynamic zones are optional fields (they appear only when populated). `media` is `StrapiMedia | null` or `StrapiMedia[]`; relations to `plugin::users-permissions.user` are `StrapiUser`.
+- Dynamic zones are `Array<(BlocksHero & { __component: "blocks.hero" }) | ...>`.
+- `enumeration` becomes a union of string literals; `json` is `unknown`; `biginteger` is `string`.
+- `private` attributes are skipped. Plugin content types are skipped unless `--include-plugins` is passed.
+- `--include-plugins` registers plugin content types under their `pluralName` even when the plugin does not expose a matching `/api/<pluralName>` route.
+
+The `--url` source calls `POST /admin/login` and the Content-Type Builder routes, which require an admin user with the `plugin::content-type-builder.read` permission. Strapi does not accept API tokens on admin routes.
 
 ## Migrating from 0.4
 
@@ -272,8 +305,9 @@ Strapi schema.
 1. Clone and install: `git clone <repo> && pnpm install` (Node.js 24, see `.nvmrc`)
 2. Run tests: `pnpm test` (Vitest), `pnpm test:coverage` for coverage
 3. Lint and typecheck: `pnpm lint && pnpm typecheck`
-4. Build: `pnpm build` (outputs ESM, CJS and bundled `.d.ts` to `dist/`)
+4. Build: `pnpm build` (outputs ESM, CJS and bundled `.d.ts` to `dist/`; also builds the `generate` CLI to `dist/cli.mjs`, used by `bin/strapi-client.mjs`)
 5. Add a changeset for user-facing changes: `pnpm changeset`
+6. After changing `src/cli/emit.ts`, refresh the fixture snapshot: `UPDATE_SNAPSHOT=1 pnpm vitest run src/test/cli/emit.spec.ts`
 
 Uses Vite for building and Vitest for testing. Releases are cut by the
 `Release` GitHub workflow from `main` via Changesets.

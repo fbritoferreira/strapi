@@ -1,0 +1,11 @@
+{
+	"kind": "singleType",
+	"collectionName": "homepages",
+	"info": { "singularName": "homepage", "pluralName": "homepages", "displayName": "Homepage" },
+	"pluginOptions": { "i18n": { "localized": true } },
+	"attributes": {
+		"heading": { "type": "string", "required": true },
+		"hero": { "type": "component", "repeatable": false, "component": "blocks.hero" },
+		"featuredArticle": { "type": "relation", "relation": "oneToOne", "target": "api::article.article" }
+	}
+}

@@ -1,0 +1,10 @@
+{
+	"extends": "./tsconfig.json",
+	"compilerOptions": {
+		"noEmit": true,
+		"rootDir": ".",
+		"paths": { "@fbritoferreira/strapi": ["./src/index.ts"] }
+	},
+	"include": ["src/cli/__fixtures__/expected-output.ts", "src/index.ts"],
+	"exclude": ["node_modules", "dist"]
+}

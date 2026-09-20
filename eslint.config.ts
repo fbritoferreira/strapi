@@ -5,7 +5,7 @@ import json from "@eslint/json";
 import { defineConfig, globalIgnores } from "eslint/config";
 
 export default defineConfig([
-	globalIgnores(["node_modules/**", "dist/**", "coverage/**"]),
+	globalIgnores(["node_modules/**", "dist/**", "coverage/**", "src/cli/__fixtures__/**"]),
 	{
 		files: ["**/*.{js,mjs,cjs,ts,mts,cts}"],
 		plugins: { js },
