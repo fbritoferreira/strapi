@@ -121,10 +121,9 @@ const [err, all, meta] = await articles.findMany({
 });
 ```
 
-The first request tells the client whether Strapi is paging by `page` or by
-offset (`start`/`limit`); the remaining pages are then fetched in that same
-mode. Pass `pagination: { start, limit }` up front to force offset mode from
-the first request:
+Mode follows the `pagination` you pass: `page`/`pageSize`, or nothing, for
+page mode; `start`/`limit` for offset mode. The client fetches the first page
+to learn the total, then requests the rest in that same mode:
 
 ```ts
 const [err, all] = await articles.findMany({
@@ -212,7 +211,7 @@ const [err, cached] = await articles.findMany({
 ```
 
 The constructor also accepts `headers`, a custom `fetch` implementation, and
-`timeout` (milliseconds, default 10 000):
+`timeout` (milliseconds, default 10_000):
 
 ```ts
 const strapi = new Strapi({
