@@ -101,4 +101,23 @@ describe("loadFromDir", () => {
 		await writeFile(file, JSON.stringify({ kind: "collectionType", attributes: {} }));
 		await expect(loadFromDir(root)).rejects.toThrow(file);
 	});
+
+	it("rejects a schema with attributes: null, naming the file", async () => {
+		const root = await mkdtemp(join(tmpdir(), "strapi-gen-"));
+		await mkdir(join(root, "src/api/bad/content-types/bad"), { recursive: true });
+		const file = join(root, "src/api/bad/content-types/bad/schema.json");
+		await writeFile(
+			file,
+			JSON.stringify({ kind: "collectionType", info: { singularName: "bad", pluralName: "bads", displayName: "Bad" }, attributes: null })
+		);
+		await expect(loadFromDir(root)).rejects.toThrow(file);
+	});
+
+	it("rejects a schema with info: [], naming the file", async () => {
+		const root = await mkdtemp(join(tmpdir(), "strapi-gen-"));
+		await mkdir(join(root, "src/api/bad/content-types/bad"), { recursive: true });
+		const file = join(root, "src/api/bad/content-types/bad/schema.json");
+		await writeFile(file, JSON.stringify({ kind: "collectionType", info: [], attributes: {} }));
+		await expect(loadFromDir(root)).rejects.toThrow(file);
+	});
 });

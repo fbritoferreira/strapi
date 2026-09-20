@@ -11,6 +11,10 @@ async function isDirectory(path: string): Promise<boolean> {
 	}
 }
 
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+	return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
 async function readJson(file: string): Promise<Record<string, unknown>> {
 	let text: string;
 	try {
@@ -20,21 +24,20 @@ async function readJson(file: string): Promise<Record<string, unknown>> {
 	}
 	try {
 		const parsed: unknown = JSON.parse(text);
-		if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+		if (!isPlainObject(parsed)) {
 			throw new Error("not a JSON object");
 		}
-		return parsed as Record<string, unknown>;
+		return parsed;
 	} catch (error) {
 		throw new Error(`Invalid JSON in ${file}: ${(error as Error).message}`, { cause: error });
 	}
 }
 
 function requireSchema(file: string, raw: Record<string, unknown>): void {
-	const info = raw["info"];
-	if (raw["attributes"] === undefined || typeof raw["attributes"] !== "object") {
+	if (!isPlainObject(raw["attributes"])) {
 		throw new Error(`Schema ${file} has no "attributes" object`);
 	}
-	if (info === null || typeof info !== "object") {
+	if (!isPlainObject(raw["info"])) {
 		throw new Error(`Schema ${file} has no "info" object`);
 	}
 }
