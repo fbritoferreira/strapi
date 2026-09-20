@@ -43,6 +43,8 @@ interface Parsed {
 	help: boolean;
 }
 
+type Source = { kind: "dir"; root: string } | { kind: "url"; url: string };
+
 function parse(args: string[]): Parsed {
 	const { values } = parseArgs({
 		args,
@@ -96,7 +98,13 @@ export async function run(argv: string[], io: Io): Promise<number> {
 		return 2;
 	}
 
-	if ((parsed.dir === undefined) === (parsed.url === undefined)) {
+	const parsedSource: Source | null =
+		parsed.dir !== undefined && parsed.url === undefined
+			? { kind: "dir", root: resolve(parsed.dir) }
+			: parsed.url !== undefined && parsed.dir === undefined
+				? { kind: "url", url: parsed.url }
+				: null;
+	if (parsedSource === null) {
 		io.stderr("Error: pass exactly one of --dir or --url");
 		io.stderr(USAGE);
 		return 2;
@@ -105,22 +113,18 @@ export async function run(argv: string[], io: Io): Promise<number> {
 	let set: SchemaSet;
 	let source: string;
 	try {
-		if (parsed.dir !== undefined) {
-			const root = resolve(parsed.dir);
-			source = `dir ${root}`;
-			set = await loadFromDir(root);
-		} else if (parsed.url !== undefined) {
-			const url = parsed.url;
+		if (parsedSource.kind === "dir") {
+			source = `dir ${parsedSource.root}`;
+			set = await loadFromDir(parsedSource.root);
+		} else {
 			const email = parsed.email ?? io.env["STRAPI_ADMIN_EMAIL"];
 			const password = parsed.password ?? io.env["STRAPI_ADMIN_PASSWORD"];
 			if (email === undefined || email === "" || password === undefined || password === "") {
 				io.stderr("Error: --url needs admin credentials: --email/--password or STRAPI_ADMIN_EMAIL/STRAPI_ADMIN_PASSWORD");
 				return 2;
 			}
-			source = `url ${url}`;
-			set = await loadFromUrl({ baseURL: url, email, password });
-		} else {
-			return 2;
+			source = `url ${parsedSource.url}`;
+			set = await loadFromUrl({ baseURL: parsedSource.url, email, password });
 		}
 
 		const model = normalize(set, { includePlugins: parsed.includePlugins });

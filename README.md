@@ -267,16 +267,19 @@ STRAPI_ADMIN_EMAIL=me@example.com STRAPI_ADMIN_PASSWORD=... \
 npx @fbritoferreira/strapi generate --dir ../my-strapi -o src/strapi-types.ts --check
 ```
 
+The installed binary is named `strapi-client`, so `npx @fbritoferreira/strapi generate` and `strapi-client generate` from a local install run the same command.
+
 Import the generated file once anywhere in your app (`import "./strapi-types";`) and `strapi.collection("articles")` returns `CollectionClient<Article>`.
 
 What is generated:
 
 - One `interface` per `api::` content type, extending `StrapiDocument`; localized types get a required `locale`.
 - One `interface` per component, with `id: number`.
-- Relations, media and components are optional fields (they appear only when populated). `media` is `StrapiMedia | null` or `StrapiMedia[]`; relations to `plugin::users-permissions.user` are `StrapiUser`.
+- Relations, media, components and dynamic zones are optional fields (they appear only when populated). `media` is `StrapiMedia | null` or `StrapiMedia[]`; relations to `plugin::users-permissions.user` are `StrapiUser`.
 - Dynamic zones are `Array<(BlocksHero & { __component: "blocks.hero" }) | ...>`.
 - `enumeration` becomes a union of string literals; `json` is `unknown`; `biginteger` is `string`.
 - `private` attributes are skipped. Plugin content types are skipped unless `--include-plugins` is passed.
+- `--include-plugins` registers plugin content types under their `pluralName` even when the plugin does not expose a matching `/api/<pluralName>` route.
 
 The `--url` source calls `POST /admin/login` and the Content-Type Builder routes, which require an admin user with the `plugin::content-type-builder.read` permission. Strapi does not accept API tokens on admin routes.
 

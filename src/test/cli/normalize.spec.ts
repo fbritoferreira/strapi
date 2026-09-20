@@ -232,6 +232,84 @@ describe("normalize (edge cases)", () => {
 		expect(model.types[0]?.fields.find((f) => f.name === "untyped")).toMatchObject({ tsType: "Thing[]" });
 	});
 
+	it("throws when a localized content type has an attribute named locale, naming the uid and the field", () => {
+		const set: SchemaSet = {
+			contentTypes: new Map([
+				[
+					"api::page.page",
+					{
+						uid: "api::page.page",
+						schema: { kind: "collectionType", info: { singularName: "page", pluralName: "pages", displayName: "Page" }, pluginOptions: { i18n: { localized: true } }, attributes: { locale: { type: "string" } } as never },
+					},
+				],
+			]),
+			components: new Map(),
+		};
+		expect(() => normalize(set, { includePlugins: false })).toThrow(/Attribute "locale" on api::page\.page collides with a StrapiDocument field/);
+	});
+
+	it("does not throw when a NON-localized content type has an attribute named locale, and emits it as a plain field", () => {
+		const set: SchemaSet = {
+			contentTypes: new Map([
+				[
+					"api::page.page",
+					{
+						uid: "api::page.page",
+						schema: { kind: "collectionType", info: { singularName: "page", pluralName: "pages", displayName: "Page" }, attributes: { locale: { type: "string" } } as never },
+					},
+				],
+			]),
+			components: new Map(),
+		};
+		const model = normalize(set, { includePlugins: false });
+		expect(field(model, "Page", "locale")).toMatchObject({ name: "locale", tsType: "string" });
+	});
+
+	it("throws when a content type has an attribute named id", () => {
+		const set: SchemaSet = {
+			contentTypes: new Map([
+				[
+					"api::page.page",
+					{
+						uid: "api::page.page",
+						schema: { kind: "collectionType", info: { singularName: "page", pluralName: "pages", displayName: "Page" }, attributes: { id: { type: "integer" } } as never },
+					},
+				],
+			]),
+			components: new Map(),
+		};
+		expect(() => normalize(set, { includePlugins: false })).toThrow(/Attribute "id" on api::page\.page collides with a StrapiDocument field/);
+	});
+
+	it("throws when a component has an attribute named id", () => {
+		const set: SchemaSet = {
+			contentTypes: new Map(),
+			components: new Map([["shared.thing", { uid: "shared.thing", category: "shared", schema: { info: { displayName: "Thing" }, attributes: { id: { type: "integer" } } as never } }]]),
+		};
+		expect(() => normalize(set, { includePlugins: false })).toThrow(/Attribute "id" on shared\.thing collides with the generated "id" field/);
+	});
+
+	it("throws when a content type's singularName cannot form a usable TypeScript identifier", () => {
+		const set: SchemaSet = {
+			contentTypes: new Map([
+				[
+					"api::nihongo.nihongo",
+					{ uid: "api::nihongo.nihongo", schema: { kind: "collectionType", info: { singularName: "日本語", pluralName: "nihongos", displayName: "Nihongo" }, attributes: {} } },
+				],
+			]),
+			components: new Map(),
+		};
+		expect(() => normalize(set, { includePlugins: false })).toThrow(/Cannot derive a TypeScript type name for api::nihongo\.nihongo/);
+	});
+
+	it("throws when a component uid cannot form a usable TypeScript identifier", () => {
+		const set: SchemaSet = {
+			contentTypes: new Map(),
+			components: new Map([["日本語.日本", { uid: "日本語.日本", category: "日本語", schema: { info: { displayName: "Nihongo" }, attributes: {} } }]]),
+		};
+		expect(() => normalize(set, { includePlugins: false })).toThrow(/Cannot derive a TypeScript type name for 日本語\.日本/);
+	});
+
 	it("sorts entries with equal keys stably", () => {
 		const set = base(
 			{},

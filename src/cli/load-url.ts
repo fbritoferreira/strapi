@@ -1,4 +1,4 @@
-import type { ComponentEntry, ContentTypeEntry, RawAttribute, RawComponentSchema, RawContentTypeSchema, SchemaSet } from "./schema";
+import { isPlainObject, type ComponentEntry, type ContentTypeEntry, type RawAttribute, type RawComponentSchema, type RawContentTypeSchema, type SchemaSet } from "./schema";
 
 export interface UrlSource {
 	baseURL: string;
@@ -42,10 +42,6 @@ interface BuilderComponent {
 	category: string;
 	apiId: string;
 	schema: BuilderComponentSchema;
-}
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-	return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
 function normalizeBase(baseURL: string): string {

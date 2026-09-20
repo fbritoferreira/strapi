@@ -1,7 +1,7 @@
 import { readdir, readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 
-import type { ComponentEntry, ContentTypeEntry, RawComponentSchema, RawContentTypeSchema, SchemaSet } from "./schema";
+import { isPlainObject, type ComponentEntry, type ContentTypeEntry, type RawComponentSchema, type RawContentTypeSchema, type SchemaSet } from "./schema";
 
 async function isDirectory(path: string): Promise<boolean> {
 	try {
@@ -9,10 +9,6 @@ async function isDirectory(path: string): Promise<boolean> {
 	} catch {
 		return false;
 	}
-}
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-	return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
 async function readJson(file: string): Promise<Record<string, unknown>> {

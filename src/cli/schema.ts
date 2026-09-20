@@ -62,6 +62,10 @@ export function isApiUid(uid: string): boolean {
 	return uid.startsWith("api::");
 }
 
+export function isPlainObject(value: unknown): value is Record<string, unknown> {
+	return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
 export function isLocalized(schema: RawContentTypeSchema): boolean {
 	return schema.pluginOptions?.i18n?.localized === true;
 }

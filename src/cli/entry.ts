@@ -6,4 +6,6 @@ const code = await run(process.argv.slice(2), {
 	env: process.env,
 	now: () => new Date(),
 });
+// Deliberate: process.exitCode alone can leave the --url path waiting on
+// keep-alive sockets from the admin login fetch, so force the exit here.
 process.exit(code);

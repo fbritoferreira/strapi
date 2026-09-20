@@ -64,6 +64,14 @@ function isEmitted(uid: string, includePlugins: boolean): boolean {
 	return isApiUid(uid) || (includePlugins && uid.startsWith("plugin::"));
 }
 
+const USABLE_NAME = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
+
+function assertUsableName(name: string, uid: string): void {
+	if (!USABLE_NAME.test(name)) {
+		throw new Error(`Cannot derive a TypeScript type name for ${uid} (got "${name}")`);
+	}
+}
+
 function assignNames(set: SchemaSet, options: NormalizeOptions): Names {
 	const taken = new Map<string, string>(); // name → uid
 	const claim = (name: string, uid: string): void => {
@@ -76,6 +84,7 @@ function assignNames(set: SchemaSet, options: NormalizeOptions): Names {
 	const components = new Map<string, string>();
 	for (const [uid] of set.components) {
 		const name = componentName(uid);
+		assertUsableName(name, uid);
 		claim(name, uid);
 		components.set(uid, name);
 	}
@@ -83,6 +92,7 @@ function assignNames(set: SchemaSet, options: NormalizeOptions): Names {
 	for (const [uid, entry] of set.contentTypes) {
 		if (!isEmitted(uid, options.includePlugins)) continue;
 		const name = pascalCase(entry.schema.info.singularName);
+		assertUsableName(name, uid);
 		claim(name, uid);
 		contentTypes.set(uid, name);
 	}
@@ -167,18 +177,38 @@ function fields(attributes: Record<string, RawAttribute>, names: Names, usage: U
 const byName = (a: { name: string }, b: { name: string }): number => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0);
 const byKey = (a: { key: string }, b: { key: string }): number => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0);
 
+const RESERVED_DOCUMENT_FIELDS = new Set(["id", "documentId", "createdAt", "updatedAt", "publishedAt"]);
+
+function assertNoReservedContentTypeFields(typeFields: Field[], uid: string, localized: boolean): void {
+	for (const f of typeFields) {
+		if (RESERVED_DOCUMENT_FIELDS.has(f.name) || (localized && f.name === "locale")) {
+			throw new Error(`Attribute "${f.name}" on ${uid} collides with a StrapiDocument field; rename it in Strapi`);
+		}
+	}
+}
+
+function assertNoReservedComponentFields(typeFields: Field[], uid: string): void {
+	for (const f of typeFields) {
+		if (f.name === "id") {
+			throw new Error(`Attribute "${f.name}" on ${uid} collides with the generated "id" field; rename it in Strapi`);
+		}
+	}
+}
+
 export function normalize(set: SchemaSet, options: NormalizeOptions): Model {
 	const names = assignNames(set, options);
 	const usage: Usage = { media: false, user: false, blocks: false };
 
 	const components: TypeDecl[] = [];
 	for (const [uid, entry] of set.components) {
+		const componentFields = fields(entry.schema.attributes, names, usage);
+		assertNoReservedComponentFields(componentFields, uid);
 		components.push({
 			name: mustGet(names.components, uid),
 			kind: "component",
 			uid,
 			localized: false,
-			fields: fields(entry.schema.attributes, names, usage),
+			fields: componentFields,
 			doc: `Component ${uid} (${entry.schema.info.displayName})`,
 		});
 	}
@@ -190,12 +220,15 @@ export function normalize(set: SchemaSet, options: NormalizeOptions): Model {
 		const name = names.contentTypes.get(uid);
 		if (name === undefined) continue;
 		const single = entry.schema.kind === "singleType";
+		const localized = isLocalized(entry.schema);
+		const contentTypeFields = fields(entry.schema.attributes, names, usage);
+		assertNoReservedContentTypeFields(contentTypeFields, uid, localized);
 		contentTypes.push({
 			name,
 			kind: single ? "single" : "collection",
 			uid,
-			localized: isLocalized(entry.schema),
-			fields: fields(entry.schema.attributes, names, usage),
+			localized,
+			fields: contentTypeFields,
 			doc: `${single ? "Single type" : "Collection type"} ${uid} (${entry.schema.info.displayName})`,
 		});
 		if (single) singles.push({ key: entry.schema.info.singularName, typeName: name });
