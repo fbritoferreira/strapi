@@ -29,6 +29,15 @@ async function fixtureFetch(): Promise<{ fetchMock: ReturnType<typeof vi.fn<type
 	};
 }
 
+function builderFetch(ctData: unknown[], compData: unknown[]): ReturnType<typeof vi.fn<typeof fetch>> {
+	return vi.fn<typeof fetch>(async (input) => {
+		const url = String(input);
+		if (url.endsWith("/admin/login")) return new Response(JSON.stringify({ data: { token: "t" } }), { status: 200 });
+		if (url.endsWith("/content-type-builder/content-types")) return new Response(JSON.stringify({ data: ctData }), { status: 200 });
+		return new Response(JSON.stringify({ data: compData }), { status: 200 });
+	});
+}
+
 describe("loadFromUrl", () => {
 	it("logs in, fetches both endpoints with the JWT, and re-nests info", async () => {
 		const { fetchMock, calls } = await fixtureFetch();
@@ -196,5 +205,87 @@ describe("loadFromUrl", () => {
 		expect(component?.schema.attributes).toEqual({});
 		expect(component?.schema.options).toEqual({ foo: true });
 		expect(component?.schema.info).toEqual({ displayName: "Empty" });
+	});
+
+	it("rejects a content type item with no kind, naming the uid and the endpoint", async () => {
+		const fetchMock = builderFetch(
+			[{ uid: "api::broken.broken", apiID: "broken", schema: { displayName: "Broken", singularName: "broken", pluralName: "brokens" } }],
+			[]
+		);
+		await expect(loadFromUrl({ baseURL: "http://h", email: "a", password: "b", fetch: fetchMock })).rejects.toThrow(
+			/content-type-builder\/content-types.*api::broken\.broken.*kind "undefined"/
+		);
+	});
+
+	it("rejects a content type item with no uid, using a placeholder in the message", async () => {
+		const fetchMock = builderFetch([{ apiID: "broken", schema: { kind: "collectionType", singularName: "b", pluralName: "bs", displayName: "B" } }], []);
+		await expect(loadFromUrl({ baseURL: "http://h", email: "a", password: "b", fetch: fetchMock })).rejects.toThrow(
+			/content-type-builder\/content-types.*<item without a uid>.*has no uid/
+		);
+	});
+
+	it("rejects a content type item with no schema object", async () => {
+		const fetchMock = builderFetch([{ uid: "api::broken.broken", apiID: "broken" }], []);
+		await expect(loadFromUrl({ baseURL: "http://h", email: "a", password: "b", fetch: fetchMock })).rejects.toThrow(
+			/api::broken\.broken has no schema object/
+		);
+	});
+
+	it("rejects a content type item with no singularName", async () => {
+		const fetchMock = builderFetch(
+			[{ uid: "api::broken.broken", apiID: "broken", schema: { kind: "collectionType", pluralName: "brokens", displayName: "Broken" } }],
+			[]
+		);
+		await expect(loadFromUrl({ baseURL: "http://h", email: "a", password: "b", fetch: fetchMock })).rejects.toThrow(
+			/api::broken\.broken has no singularName/
+		);
+	});
+
+	it("rejects a content type item with no pluralName", async () => {
+		const fetchMock = builderFetch(
+			[{ uid: "api::broken.broken", apiID: "broken", schema: { kind: "collectionType", singularName: "broken", displayName: "Broken" } }],
+			[]
+		);
+		await expect(loadFromUrl({ baseURL: "http://h", email: "a", password: "b", fetch: fetchMock })).rejects.toThrow(
+			/api::broken\.broken has no pluralName/
+		);
+	});
+
+	it("rejects a content type item with no displayName", async () => {
+		const fetchMock = builderFetch(
+			[{ uid: "api::broken.broken", apiID: "broken", schema: { kind: "collectionType", singularName: "broken", pluralName: "brokens" } }],
+			[]
+		);
+		await expect(loadFromUrl({ baseURL: "http://h", email: "a", password: "b", fetch: fetchMock })).rejects.toThrow(
+			/api::broken\.broken has no displayName/
+		);
+	});
+
+	it("rejects a component item with no category, naming the endpoint", async () => {
+		const fetchMock = builderFetch([], [{ uid: "shared.broken", apiId: "broken", schema: { displayName: "Broken" } }]);
+		await expect(loadFromUrl({ baseURL: "http://h", email: "a", password: "b", fetch: fetchMock })).rejects.toThrow(
+			/content-type-builder\/components.*shared\.broken.*has no category/
+		);
+	});
+
+	it("rejects a component item with no uid, using a placeholder in the message", async () => {
+		const fetchMock = builderFetch([], [{ category: "shared", apiId: "broken", schema: { displayName: "Broken" } }]);
+		await expect(loadFromUrl({ baseURL: "http://h", email: "a", password: "b", fetch: fetchMock })).rejects.toThrow(
+			/content-type-builder\/components.*<item without a uid>.*has no uid/
+		);
+	});
+
+	it("rejects a component item with no schema object", async () => {
+		const fetchMock = builderFetch([], [{ uid: "shared.broken", category: "shared", apiId: "broken" }]);
+		await expect(loadFromUrl({ baseURL: "http://h", email: "a", password: "b", fetch: fetchMock })).rejects.toThrow(
+			/shared\.broken has no schema object/
+		);
+	});
+
+	it("rejects a component item with no displayName", async () => {
+		const fetchMock = builderFetch([], [{ uid: "shared.broken", category: "shared", apiId: "broken", schema: {} }]);
+		await expect(loadFromUrl({ baseURL: "http://h", email: "a", password: "b", fetch: fetchMock })).rejects.toThrow(
+			/shared\.broken has no displayName/
+		);
 	});
 });

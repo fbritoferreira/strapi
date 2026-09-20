@@ -23,7 +23,7 @@ interface BuilderContentTypeSchema {
 
 interface BuilderContentType {
 	uid: string;
-	plugin?: string;
+	// plugin?: string — present on plugin-owned content types (e.g. "users-permissions"), unused here.
 	apiID: string;
 	schema: BuilderContentTypeSchema;
 }
@@ -82,12 +82,59 @@ async function getJson(fetchImpl: typeof fetch, url: string, token: string): Pro
 	return body;
 }
 
-function dataArray<T>(body: unknown, url: string): T[] {
+function dataArray(body: unknown, url: string): unknown[] {
 	if (isPlainObject(body) && Array.isArray(body["data"])) {
-		// Typed boundary: caller-supplied shape from the admin API, trusted after the array check above.
-		return body["data"] as T[];
+		return body["data"];
 	}
 	throw new Error(`Unexpected response from ${url}: expected { data: [...] }`);
+}
+
+function describeUid(item: unknown): string {
+	return isPlainObject(item) && typeof item["uid"] === "string" && item["uid"] !== "" ? item["uid"] : "<item without a uid>";
+}
+
+function validateContentType(raw: unknown, ctUrl: string): BuilderContentType {
+	const label = describeUid(raw);
+	if (!isPlainObject(raw) || typeof raw["uid"] !== "string" || raw["uid"] === "") {
+		throw new Error(`Unexpected content type in ${ctUrl}: ${label} has no uid`);
+	}
+	if (!isPlainObject(raw["schema"])) {
+		throw new Error(`Unexpected content type in ${ctUrl}: ${label} has no schema object`);
+	}
+	const schema = raw["schema"];
+	const kind = schema["kind"];
+	if (kind !== "collectionType" && kind !== "singleType") {
+		throw new Error(`Unexpected content type in ${ctUrl}: ${label} has kind "${String(kind)}"`);
+	}
+	if (typeof schema["singularName"] !== "string") {
+		throw new Error(`Unexpected content type in ${ctUrl}: ${label} has no singularName`);
+	}
+	if (typeof schema["pluralName"] !== "string") {
+		throw new Error(`Unexpected content type in ${ctUrl}: ${label} has no pluralName`);
+	}
+	if (typeof schema["displayName"] !== "string") {
+		throw new Error(`Unexpected content type in ${ctUrl}: ${label} has no displayName`);
+	}
+	// Typed boundary: uid, schema, schema.kind, schema.singularName, schema.pluralName and schema.displayName were validated above.
+	return raw as unknown as BuilderContentType;
+}
+
+function validateComponent(raw: unknown, compUrl: string): BuilderComponent {
+	const label = describeUid(raw);
+	if (!isPlainObject(raw) || typeof raw["uid"] !== "string" || raw["uid"] === "") {
+		throw new Error(`Unexpected component in ${compUrl}: ${label} has no uid`);
+	}
+	if (typeof raw["category"] !== "string") {
+		throw new Error(`Unexpected component in ${compUrl}: ${label} has no category`);
+	}
+	if (!isPlainObject(raw["schema"])) {
+		throw new Error(`Unexpected component in ${compUrl}: ${label} has no schema object`);
+	}
+	if (typeof raw["schema"]["displayName"] !== "string") {
+		throw new Error(`Unexpected component in ${compUrl}: ${label} has no displayName`);
+	}
+	// Typed boundary: uid, category, schema and schema.displayName were validated above.
+	return raw as unknown as BuilderComponent;
 }
 
 export async function loadFromUrl(source: UrlSource): Promise<SchemaSet> {
@@ -114,7 +161,8 @@ export async function loadFromUrl(source: UrlSource): Promise<SchemaSet> {
 	const [ctBody, compBody] = await Promise.all([getJson(fetchImpl, ctUrl, token), getJson(fetchImpl, compUrl, token)]);
 
 	const contentTypes = new Map<string, ContentTypeEntry>();
-	for (const item of dataArray<BuilderContentType>(ctBody, ctUrl)) {
+	for (const raw of dataArray(ctBody, ctUrl)) {
+		const item = validateContentType(raw, ctUrl);
 		const { displayName, singularName, pluralName, description, kind, collectionName, options, pluginOptions, attributes } = item.schema;
 		const schema: RawContentTypeSchema = {
 			kind,
@@ -128,7 +176,8 @@ export async function loadFromUrl(source: UrlSource): Promise<SchemaSet> {
 	}
 
 	const components = new Map<string, ComponentEntry>();
-	for (const item of dataArray<BuilderComponent>(compBody, compUrl)) {
+	for (const raw of dataArray(compBody, compUrl)) {
+		const item = validateComponent(raw, compUrl);
 		const { displayName, description, icon, collectionName, options, attributes } = item.schema;
 		const schema: RawComponentSchema = {
 			...(collectionName !== undefined && { collectionName }),
