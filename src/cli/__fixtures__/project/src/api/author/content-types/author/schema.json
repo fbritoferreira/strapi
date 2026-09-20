@@ -1,0 +1,12 @@
+{
+	"kind": "collectionType",
+	"collectionName": "authors",
+	"info": { "singularName": "author", "pluralName": "authors", "displayName": "Author" },
+	"attributes": {
+		"name": { "type": "string", "required": true },
+		"email": { "type": "email" },
+		"avatar": { "type": "media", "multiple": false },
+		"articles": { "type": "relation", "relation": "oneToMany", "target": "api::article.article", "mappedBy": "author" },
+		"links": { "type": "component", "repeatable": true, "component": "shared.seo" }
+	}
+}

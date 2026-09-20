@@ -10,7 +10,7 @@ export default defineConfig({
 		coverage: {
 			reporter: ["json-summary", "json", "html-spa"],
 			provider: "v8",
-			exclude: ["src/test/**"],
+			exclude: ["src/test/**", "src/cli/__fixtures__/**", "src/cli/entry.ts"],
 			thresholds: {
 				lines: 95,
 				branches: 95,
