@@ -187,4 +187,62 @@ describe("normalize (edge cases)", () => {
 		expect(fields["noComponentUid"]).toMatchObject({ tsType: "unknown" });
 		expect(model.types.find((t) => t.name === "Solo")).toBeDefined();
 	});
+
+	it("never emits admin:: uids, with or without includePlugins, and they do not collide with a same-named plugin:: uid", () => {
+		const set = base(
+			{},
+			{
+				contentTypes: [
+					["admin::role", { uid: "admin::role", schema: { kind: "collectionType", info: { singularName: "role", pluralName: "admin-roles", displayName: "Admin Role" }, attributes: {} } }],
+					["plugin::users-permissions.role", { uid: "plugin::users-permissions.role", schema: { kind: "collectionType", info: { singularName: "role", pluralName: "roles", displayName: "Role" }, attributes: {} } }],
+				],
+			}
+		);
+		expect(normalize(set, { includePlugins: false }).types.map((t) => t.name)).toEqual(["Thing"]);
+		expect(normalize(set, { includePlugins: true }).types.map((t) => t.name)).toEqual(["Role", "Thing"]);
+	});
+
+	it("sorts by codepoint, not locale: uppercase before underscore before lowercase", () => {
+		const set = base(
+			{},
+			{
+				contentTypes: [
+					["api::a1.a1", { uid: "api::a1.a1", schema: { kind: "collectionType", info: { singularName: "a1", pluralName: "_2faCode", displayName: "A1" }, attributes: {} } }],
+					["api::a2.a2", { uid: "api::a2.a2", schema: { kind: "collectionType", info: { singularName: "a2", pluralName: "Article", displayName: "A2" }, attributes: {} } }],
+					["api::a3.a3", { uid: "api::a3.a3", schema: { kind: "collectionType", info: { singularName: "a3", pluralName: "article2", displayName: "A3" }, attributes: {} } }],
+				],
+			}
+		);
+		const model = normalize(set, { includePlugins: false });
+		expect(model.collections.map((c) => c.key)).toEqual(["Article", "_2faCode", "article2", "things"]);
+	});
+
+	it("treats morphOne as a to-one relation", () => {
+		const model = normalize(base({ owner: { type: "relation", relation: "morphOne", target: "api::thing.thing" } }), { includePlugins: false });
+		expect(model.types[0]?.fields.find((f) => f.name === "owner")).toMatchObject({ tsType: "Thing | null" });
+	});
+
+	it("relation doc has no dangling arrow when target is missing", () => {
+		const model = normalize(base({ orphan: { type: "relation", relation: "morphToMany" } }), { includePlugins: false });
+		expect(model.types[0]?.fields.find((f) => f.name === "orphan")).toMatchObject({ tsType: "unknown", doc: "relation morphToMany (not generated)" });
+	});
+
+	it("defaults relation direction to many when relation kind is missing", () => {
+		const model = normalize(base({ untyped: { type: "relation", target: "api::thing.thing" } }), { includePlugins: false });
+		expect(model.types[0]?.fields.find((f) => f.name === "untyped")).toMatchObject({ tsType: "Thing[]" });
+	});
+
+	it("sorts entries with equal keys stably", () => {
+		const set = base(
+			{},
+			{
+				contentTypes: [
+					["api::b1.b1", { uid: "api::b1.b1", schema: { kind: "collectionType", info: { singularName: "b1", pluralName: "same-key", displayName: "B1" }, attributes: {} } }],
+					["api::b2.b2", { uid: "api::b2.b2", schema: { kind: "collectionType", info: { singularName: "b2", pluralName: "same-key", displayName: "B2" }, attributes: {} } }],
+				],
+			}
+		);
+		const model = normalize(set, { includePlugins: false });
+		expect(model.collections.filter((c) => c.key === "same-key").map((c) => c.typeName)).toEqual(["B1", "B2"]);
+	});
 });

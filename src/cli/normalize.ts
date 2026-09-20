@@ -61,7 +61,7 @@ function componentName(uid: string): string {
 
 function isEmitted(uid: string, includePlugins: boolean): boolean {
 	if (uid === MEDIA_UID || uid === USER_UID) return false;
-	return isApiUid(uid) || includePlugins;
+	return isApiUid(uid) || (includePlugins && uid.startsWith("plugin::"));
 }
 
 function assignNames(set: SchemaSet, options: NormalizeOptions): Names {
@@ -95,16 +95,20 @@ interface Usage {
 	blocks: boolean;
 }
 
+const TO_ONE_RELATIONS = new Set(["oneToOne", "manyToOne", "morphToOne", "morphOne"]);
+
 function relationTarget(attribute: RawAttribute, names: Names, usage: Usage): { tsType: string; doc: string } {
 	const relation = attribute.relation ?? "";
 	const target = attribute.target ?? "";
-	const toOne = /ToOne$/.test(relation);
-	const doc = `relation ${relation} → ${target}`;
+	const toOne = TO_ONE_RELATIONS.has(relation);
 	if (target === USER_UID) usage.user = true;
 	else if (target === MEDIA_UID) usage.media = true;
-	const base = target === USER_UID ? "StrapiUser" : target === MEDIA_UID ? "StrapiMedia" : (names.contentTypes.get(target) ?? null);
-	if (base === null) return { tsType: "unknown", doc: `${doc} (not generated)` };
-	return { tsType: toOne ? `${base} | null` : `${base}[]`, doc };
+	const base = target === "" ? null : target === USER_UID ? "StrapiUser" : target === MEDIA_UID ? "StrapiMedia" : (names.contentTypes.get(target) ?? null);
+	if (base === null) {
+		const doc = target === "" ? `relation ${relation} (not generated)` : `relation ${relation} → ${target} (not generated)`;
+		return { tsType: "unknown", doc };
+	}
+	return { tsType: toOne ? `${base} | null` : `${base}[]`, doc: `relation ${relation} → ${target}` };
 }
 
 function fieldType(attribute: RawAttribute, names: Names, usage: Usage): { tsType: string; doc?: string } {
@@ -160,8 +164,8 @@ function fields(attributes: Record<string, RawAttribute>, names: Names, usage: U
 	return out;
 }
 
-const byName = (a: { name: string }, b: { name: string }): number => a.name.localeCompare(b.name);
-const byKey = (a: { key: string }, b: { key: string }): number => a.key.localeCompare(b.key);
+const byName = (a: { name: string }, b: { name: string }): number => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0);
+const byKey = (a: { key: string }, b: { key: string }): number => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0);
 
 export function normalize(set: SchemaSet, options: NormalizeOptions): Model {
 	const names = assignNames(set, options);
