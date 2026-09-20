@@ -16,66 +16,55 @@ jobs:
   release:
     name: Release
     runs-on: ubuntu-latest
+    # "Version Packages" commits are pushed by this workflow; do not run on them.
+    if: ${{ !contains(github.event.head_commit.message, '[skip ci]') }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
-      - name: Check for [skip ci] and exit early
-        run: |
-          if [[ "${{ github.event.head_commit.message }}" =~ \[skip\ ci\] ]]; then
-            echo "This is an automated commit; skipping CI."
-            exit 0
-          fi
-        shell: bash
-
-      - name: Cache pnpm store
-        uses: actions/cache@v4
-        with:
-          path: ~/.pnpm-store
-          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-pnpm-store-
-
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6
         with:
           run_install: false
 
       - name: Setup Node.js
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@v7
         with:
-          node-version: 24
+          node-version-file: .nvmrc
           cache: pnpm
           registry-url: "https://registry.npmjs.org"
 
-      - name: Update npm for pnpm's OIDC support
-        if: steps.changesets.outputs.changesets == 'true'
-        run: npm install -g npm@latest
-
-      - name: Install dependencies with pnpm
+      - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Run tests with pnpm
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Run tests
         run: pnpm test
 
-      - name: Check for changesets
+      - name: Check for pending changesets
         id: changesets
+        # Only .md files other than README.md are changesets. `changeset version`
+        # exits 1 when there are none (changesets v3), so gate on this first.
         run: |
-          if [[ -d .changeset ]]; then
-            echo "changesets=true" >> $GITHUB_OUTPUT
-          else
-            echo "changesets=false" >> $GITHUB_OUTPUT
-          fi
+          pending=false
+          for f in .changeset/*.md; do
+            [[ -e "$f" && "$(basename "$f")" != "README.md" ]] && pending=true
+          done
+          echo "pending=$pending" >> "$GITHUB_OUTPUT"
 
-      - name: Version and changelog with pnpm (if changesets exist)
-        if: steps.changesets.outputs.changesets == 'true'
-        id: changesets-version
+      - name: Version and changelog
+        if: steps.changesets.outputs.pending == 'true'
         run: pnpm changeset version
 
       - name: Commit and push version changes
-        if: steps.changesets.outputs.changesets == 'true'
+        if: steps.changesets.outputs.pending == 'true'
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
@@ -83,40 +72,43 @@ jobs:
           NEW_VERSION=$(jq -r .version package.json)
 
           git add -A
-          git commit -m "Version Packages (v${NEW_VERSION}) [skip ci]" || echo "No changes to commit"
+          git commit -m "Version Packages (v${NEW_VERSION}) [skip ci]"
           git push origin main
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build package with pnpm
-        if: steps.changesets.outputs.changesets == 'true'
+      - name: Build package
+        if: steps.changesets.outputs.pending == 'true'
         run: pnpm build
 
-      - name: Publish to npm with pnpm (using OIDC/Trusted Publishing)
-        if: steps.changesets.outputs.changesets == 'true'
-        run: |
-          pnpm publish --access public --no-git-checks
+      - name: Publish to npm (OIDC / Trusted Publishing)
+        if: steps.changesets.outputs.pending == 'true'
+        run: pnpm publish --access public --no-git-checks
 
       - name: Extract version for release
-        if: steps.changesets.outputs.changesets == 'true'
+        if: steps.changesets.outputs.pending == 'true'
         id: extract-version
         run: |
           NEW_VERSION=$(jq -r .version package.json)
-          echo "tag=v${NEW_VERSION}" >> $GITHUB_OUTPUT
+          echo "tag=v${NEW_VERSION}" >> "$GITHUB_OUTPUT"
 
-          CHANGELOG_SECTION=$(grep -A 20 "^## ${NEW_VERSION}$" CHANGELOG.md || echo "No detailed changes available.")
-          echo "changelog<<EOF" >> $GITHUB_OUTPUT
-          echo "$CHANGELOG_SECTION" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          # Changelog section for this version: from its heading to the next "## " heading.
+          CHANGELOG_SECTION=$(awk -v v="## ${NEW_VERSION}" '
+            $0 == v { p = 1; next }
+            p && /^## / { exit }
+            p { print }
+          ' CHANGELOG.md)
+          {
+            echo "changelog<<EOF"
+            echo "${CHANGELOG_SECTION:-No detailed changes available.}"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Create GitHub Release
-        if: steps.changesets.outputs.changesets == 'true'
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        if: steps.changesets.outputs.pending == 'true'
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ steps.extract-version.outputs.tag }}
-          release_name: Release ${{ steps.extract-version.outputs.tag }}
+          name: Release ${{ steps.extract-version.outputs.tag }}
+          target_commitish: main
           body: |
             ## Changes
 
@@ -127,5 +119,3 @@ jobs:
             See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) for details.
 
             Auto-generated by [Changesets](https://github.com/changesets/changesets).
-          draft: false
-          prerelease: false

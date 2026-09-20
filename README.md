@@ -18,15 +18,15 @@ via `qs` serialization.
 - **CRUD Operations**: `findMany`, `find`, `create`, `update`, `delete`.
 - **Upsert**: Atomic create-or-update based on filters.
 - **i18n Handling**: Automatic default locale creation and localization linking
-  using numeric IDs.
+  under a shared `documentId`.
 - **Query Params**: Supports Strapi's filters (e.g.,
   `{ name: { $eq: 'foo' } }`), populate (`*`), pagination, and locale.
 - **Parallel Pagination**: Use `all: true` to fetch all pages in parallel for
   better performance.
 - **Error Handling**: Returns `[ServiceError | null, Data | null]` tuples for
   async operations.
-- **No Dependencies**: Only `qs` for query stringification; polyfills Fetch if
-  needed.
+- **Tiny Footprint**: Only `qs` for query stringification. Uses the global
+  Fetch API (Node.js 20+, browsers, edge runtimes).
 
 ## Installation
 
@@ -42,7 +42,8 @@ pnpm add @fbritoferreira/strapi
 yarn add @fbritoferreira/strapi
 ```
 
-Requires Node.js >=18 for modern Fetch. For older environments, polyfill `fetch`
+Requires Node.js >=20 (global `fetch`). Ships ESM and CommonJS builds with
+bundled type declarations.
 
 ## Quick Start
 
@@ -50,12 +51,13 @@ Import and instantiate the client with your Strapi base URL, optional auth
 token, and content-type UID (e.g., `articles` for `/api/articles`)
 
 ```ts
-import { StrapiClient } from "@fbritoferreira/strapi";
-import type {
-	CreatePayload,
-	QueryParams,
-	StrapiFilters,
-} from "@fbritoferreira/strapi/types";
+import {
+	StrapiClient,
+	type CreatePayload,
+	type QueryParams,
+	type StrapiFilters,
+	type UpdatePayload,
+} from "@fbritoferreira/strapi";
 
 interface Article {
 	id: number;
@@ -71,13 +73,13 @@ const client = new StrapiClient<Article>({
 });
 
 // Find multiple
-const [err1, articles] = await client.findMany({ populate: ["*"] });
+const [err1, articles] = await client.findMany({ params: { populate: "*" } });
 if (!err1 && articles) {
 	console.log(articles); // Article[]
 }
 
-// Find one by ID
-const [err2, article] = await client.find({ id: 1 });
+// Find one by documentId (Strapi 5 addresses documents by documentId, not numeric id)
+const [err2, article] = await client.find({ id: "a1b2c3d4e5f6g7h8i9j0k1l2" });
 if (!err2 && article) {
 	console.log(article); // Article | null
 }
@@ -101,9 +103,9 @@ if (!err4 && upserted) {
 
 ## i18n Usage
 
-Strapi i18n uses locales (default 'en'). For non-default locales, provide
-`locale` option; the client auto-creates default if needed and links via base
-ID.
+Strapi i18n uses locales; this client assumes `en` is the default locale. For
+non-default locales, provide the `locale` option; the client auto-creates the
+`en` entry if needed and creates the localization under the same `documentId`.
 
 ```ts
 // Create in French (searches/creates 'en' first if missing)
@@ -121,14 +123,14 @@ const updatePayload: UpdatePayload<Article> = {
 	data: { content: "Updated FR" },
 };
 const [err5, updated] = await client.update({
-	id: 1,
+	id: frArticle.documentId,
 	payload: updatePayload,
 	locale: "fr",
 });
 
 // Find with locale
 const [err6, frArticles] = await client.findMany({
-	filters: { title: { $contains: "Français" } },
+	params: { filters: { title: { $contains: "Français" } } },
 	locale: "fr",
 });
 ```
@@ -143,9 +145,11 @@ const params: QueryParams<Article> = {
 	filters: { title: { $eq: "Exact Title" } },
 	populate: ["category", "author"],
 	pagination: { pageSize: 10 },
+	sort: ["title:asc"],
+	status: "published", // Strapi 5 Draft & Publish ("draft" | "published")
 	locale: "fr",
 };
-const [err, paginated] = await client.findMany(params);
+const [err, paginated] = await client.findMany({ params });
 
 // Fetch all pages in parallel (better performance for large datasets)
 const [err2, allArticles] = await client.findMany({
@@ -160,7 +164,7 @@ Methods return `[ServiceError | null, Data | null]`. Check `err` for issues like
 404 or network failures.
 
 ```ts
-const [err, data] = await client.find({ id: 999 });
+const [err, data] = await client.find({ id: "does-not-exist" });
 if (err) {
 	console.error(err.message, err.status); // e.g., "Strapi API error: 404 Not Found"
 }
@@ -182,12 +186,14 @@ Constructor:
 
 ## Development
 
-1. Clone and install: `git clone <repo> && pnpm install`
-2. Run tests: `pnpm test` (uses Vitest)
-3. Build: `pnpm build` (outputs to `dist/`)
-4. Dev server: `pnpm dev` (for library previews)
+1. Clone and install: `git clone <repo> && pnpm install` (Node.js 24, see `.nvmrc`)
+2. Run tests: `pnpm test` (Vitest), `pnpm test:coverage` for coverage
+3. Lint and typecheck: `pnpm lint && pnpm typecheck`
+4. Build: `pnpm build` (outputs ESM, CJS and bundled `.d.ts` to `dist/`)
+5. Add a changeset for user-facing changes: `pnpm changeset`
 
-Uses Vite for building and Vitest for testing.
+Uses Vite for building and Vitest for testing. Releases are cut by the
+`Release` GitHub workflow from `main` via Changesets.
 
 ## Contributing
 
@@ -199,4 +205,4 @@ Uses Vite for building and Vitest for testing.
 
 ## License
 
-Distributed under the MIT License. See `LICENSE` for more information.
+Distributed under the MIT License. See `LICENCE.md` for more information.

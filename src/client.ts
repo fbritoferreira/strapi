@@ -257,28 +257,25 @@ export class StrapiClient<
 			...(locale && locale !== "en" ? { locale } : {}),
 		};
 		const queryString = this.getQueryString(queryParams);
-		let err: ServiceError | null = null;
-		let response: StrapiSingleResponse<T> | null = null;
 		if (id) {
-			[err, response] = await this.request<StrapiSingleResponse<T>>(
+			const [err, response] = await this.request<StrapiSingleResponse<T>>(
 				`${this.uid}/${id}${queryString}`,
 				{ method: "GET" },
 				{ all: false }
 			);
-		} else {
-			const findManyOptions: {
-				params?: QueryParams<T>;
-				locale?: string;
-				all: boolean;
-			} = { all };
-			if (params) findManyOptions.params = params;
-			if (locale) findManyOptions.locale = locale;
-			const [findErr, findResponse] = await this.findMany(findManyOptions);
-			if (findErr) return [findErr, null];
-			return [null, findResponse?.[0] ?? null];
+			if (err) return [err, null];
+			return [null, response?.data ?? null];
 		}
-		if (err) return [err, null];
-		return [null, response?.data ?? null];
+		const findManyOptions: {
+			params?: QueryParams<T>;
+			locale?: string;
+			all: boolean;
+		} = { all };
+		if (params) findManyOptions.params = params;
+		if (locale) findManyOptions.locale = locale;
+		const [findErr, findResponse] = await this.findMany(findManyOptions);
+		if (findErr) return [findErr, null];
+		return [null, findResponse?.[0] ?? null];
 	}
 
 	async create(options: {
@@ -318,7 +315,7 @@ export class StrapiClient<
 		);
 		if (searchErr) return [searchErr, null];
 
-		let baseId: string | null = null;
+		let baseId: string;
 		if (
 			enResponse?.data &&
 			enResponse.data.length > 0 &&

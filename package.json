@@ -2,25 +2,40 @@
 	"name": "@fbritoferreira/strapi",
 	"version": "0.4.0",
 	"description": "A generic TypeScript client for interacting with Strapi CMS APIs, supporting content fetching, creation, updates, and deletions.",
-	"main": "./dist/strapi.cjs.js",
-	"module": "./dist/strapi.es.js",
-	"types": "./dist/strapi.d.ts",
+	"main": "./dist/strapi.cjs",
+	"module": "./dist/strapi.mjs",
+	"types": "./dist/strapi.d.cts",
 	"exports": {
 		".": {
-			"types": "./dist/strapi.d.ts",
-			"import": "./dist/strapi.es.js",
-			"require": "./dist/strapi.cjs.js"
-		}
+			"import": {
+				"types": "./dist/strapi.d.mts",
+				"default": "./dist/strapi.mjs"
+			},
+			"require": {
+				"types": "./dist/strapi.d.cts",
+				"default": "./dist/strapi.cjs"
+			}
+		},
+		"./package.json": "./package.json"
+	},
+	"files": [
+		"dist",
+		"README.md",
+		"LICENCE.md",
+		"CHANGELOG.md"
+	],
+	"sideEffects": false,
+	"engines": {
+		"node": ">=20"
 	},
 	"scripts": {
-		"dev": "vite",
-		"build": "tsc && tsc --project tsconfig.cjs.json && vite build",
-		"lint": "eslint . --ext .ts",
-		"lint:fix": "eslint . --ext .ts --fix",
-		"preview": "vite preview",
+		"build": "tsc --noEmit && vite build",
+		"typecheck": "tsc --noEmit",
+		"lint": "eslint .",
+		"lint:fix": "eslint . --fix",
 		"test": "vitest run",
-		"test:watch": "vitest run",
-		"test:ui": "vitest --ui",
+		"test:watch": "vitest",
+		"test:coverage": "vitest run --coverage",
 		"prepare": "husky",
 		"lint-staged": "lint-staged"
 	},
@@ -46,30 +61,31 @@
 		"registry": "https://registry.npmjs.org/",
 		"access": "public"
 	},
-	"packageManager": "pnpm@10.20.0",
+	"packageManager": "pnpm@12.5.1",
 	"devDependencies": {
-		"@changesets/cli": "^2.29.7",
-		"@eslint/js": "^9.39.1",
-		"@eslint/json": "^0.14.0",
-		"@types/node": "^24.10.0",
-		"@types/qs": "^6.14.0",
-		"@vitest/coverage-v8": "4.0.7",
-		"eslint": "^9.39.1",
-		"globals": "^16.5.0",
+		"@changesets/cli": "^3.0.3",
+		"@eslint/js": "^10.0.1",
+		"@eslint/json": "^2.1.0",
+		"@microsoft/api-extractor": "^7.59.1",
+		"@types/node": "^24.13.6",
+		"@types/qs": "^6.15.1",
+		"@vitest/coverage-v8": "5.0.1",
+		"eslint": "^10.11.0",
+		"globals": "^17.12.0",
 		"husky": "^9.1.7",
-		"jiti": "^2.6.1",
-		"lint-staged": "^16.2.6",
-		"typescript": "^5.9.3",
-		"typescript-eslint": "^8.46.3",
-		"vite": "^7.2.1",
-		"vite-plugin-dts": "^4.5.4",
-		"vitest": "^4.0.7"
+		"jiti": "^2.7.0",
+		"lint-staged": "^17.5.1",
+		"typescript": "^6.0.3",
+		"typescript-eslint": "^8.70.0",
+		"vite": "^8.3.0",
+		"vite-plugin-dts": "^5.1.1",
+		"vitest": "^5.0.1"
 	},
 	"dependencies": {
-		"qs": "^6.14.0"
+		"qs": "^6.16.0"
 	},
 	"lint-staged": {
-		"*.{ts,js}": [
+		"*.{ts,mts,js}": [
 			"eslint --fix"
 		]
 	}
