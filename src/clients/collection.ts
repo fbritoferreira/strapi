@@ -78,8 +78,13 @@ export class CollectionClient<T extends object> {
 
 	async findFirst(options: ReadOptions<T> = {}): Promise<Result<T | null>> {
 		const { params, locale, init } = options;
+		const pagination = params?.pagination;
+		const isOffsetShaped = pagination?.start !== undefined || pagination?.limit !== undefined;
 		const [err, data, meta] = await this.findMany({
-			params: { ...params, pagination: { ...params?.pagination, pageSize: 1 } },
+			params: {
+				...params,
+				pagination: isOffsetShaped ? { ...pagination, limit: 1 } : { ...pagination, pageSize: 1 },
+			},
 			...(locale !== undefined && { locale }),
 			...(init && { init }),
 		});
@@ -115,16 +120,21 @@ export class CollectionClient<T extends object> {
 		// Non-default locale: find or create the default-locale document, then add the localization.
 		// The base-document lookup uses only `filters` (plus a forced pageSize of 1), never the
 		// caller's `params` — sort/pagination/status shape the response shape, not which document
-		// is the localization base.
-		const searchQuery = this.query({ ...(filters && { filters }), pagination: { pageSize: 1 } }, this.defaultLocale);
-		const [searchErr, found] = await this.http.request<StrapiResponse<T>>(`${this.uid}${searchQuery}`, {
-			...init,
-			method: "GET",
-		});
-		if (searchErr) return fail(searchErr);
+		// is the localization base. With no `filters` there is nothing to match on, so the lookup
+		// is skipped entirely and a fresh default-locale document is created instead.
+		let documentId: string | undefined;
+		if (filters) {
+			const searchQuery = this.query({ filters, pagination: { pageSize: 1 } }, this.defaultLocale);
+			const [searchErr, found] = await this.http.request<StrapiResponse<T>>(`${this.uid}${searchQuery}`, {
+				...init,
+				method: "GET",
+			});
+			if (searchErr) return fail(searchErr);
 
-		const firstFound = found?.data?.[0];
-		let documentId = firstFound ? documentIdOf(firstFound) : undefined;
+			const firstFound = found?.data?.[0];
+			documentId = firstFound ? documentIdOf(firstFound) : undefined;
+		}
+
 		if (!documentId) {
 			const basePayload = { ...payload, data: { ...payload.data, locale: this.defaultLocale } };
 			const [createErr, created] = await this.post(`${this.uid}${this.query(params, undefined)}`, basePayload, init);

@@ -143,6 +143,12 @@ describe("CollectionClient", () => {
 			expect(data).toBeNull();
 		});
 
+		it("forces limit 1 instead of pageSize for offset-shaped pagination", async () => {
+			fetchMock.mockResolvedValueOnce(jsonResponse({ data: [doc("a")] }));
+			await articles.findFirst({ params: { pagination: { start: 0, limit: 10 } } });
+			expect(decoded(fetchMock)).toBe("http://h/api/articles?pagination[start]=0&pagination[limit]=1");
+		});
+
 		it("passes init through", async () => {
 			fetchMock.mockResolvedValueOnce(jsonResponse({ data: [doc("a")] }));
 			await articles.findFirst({ init: { cache: "no-store" } });
@@ -255,7 +261,12 @@ describe("CollectionClient", () => {
 				.mockResolvedValueOnce(jsonResponse({ data: [] }))
 				.mockResolvedValueOnce(jsonResponse({ data: doc("fresh") }, 201))
 				.mockResolvedValueOnce(jsonResponse({ data: { ...doc("fresh"), locale: "de" } }));
-			const [err, data] = await articles.create({ payload, locale: "de", params: { status: "published" } });
+			const [err, data] = await articles.create({
+				payload,
+				locale: "de",
+				filters: { title: { $eq: "New" } },
+				params: { status: "published" },
+			});
 			expect(err).toBeNull();
 			expect(data?.documentId).toBe("fresh");
 			const secondBody = JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body));
@@ -268,7 +279,7 @@ describe("CollectionClient", () => {
 			fetchMock
 				.mockResolvedValueOnce(jsonResponse({ data: [] }))
 				.mockResolvedValueOnce(jsonResponse({ data: { id: 1 } }, 201));
-			const [err, data] = await articles.create({ payload, locale: "fr" });
+			const [err, data] = await articles.create({ payload, locale: "fr", filters: { title: { $eq: "New" } } });
 			expect(err?.name).toBe("HTTPError");
 			expect(err?.message).toContain("documentId");
 			expect(data).toBeNull();
@@ -277,22 +288,38 @@ describe("CollectionClient", () => {
 
 		it("returns the search error for a non-default locale", async () => {
 			fetchMock.mockResolvedValueOnce(errorResponse(500, "InternalServerError", "x"));
-			const [err] = await articles.create({ payload, locale: "fr" });
+			const [err] = await articles.create({ payload, locale: "fr", filters: { title: { $eq: "New" } } });
 			expect(err?.status).toBe(500);
 			expect(fetchMock).toHaveBeenCalledTimes(1);
 		});
 
 		it("returns the base create error for a non-default locale", async () => {
 			fetchMock.mockResolvedValueOnce(jsonResponse({ data: [] })).mockResolvedValueOnce(errorResponse(400, "ValidationError", "bad"));
-			const [err] = await articles.create({ payload, locale: "fr" });
+			const [err] = await articles.create({ payload, locale: "fr", filters: { title: { $eq: "New" } } });
 			expect(err?.name).toBe("ValidationError");
 			expect(fetchMock).toHaveBeenCalledTimes(2);
 		});
 
 		it("returns the localization put error", async () => {
 			fetchMock.mockResolvedValueOnce(jsonResponse({ data: [doc("base")] })).mockResolvedValueOnce(errorResponse(400, "ValidationError", "bad"));
-			const [err] = await articles.create({ payload, locale: "fr" });
+			const [err] = await articles.create({ payload, locale: "fr", filters: { title: { $eq: "New" } } });
 			expect(err?.name).toBe("ValidationError");
+		});
+
+		it("creates a fresh default-locale document when no filters are supplied", async () => {
+			fetchMock
+				.mockResolvedValueOnce(jsonResponse({ data: doc("fresh") }, 201))
+				.mockResolvedValueOnce(jsonResponse({ data: { ...doc("fresh"), locale: "fr" } }));
+			const [err, data] = await articles.create({ payload, locale: "fr" });
+			expect(err).toBeNull();
+			expect(data?.locale).toBe("fr");
+			expect(fetchMock).toHaveBeenCalledTimes(2);
+			const urls = fetchMock.mock.calls.map(([u]) => decodeURIComponent(String(u)));
+			expect(urls[0]).toBe("http://h/api/articles");
+			expect(urls[1]).toBe("http://h/api/articles/fresh?locale=fr");
+			expect(fetchMock.mock.calls[0]?.[1]?.method).toBe("POST");
+			expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toEqual({ data: { title: "New", locale: "en" } });
+			expect(fetchMock.mock.calls[1]?.[1]?.method).toBe("PUT");
 		});
 	});
 

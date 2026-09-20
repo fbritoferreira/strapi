@@ -41,7 +41,7 @@ interface Article {
 const strapi = new Strapi({
 	baseURL: "http://localhost:1337",
 	defaultLocale: "en",
-	token: process.env.STRAPI_TOKEN,
+	...(process.env.STRAPI_TOKEN && { token: process.env.STRAPI_TOKEN }),
 });
 
 const articles = strapi.collection<Article>("articles");
@@ -74,7 +74,7 @@ type argument. `users` and `files` work against `/api/users` and
 handling, matching how those plugins actually respond.
 
 `StrapiClient<T>` is a shorthand for `new Strapi(config).collection<T>(uid)`.
-It is a collection client only, it has no `files`, `users()` or `single()`.
+It is a collection client only. It has no `files`, `users()` or `single()`.
 
 ```ts
 import { StrapiClient } from "@fbritoferreira/strapi";
@@ -147,7 +147,10 @@ missing or empty.
 
 `create` with `locale` set to a non-default locale searches for the base
 document in `defaultLocale` using `filters`, creates it if it does not exist,
-then adds the localization:
+then adds the localization. `filters` is how you identify which
+default-locale document the new localization belongs to; omitting `filters`
+skips that lookup entirely and always creates a fresh default-locale
+document before localizing it:
 
 ```ts
 const [err, frArticle] = await articles.create({
@@ -255,7 +258,7 @@ Strapi schema.
 - Every method now returns `[error, data, meta]` instead of `[error, data]`.
   `meta.pagination` carries `total` and `pageCount`. Existing two-element
   destructuring (`const [err, data] = ...`) still works; the third element is
-  simply ignored.
+  ignored.
 - `T` no longer has to declare `id`.
 - `ServiceError` gained `name`, `details` and `cause`. Strapi's `error` body,
   validation details included, is copied into it.

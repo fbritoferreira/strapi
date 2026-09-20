@@ -1,5 +1,5 @@
 import type { ServiceError } from "./errors";
-import type { FetchInit, StrapiErrorBody } from "./types";
+import type { FetchInit } from "./types";
 
 export interface HttpConfig {
 	baseURL: string;
@@ -83,13 +83,23 @@ function toNetworkError(thrown: unknown, timeout: number): ServiceError {
 	return { name: "NetworkError", message, cause: thrown };
 }
 
+/** `StrapiErrorBody["error"]`, but `name` may be missing on a malformed or non-conforming response body. */
+interface ParsedErrorBody {
+	error?: {
+		status?: number;
+		name?: string;
+		message: string;
+		details?: unknown;
+	};
+}
+
 function toHttpError(response: Response, text: string): ServiceError {
 	try {
-		const body = JSON.parse(text) as Partial<StrapiErrorBody>;
+		const body = JSON.parse(text) as ParsedErrorBody;
 		if (body && typeof body === "object" && body.error && typeof body.error.message === "string") {
 			const error: ServiceError = {
 				status: body.error.status ?? response.status,
-				name: body.error.name,
+				name: body.error.name ?? "HTTPError",
 				message: body.error.message,
 			};
 			if (body.error.details !== undefined) error.details = body.error.details;

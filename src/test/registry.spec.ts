@@ -13,10 +13,10 @@ interface Homepage {
 
 declare module "../index" {
 	interface StrapiContentTypes {
-		articles: Article;
+		"registry-test-articles": Article;
 	}
 	interface StrapiSingleTypes {
-		homepage: Homepage;
+		"registry-test-homepage": Homepage;
 	}
 }
 
@@ -24,12 +24,14 @@ describe("registry augmentation", () => {
 	const strapi = new Strapi({ baseURL: "http://h", defaultLocale: "en" });
 
 	it("infers T from StrapiContentTypes", () => {
-		expectTypeOf(strapi.collection("articles")).toEqualTypeOf<CollectionClient<Article>>();
-		expectTypeOf(strapi.single("homepage")).toEqualTypeOf<SingleTypeClient<Homepage>>();
+		expectTypeOf(strapi.collection("registry-test-articles")).toEqualTypeOf<CollectionClient<Article>>();
+		expectTypeOf(strapi.single("registry-test-homepage")).toEqualTypeOf<SingleTypeClient<Homepage>>();
 	});
 
 	it("still allows an explicit type argument and unknown uids", () => {
-		expectTypeOf(strapi.collection<Homepage>("articles")).toEqualTypeOf<CollectionClient<Homepage>>();
+		expectTypeOf(strapi.collection<Homepage>("registry-test-articles")).toEqualTypeOf<
+			CollectionClient<Homepage>
+		>();
 		expectTypeOf(strapi.collection("not-registered")).toEqualTypeOf<CollectionClient<object>>();
 	});
 });

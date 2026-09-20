@@ -21,3 +21,4 @@ New:
 - `all: true` supports `pagination.start`/`limit` (offset mode).
 - `params` are sent on `create` and `update`, so `{ status: "published" }` reaches Strapi.
 - `StrapiContentTypes`/`StrapiSingleTypes` registry interfaces for typed `collection("articles")` calls.
+- `create` with a non-default locale and no `filters` now creates a fresh default-locale document instead of localizing the first document Strapi returns.

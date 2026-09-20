@@ -206,5 +206,6 @@ export interface StrapiContentTypes {
 
 /** Same as {@link StrapiContentTypes} for single types. */
 export interface StrapiSingleTypes {
+	/** Marker so the interface is not empty; never set. */
 	readonly __brand?: never;
 }

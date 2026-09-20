@@ -2,7 +2,6 @@ import { describe, expectTypeOf, it } from "vitest";
 
 import type {
 	FetchInit,
-	StrapiContentTypes,
 	StrapiDocument,
 	StrapiErrorBody,
 	StrapiMedia,
@@ -10,6 +9,7 @@ import type {
 	StrapiResponse,
 	StrapiSingleResponse,
 } from "../types";
+import type { RegistryKey } from "../strapi";
 
 describe("types", () => {
 	it("StrapiDocument has Strapi 5 system fields", () => {
@@ -36,8 +36,9 @@ describe("types", () => {
 		expectTypeOf(init).toMatchTypeOf<RequestInit>();
 	});
 
-	it("registry has only the brand key until augmented", () => {
-		expectTypeOf<Exclude<keyof StrapiContentTypes, "__brand">>().toEqualTypeOf<never>();
+	it("RegistryKey drops the brand marker", () => {
+		expectTypeOf<RegistryKey<{ readonly __brand?: never }>>().toEqualTypeOf<never>();
+		expectTypeOf<RegistryKey<{ readonly __brand?: never; articles: { a: 1 } }>>().toEqualTypeOf<"articles">();
 	});
 
 	it("StrapiMedia has url and mime", () => {

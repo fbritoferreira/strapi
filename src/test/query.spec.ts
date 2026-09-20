@@ -1,4 +1,3 @@
-import qs from "qs";
 import { describe, expect, it } from "vitest";
 
 import { buildQuery } from "../query";
@@ -14,7 +13,7 @@ describe("buildQuery", () => {
 	it("serializes with qs indices format", () => {
 		const params = { populate: ["author", "tags"], pagination: { page: 2, pageSize: 10 } };
 		expect(buildQuery(params, defaults)).toBe(
-			`?${qs.stringify(params, { arrayFormat: "indices", encode: true })}`
+			"?populate%5B0%5D=author&populate%5B1%5D=tags&pagination%5Bpage%5D=2&pagination%5BpageSize%5D=10"
 		);
 	});
 

@@ -126,6 +126,13 @@ describe("HttpClient", () => {
 			});
 		});
 
+		it("defaults the error name to HTTPError when the body omits it", async () => {
+			fetchMock.mockResolvedValueOnce(jsonResponse({ data: null, error: { status: 400, message: "x" } }, 400));
+			const [err, data] = await new HttpClient({ baseURL: "http://h" }).request("x");
+			expect(data).toBeNull();
+			expect(err).toEqual({ status: 400, name: "HTTPError", message: "x" });
+		});
+
 		it("maps a non-JSON error response", async () => {
 			fetchMock.mockResolvedValueOnce(textResponse("Bad Gateway", 502));
 			const [err] = await new HttpClient({ baseURL: "http://h" }).request("x");
