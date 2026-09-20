@@ -18,8 +18,12 @@
 		},
 		"./package.json": "./package.json"
 	},
+	"bin": {
+		"strapi-client": "./bin/strapi-client.mjs"
+	},
 	"files": [
 		"dist",
+		"bin",
 		"README.md",
 		"LICENCE.md",
 		"CHANGELOG.md"
@@ -29,7 +33,7 @@
 		"node": ">=20"
 	},
 	"scripts": {
-		"build": "tsc --noEmit && vite build",
+		"build": "tsc --noEmit && vite build && vite build --config vite.cli.config.mts",
 		"typecheck": "tsc --noEmit && tsc -p tsconfig.test.json && tsc -p tsconfig.cli-fixture.json",
 		"lint": "eslint .",
 		"lint:fix": "eslint . --fix",
