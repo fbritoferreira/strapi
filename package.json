@@ -30,7 +30,7 @@
 	},
 	"scripts": {
 		"build": "tsc --noEmit && vite build",
-		"typecheck": "tsc --noEmit && tsc -p tsconfig.test.json",
+		"typecheck": "tsc --noEmit && tsc -p tsconfig.test.json && tsc -p tsconfig.cli-fixture.json",
 		"lint": "eslint .",
 		"lint:fix": "eslint . --fix",
 		"test": "vitest run",
