@@ -122,3 +122,9 @@ export interface CreatePayload<T> {
 export interface UpdatePayload<T> {
 	data: DeepPartial<T>;
 }
+
+export type StrapiPagination =
+	| { page: number; pageSize: number; pageCount: number; total: number }
+	| { start: number; limit: number; total: number };
+
+export type StrapiMeta = { pagination?: StrapiPagination } | null;
