@@ -1,2 +1,5 @@
+minimumReleaseAgeExclude:
+  - unplugin-dts@1.1.1
+  - vite-plugin-dts@5.1.1
 onlyBuiltDependencies:
   - esbuild

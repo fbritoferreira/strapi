@@ -73,13 +73,29 @@ export interface QueryParams<T = unknown> {
 	populate?: Populate<T>;
 	fields?: (keyof T)[];
 	sort?: SortField<T>[];
+	/**
+	 * Page-based (`page` + `pageSize`) or offset-based (`start` + `limit`)
+	 * pagination. Strapi ignores `pageCount` on requests; it is kept for
+	 * backwards compatibility only.
+	 */
 	pagination?: {
 		page?: number;
 		pageSize?: number;
+		/** @deprecated Not a request parameter in Strapi; has no effect. */
 		pageCount?: number;
 		withCount?: boolean;
+		start?: number;
+		limit?: number;
 	};
 	locale?: string;
+	/** Strapi 5 Draft & Publish status. Defaults to `published` server-side. */
+	status?: "draft" | "published";
+	/**
+	 * Strapi 5 filter on how the draft and published versions of a document
+	 * relate to each other.
+	 */
+	publicationFilter?: "all" | "modified" | "published" | "unpublished";
+	/** @deprecated Strapi 4 only. Use `status` on Strapi 5. */
 	publicationState?: "live" | "preview" | "draft";
 }
 
