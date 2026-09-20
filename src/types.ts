@@ -101,18 +101,12 @@ export interface QueryParams<T = unknown> {
 
 export interface StrapiResponse<T> {
 	data: T[];
-	meta?: {
-		pagination?: {
-			page: number;
-			pageSize: number;
-			pageCount: number;
-			total: number;
-		};
-	};
+	meta?: { pagination?: StrapiPagination };
 }
 
 export interface StrapiSingleResponse<T> {
 	data: T;
+	meta?: { pagination?: StrapiPagination };
 }
 
 export interface CreatePayload<T> {
@@ -121,4 +115,97 @@ export interface CreatePayload<T> {
 
 export interface UpdatePayload<T> {
 	data: DeepPartial<T>;
+}
+
+export type StrapiPagination =
+	| { page: number; pageSize: number; pageCount: number; total: number }
+	| { start: number; limit: number; total: number };
+
+export type StrapiMeta = { pagination?: StrapiPagination } | null;
+
+/** Shape Strapi 5 returns for any non-2xx response. */
+export interface StrapiErrorBody {
+	data: null;
+	error: {
+		status: number;
+		name: string;
+		message: string;
+		details?: unknown;
+	};
+}
+
+/** Fields Strapi 5 adds to every document. `locale` only when i18n is enabled. */
+export interface StrapiDocument {
+	id: number;
+	documentId: string;
+	createdAt: string;
+	updatedAt: string;
+	publishedAt: string | null;
+	locale?: string;
+}
+
+export interface StrapiMediaFormat {
+	name: string;
+	hash: string;
+	ext: string;
+	mime: string;
+	width: number;
+	height: number;
+	size: number;
+	url: string;
+}
+
+/** `plugin::upload.file` as returned by the REST API. */
+export interface StrapiMedia extends StrapiDocument {
+	name: string;
+	alternativeText: string | null;
+	caption: string | null;
+	width: number | null;
+	height: number | null;
+	formats: Record<string, StrapiMediaFormat> | null;
+	hash: string;
+	ext: string;
+	mime: string;
+	size: number;
+	url: string;
+	previewUrl: string | null;
+	provider: string;
+	provider_metadata: unknown;
+}
+
+/** `plugin::users-permissions.user` as returned by `/api/users`. */
+export interface StrapiUser extends StrapiDocument {
+	username: string;
+	email: string;
+	provider: string;
+	confirmed: boolean;
+	blocked: boolean;
+}
+
+/** Minimal node of a Strapi `blocks` (rich text) field. */
+export interface StrapiBlock {
+	type: string;
+	children?: StrapiBlock[];
+	text?: string;
+	[key: string]: unknown;
+}
+
+/** `RequestInit` plus the Next.js `fetch` extension. Merged last into every request. */
+export type FetchInit = RequestInit & {
+	next?: { revalidate?: number | false; tags?: string[] };
+};
+
+/**
+ * Augment these from generated code to get `strapi.collection("articles")`
+ * typed without a type argument. Keys are REST path segments.
+ */
+export interface StrapiContentTypes {
+	/** Marker so the interface is not empty; never set. */
+	readonly __brand?: never;
+}
+
+/** Same as {@link StrapiContentTypes} for single types. */
+export interface StrapiSingleTypes {
+	/** Marker so the interface is not empty; never set. */
+	readonly __brand?: never;
 }

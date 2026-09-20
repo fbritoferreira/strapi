@@ -4,29 +4,11 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![npm downloads](https://img.shields.io/npm/dm/@fbritoferreira/strapi.svg)](https://www.npmjs.com/package/@fbritoferreira/strapi)
 
-A lightweight, generic TypeScript client for Strapi CMS v5, supporting CRUD
-operations, query parameters (filters, populate, pagination), and
-internationalization (i18n) with locale-specific creates/updates. Built with
-modern ES modules and Fetch API, it handles error responses and nested filters
-via `qs` serialization.
-
-## Features
-
-- **Generic TypeScript Support**: Define your entity types (e.g.,
-  `{ id: number; name: string; documentId?: string }`) for full type safety on
-  requests/responses.
-- **CRUD Operations**: `findMany`, `find`, `create`, `update`, `delete`.
-- **Upsert**: Atomic create-or-update based on filters.
-- **i18n Handling**: Automatic default locale creation and localization linking
-  under a shared `documentId`.
-- **Query Params**: Supports Strapi's filters (e.g.,
-  `{ name: { $eq: 'foo' } }`), populate (`*`), pagination, and locale.
-- **Parallel Pagination**: Use `all: true` to fetch all pages in parallel for
-  better performance.
-- **Error Handling**: Returns `[ServiceError | null, Data | null]` tuples for
-  async operations.
-- **Tiny Footprint**: Only `qs` for query stringification. Uses the global
-  Fetch API (Node.js 20+, browsers, edge runtimes).
+A TypeScript client for the Strapi 5 REST API. A root `Strapi` class wraps
+collection types, single types, the users-permissions plugin (`/api/users`)
+and the upload plugin (`/api/upload`); a `StrapiClient` shorthand covers a
+single collection. Every method returns a `[error, data, meta]` tuple instead
+of throwing.
 
 ## Installation
 
@@ -42,147 +24,248 @@ pnpm add @fbritoferreira/strapi
 yarn add @fbritoferreira/strapi
 ```
 
-Requires Node.js >=20 (global `fetch`). Ships ESM and CommonJS builds with
-bundled type declarations.
+Requires Node.js >= 20. Ships ESM and CommonJS builds with bundled type
+declarations.
 
-## Quick Start
-
-Import and instantiate the client with your Strapi base URL, optional auth
-token, and content-type UID (e.g., `articles` for `/api/articles`)
+## Quick start
 
 ```ts
-import {
-	StrapiClient,
-	type CreatePayload,
-	type QueryParams,
-	type StrapiFilters,
-	type UpdatePayload,
-} from "@fbritoferreira/strapi";
+import { Strapi } from "@fbritoferreira/strapi";
 
 interface Article {
-	id: number;
-	documentId?: string;
+	documentId: string;
 	title: string;
-	content: string;
+	body: string;
 }
 
-const client = new StrapiClient<Article>({
-	baseURL: "http://localhost:1337", // Strapi API base
-	uid: "articles", // UID for /api/articles
-	token: "your-jwt-token", // Optional for auth
+const strapi = new Strapi({
+	baseURL: "http://localhost:1337",
+	defaultLocale: "en",
+	...(process.env.STRAPI_TOKEN && { token: process.env.STRAPI_TOKEN }),
 });
 
-// Find multiple
-const [err1, articles] = await client.findMany({ params: { populate: "*" } });
-if (!err1 && articles) {
-	console.log(articles); // Article[]
-}
+const articles = strapi.collection<Article>("articles");
 
-// Find one by documentId (Strapi 5 addresses documents by documentId, not numeric id)
-const [err2, article] = await client.find({ id: "a1b2c3d4e5f6g7h8i9j0k1l2" });
-if (!err2 && article) {
-	console.log(article); // Article | null
-}
+const [err, items, meta] = await articles.findMany({
+	params: { filters: { title: { $contains: "strapi" } }, pagination: { pageSize: 10 } },
+});
+if (err) throw new Error(`${err.name}: ${err.message}`);
+console.log(items.length, "of", meta?.pagination?.total);
 
-// Create (default locale 'en')
-const payload: CreatePayload<Article> = {
-	data: { title: "New Article", content: "Hello World" },
-};
-const [err3, newArticle] = await client.create({ payload });
-if (!err3 && newArticle) {
-	console.log(newArticle); // Article
-}
-
-// Upsert with filters (create if not exists)
-const filters: StrapiFilters<Article> = { title: { $eq: "Existing Title" } };
-const [err4, upserted] = await client.upsert({ payload, filters });
-if (!err4 && upserted) {
-	console.log(upserted); // Article
-}
+const [createErr, created] = await articles.create({ payload: { data: { title: "Hello", body: "..." } } });
+const [, updated] = await articles.update({ documentId: created!.documentId, payload: { data: { title: "Hi" } }, params: { status: "published" } });
 ```
 
-## i18n Usage
+## Clients
 
-Strapi i18n uses locales; this client assumes `en` is the default locale. For
-non-default locales, provide the `locale` option; the client auto-creates the
-`en` entry if needed and creates the localization under the same `documentId`.
+`new Strapi(config)` exposes one sub-client per Strapi API surface:
+
+| Client | Access | Methods |
+| --- | --- | --- |
+| Collection types | `strapi.collection<T>("articles")` | `findMany`, `find`, `findFirst`, `count`, `create`, `update`, `delete`, `upsert` |
+| Single types | `strapi.single<T>("homepage")` | `find`, `update`, `delete` |
+| Users-permissions | `strapi.users<T>()` | `findMany`, `find`, `me`, `count`, `create`, `update`, `delete` |
+| Upload | `strapi.files` | `find`, `findOne`, `upload`, `update`, `delete` |
+
+`collection` and `single` accept a `StrapiContentTypes`/`StrapiSingleTypes`
+registry key (see Typed registry below) or any string uid with an explicit
+type argument. `users` and `files` work against `/api/users` and
+`/api/upload`; they return plain bodies with numeric ids and no locale
+handling, matching how those plugins actually respond.
+
+`StrapiClient<T>` is a shorthand for `new Strapi(config).collection<T>(uid)`.
+It is a collection client only. It has no `files`, `users()` or `single()`.
 
 ```ts
-// Create in French (searches/creates 'en' first if missing)
-const [err, frArticle] = await client.create({
-	payload,
-	locale: "fr",
-	filters: { title: { $eqi: "Article Français" } }, // For existence check
-});
-if (!err && frArticle) {
-	console.log(frArticle.documentId); // Shared document ID for localizations
-}
+import { StrapiClient } from "@fbritoferreira/strapi";
 
-// Update specific locale
-const updatePayload: UpdatePayload<Article> = {
-	data: { content: "Updated FR" },
-};
-const [err5, updated] = await client.update({
-	id: frArticle.documentId,
-	payload: updatePayload,
-	locale: "fr",
-});
-
-// Find with locale
-const [err6, frArticles] = await client.findMany({
-	params: { filters: { title: { $contains: "Français" } } },
-	locale: "fr",
+const articles = new StrapiClient<Article>({
+	baseURL: "http://localhost:1337",
+	defaultLocale: "en",
+	uid: "articles",
 });
 ```
 
-### Query Parameters
+## Query parameters
 
-Pass `QueryParams<Article>` for filters, populate, etc. Nested filters use
-`$eq`, `$contains`, etc.
+Pass `params: QueryParams<T>` to filter, sort, select fields, set the
+publication status, and paginate.
 
 ```ts
-const params: QueryParams<Article> = {
-	filters: { title: { $eq: "Exact Title" } },
-	populate: ["category", "author"],
-	pagination: { pageSize: 10 },
-	sort: ["title:asc"],
-	status: "published", // Strapi 5 Draft & Publish ("draft" | "published")
-	locale: "fr",
-};
-const [err, paginated] = await client.findMany({ params });
+const [err, matching, meta] = await articles.findMany({
+	params: {
+		filters: { title: { $contains: "strapi" } },
+		populate: ["category", "author"],
+		fields: ["title", "body"],
+		sort: ["title:asc"],
+		pagination: { pageSize: 10 },
+		status: "published",
+	},
+});
+```
 
-// Fetch all pages in parallel (better performance for large datasets)
-const [err2, allArticles] = await client.findMany({
-	params,
+`pagination` accepts either page-based (`page`, `pageSize`) or offset-based
+(`start`, `limit`) options; Strapi picks the mode from whichever fields are
+present. `status` is Strapi 5's Draft & Publish filter (`"draft"` or
+`"published"`).
+
+## Fetching every page
+
+Pass `all: true` to fetch every page and concatenate the results, instead of
+one page at a time.
+
+```ts
+const [err, all, meta] = await articles.findMany({
+	params: { pagination: { pageSize: 100 } },
 	all: true,
 });
 ```
 
-## Error Handling
-
-Methods return `[ServiceError | null, Data | null]`. Check `err` for issues like
-404 or network failures.
+Mode follows the `pagination` you pass: `page`/`pageSize`, or nothing, for
+page mode; `start`/`limit` for offset mode. The client fetches the first page
+to learn the total, then requests the rest in that same mode:
 
 ```ts
-const [err, data] = await client.find({ id: "does-not-exist" });
-if (err) {
-	console.error(err.message, err.status); // e.g., "Strapi API error: 404 Not Found"
+const [err, all] = await articles.findMany({
+	params: { pagination: { start: 0, limit: 100 } },
+	all: true,
+});
+```
+
+Remaining pages are fetched in parallel, bounded by `concurrency` (default 5).
+Set it on the constructor:
+
+```ts
+const strapi = new Strapi({ baseURL: "http://localhost:1337", defaultLocale: "en", concurrency: 10 });
+```
+
+## i18n
+
+`defaultLocale` is required on both `Strapi` and `StrapiClient`; there is no
+implicit `"en"` default, and the constructor throws a `TypeError` if it is
+missing or empty.
+
+`create` with `locale` set to a non-default locale searches for the base
+document in `defaultLocale` using `filters`, creates it if it does not exist,
+then adds the localization. `filters` is how you identify which
+default-locale document the new localization belongs to; omitting `filters`
+skips that lookup entirely and always creates a fresh default-locale
+document before localizing it:
+
+```ts
+const [err, frArticle] = await articles.create({
+	payload: { data: { title: "Article en français", body: "..." } },
+	locale: "fr",
+	filters: { title: { $eq: "Existing Title" } },
+});
+```
+
+`update` and `delete` take `documentId` plus `locale` to target one
+localization:
+
+```ts
+await articles.update({ documentId: frArticle!.documentId, payload: { data: { title: "Updated" } }, locale: "fr" });
+
+// Deletes only the fr localization; the default-locale document and other
+// localizations are untouched.
+await articles.delete({ documentId: frArticle!.documentId, locale: "fr" });
+```
+
+## Errors
+
+Every method returns `[error, data, meta]`. `data` and `meta` are `null` when
+`error` is set.
+
+```ts
+export interface ServiceError {
+	message: string;
+	status?: number;
+	name?: string;
+	details?: unknown;
+	cause?: unknown;
 }
 ```
 
-## API Reference
+`name` is Strapi's own error name (`"ValidationError"`, `"NotFoundError"`,
+etc.) when Strapi returned one, or one of `"HTTPError"`, `"TimeoutError"`,
+`"NetworkError"` for failures the client classifies itself. `details` carries
+Strapi's `error.details`, for example per-field validation errors.
 
-See `src/types.ts` for full types. Key methods:
+```ts
+const [err, created] = await articles.create({ payload: { data: { title: "" } } });
+if (err) {
+	if (err.name === "ValidationError") {
+		console.error(err.details); // e.g. { errors: [{ path: ["title"], message: "title must be defined" }] }
+	}
+	throw new Error(`${err.name}: ${err.message}`);
+}
+```
 
-- `findMany(options: { params?: QueryParams<T>; locale?: string; all?: boolean }): Promise<[ServiceError | null, T[] | null]>`
-- `find(options: { id?: number | string; params?: QueryParams<T>; locale?: string; all?: boolean }): Promise<[ServiceError | null, T | null]>`
-- `create(options: { payload: CreatePayload<T>; params?: Omit<QueryParams<T>, 'filters'>; locale?: string; filters?: StrapiFilters<T> }): Promise<[ServiceError | null, T | null]>`
-- `update(options: { id: number | string; payload: UpdatePayload<T>; params?: QueryParams<T>; locale?: string }): Promise<[ServiceError | null, T | null]>`
-- `delete(options: { id: number | string }): Promise<[ServiceError | null, T | null]>`
-- `upsert(options: { payload: CreatePayload<T>; filters?: StrapiFilters<T>; params?: Omit<QueryParams<T>, 'filters'>; locale?: string }): Promise<[ServiceError | null, T | null]>`
+## Next.js and custom fetch
 
-Constructor:
-`new StrapiClient<T>({ baseURL: string, uid: string, token?: string })`
+Pass `init` on any call to merge extra `RequestInit` fields, including
+Next.js's `fetch` extensions, into that request:
+
+```ts
+const [err, cached] = await articles.findMany({
+	params: { populate: "*" },
+	init: { next: { revalidate: 60, tags: ["articles"] } },
+});
+```
+
+The constructor also accepts `headers`, a custom `fetch` implementation, and
+`timeout` (milliseconds, default 10_000):
+
+```ts
+const strapi = new Strapi({
+	baseURL: "http://localhost:1337",
+	defaultLocale: "en",
+	headers: { "X-Custom": "1" },
+	fetch: myFetch,
+	timeout: 5000,
+});
+```
+
+## Typed registry
+
+Augment `StrapiContentTypes` and `StrapiSingleTypes` so `collection()` and
+`single()` infer `T` from the uid, without an explicit type argument:
+
+```ts
+declare module "@fbritoferreira/strapi" {
+	interface StrapiContentTypes {
+		articles: Article;
+	}
+	interface StrapiSingleTypes {
+		homepage: Homepage;
+	}
+}
+
+strapi.collection("articles"); // CollectionClient<Article>
+strapi.single("homepage"); // SingleTypeClient<Homepage>
+```
+
+An explicit type argument still overrides the registry, and an unregistered
+uid falls back to `CollectionClient<object>` / `SingleTypeClient<object>`. A
+`generate` command planned for 0.7.0 will emit this augmentation from your
+Strapi schema.
+
+## Migrating from 0.4
+
+- `id: number` addressing is gone. `find`, `update` and `delete` now take
+  `documentId: string`; Strapi 5 routes accept `documentId` only.
+- `find` with no id (the old "find all" call) is removed. Use `findFirst`.
+- Every method now returns `[error, data, meta]` instead of `[error, data]`.
+  `meta.pagination` carries `total` and `pageCount`. Existing two-element
+  destructuring (`const [err, data] = ...`) still works; the third element is
+  ignored.
+- `T` no longer has to declare `id`.
+- `ServiceError` gained `name`, `details` and `cause`. Strapi's `error` body,
+  validation details included, is copied into it.
+- `defaultLocale` is now required. There is no `"en"` default.
+- `StrapiClient` stays as a shorthand for a single collection and now takes
+  `defaultLocale`, but it is collection-only: it has no `files`, `users()` or
+  `single()`. Use `new Strapi(...)` when you need those.
 
 ## Development
 
@@ -194,14 +277,6 @@ Constructor:
 
 Uses Vite for building and Vitest for testing. Releases are cut by the
 `Release` GitHub workflow from `main` via Changesets.
-
-## Contributing
-
-1. Fork the repo.
-2. Create a feature branch (`git checkout -b feature/amazing-feature`).
-3. Commit changes (`git commit -m 'Add amazing feature'`).
-4. Push (`git push origin feature/amazing-feature`).
-5. Open a Pull Request.
 
 ## License
 
