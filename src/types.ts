@@ -347,6 +347,42 @@ export interface StrapiMedia extends StrapiDocument {
 	provider_metadata: unknown;
 }
 
+/** Body the auth routes answer with once a session exists. */
+export interface AuthSession<T = StrapiUser> {
+	jwt: string;
+	/** Only in the `"refresh"` JWT mode, and omitted when it travels in an httpOnly cookie. */
+	refreshToken?: string;
+	user: T;
+}
+
+/**
+ * Body `POST /api/auth/local/register` answers with. `jwt` is absent when email
+ * confirmation is enabled: the account exists but cannot sign in yet.
+ */
+export interface RegisterResult<T = StrapiUser> {
+	jwt?: string;
+	refreshToken?: string;
+	user: T;
+}
+
+/** Body `POST /api/auth/refresh` answers with. */
+export interface RefreshedSession {
+	jwt: string;
+	/** Omitted when the rotated token is set as an httpOnly cookie instead. */
+	refreshToken?: string;
+}
+
+/** Body `POST /api/auth/send-email-confirmation` answers with. */
+export interface SentEmailConfirmation {
+	email: string;
+	sent: boolean;
+}
+
+/** Body `POST /api/auth/logout` answers with. */
+export interface LogoutResult {
+	ok: boolean;
+}
+
 /** `plugin::users-permissions.user` as returned by `/api/users`. */
 export interface StrapiUser extends StrapiDocument {
 	username: string;
