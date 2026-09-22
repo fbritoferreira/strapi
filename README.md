@@ -31,7 +31,8 @@ interfaces and the content-type registry from your Strapi schema.
 
 [Installation](#installation) · [Quick start](#quick-start) ·
 [Clients](#clients) · [Authentication](#authentication) ·
-[Query parameters](#query-parameters) · [Fetching every page](#fetching-every-page) ·
+[Query parameters](#query-parameters) · [Writing](#writing) ·
+[Fetching every page](#fetching-every-page) ·
 [i18n](#i18n) · [Errors](#errors) · [Next.js and custom fetch](#nextjs-and-custom-fetch) ·
 [Typed registry](#typed-registry) · [Generating types](#generating-types) ·
 [Route types from OpenAPI](#route-types-from-openapi) · [GraphQL](#graphql) ·
@@ -278,6 +279,51 @@ publication cohorts — `never-published`, `has-published-version`, `modified`,
 `published-without-draft`, `published-with-draft` — and Strapi answers a 400
 for anything else.
 
+## Writing
+
+Strapi takes relations and media **by reference** — a `documentId`, a numeric
+`id`, or the `connect`/`disconnect`/`set` longhand — while components and
+dynamic zones are written inline. Generated types carry a `__relations` marker
+so the payload is checked the same way:
+
+```ts
+await articles.create({
+	payload: {
+		data: {
+			title: "Hello",
+			author: "author-document-id",
+			tags: ["tag-1", "tag-2"],
+			cover: { id: 7 },
+			seo: { metaTitle: "Hello" }, // a component: inline
+		},
+	},
+});
+
+await articles.update({
+	documentId,
+	payload: {
+		data: {
+			tags: {
+				connect: [{ documentId: "tag-3", position: { end: true } }],
+				disconnect: ["tag-1"],
+			},
+		},
+	},
+});
+
+await articles.create({ payload: { data: { author: { name: "Ada" } } } });
+// error: a relation takes a reference, not the related document
+```
+
+A reference is a `documentId`, an `id`, or the longhand
+`{ documentId, locale?, status?, position? }` / `{ id, position? }`. To-many
+fields take a list of them; to-one fields take one, or `null` to clear it.
+`position` orders a connected relation: `{ before }`, `{ after }`,
+`{ start: true }` or `{ end: true }`.
+
+Types written by hand, with no marker, keep the previous `DeepPartial<T>`
+payload.
+
 ## Fetching every page
 
 Pass `all: true` to fetch every page and concatenate the results, instead of
@@ -460,6 +506,7 @@ What is generated:
 - Relations, media, components and dynamic zones are optional fields (they appear only when populated). `media` is `StrapiMedia | null` or `StrapiMedia[]`; relations to `plugin::users-permissions.user` are `StrapiUser`.
 - Dynamic zones are `Array<(BlocksHero & { __component: "blocks.hero" }) | ...>`.
 - `enumeration` becomes a union of string literals; `json` is `unknown`; `biginteger` is `string`.
+- A `__relations` marker per type, listing the fields written by reference — relations and media, but not components or dynamic zones.
 - A `__populatable` marker per type, listing the fields `populate` accepts. It exists only in the type system — Strapi never returns it — and is what lets `fields`, `sort` and `populate` be told apart and results be narrowed.
 - `private` attributes are skipped. Plugin content types are skipped unless `--include-plugins` is passed.
 - `--include-plugins` registers plugin content types under their `pluralName` even when the plugin does not expose a matching `/api/<pluralName>` route.

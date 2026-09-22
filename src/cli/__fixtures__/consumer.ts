@@ -25,6 +25,35 @@ export async function narrowed() {
 	return [shape, author] as const;
 }
 
+export async function writes() {
+	// Relations and media by reference; components inline.
+	await articles.create({
+		payload: {
+			data: {
+				title: "Hello",
+				slug: "hello",
+				author: "author-document-id",
+				tags: ["tag-1", "tag-2"],
+				cover: { id: 7 },
+				seo: { metaTitle: "Hello" },
+			},
+		},
+	});
+
+	// The longhand, including ordering.
+	await articles.update({
+		documentId: "a",
+		payload: { data: { tags: { connect: [{ documentId: "tag-3", position: { end: true } }], disconnect: ["tag-1"] } } },
+	});
+}
+
+export async function rejectedWrites() {
+	// @ts-expect-error a relation takes a reference, not the related document
+	await articles.create({ payload: { data: { author: { name: "Ada" } } } });
+	// @ts-expect-error author is a to-one relation
+	await articles.create({ payload: { data: { author: ["a", "b"] } } });
+}
+
 export async function rejectedSelections() {
 	const [, list] = await articles.findMany();
 	// @ts-expect-error author was not populated, so Strapi does not return it
