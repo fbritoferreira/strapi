@@ -68,6 +68,7 @@ export {
 } from "./config";
 export type { ServiceError, Result } from "./errors";
 export { HttpClient, type HttpConfig } from "./http";
+export type { RetryOptions, ResolvedRetry } from "./retry";
 export { Strapi, type StrapiConfig, type RegistryKey, type Uid, type DocOf } from "./strapi";
 export { StrapiClient, type StrapiClientConfig } from "./client";
 export { CollectionClient, type ClientContext } from "./clients/collection";

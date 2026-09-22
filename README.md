@@ -33,7 +33,7 @@ interfaces and the content-type registry from your Strapi schema.
 [Clients](#clients) · [Authentication](#authentication) ·
 [Query parameters](#query-parameters) · [Writing](#writing) ·
 [Fetching every page](#fetching-every-page) ·
-[i18n](#i18n) · [Errors](#errors) · [Next.js and custom fetch](#nextjs-and-custom-fetch) ·
+[i18n](#i18n) · [Errors](#errors) · [Retries](#retries) · [Next.js and custom fetch](#nextjs-and-custom-fetch) ·
 [Typed registry](#typed-registry) · [Generating types](#generating-types) ·
 [One config for every source](#one-config-for-every-source) ·
 [Route types from OpenAPI](#route-types-from-openapi) · [GraphQL](#graphql) ·
@@ -416,6 +416,41 @@ if (err) {
 	}
 	throw new Error(`${err.name}: ${err.message}`);
 }
+```
+
+## Retries
+
+Off by default. Pass `retry` to repeat the failures worth repeating:
+
+```ts
+const strapi = new Strapi({
+	baseURL: "http://localhost:1337",
+	defaultLocale: "en",
+	retry: 3, // or { attempts: 3, delay: 300, maxDelay: 10_000 }
+});
+```
+
+What it repeats, and what it leaves alone:
+
+- **Statuses** `408`, `429`, `500`, `502`, `503`, `504` by default — the ones a
+  second attempt can fix. A `400` or `404` is returned as it is.
+- **Methods**: only the idempotent ones (`GET`, `HEAD`, `OPTIONS`). Repeating a
+  `POST` can create a second document, because the first may have been applied
+  before the response was lost. Opt in per method with `methods: ["POST"]` when
+  you know the endpoint tolerates it.
+- **Network failures**, where no response arrived at all. Turn off with
+  `network: false`.
+
+`Retry-After` is honoured, in seconds or as an HTTP date, capped at `maxDelay`.
+Otherwise the wait doubles each attempt from `delay`, capped the same way. Set
+`jitter: true` to spread the waits when many clients retry at once.
+
+The `timeout` applies per attempt rather than to the whole sequence, and an
+aborted signal stops the retrying — you asked for the request to stop, not to be
+repeated. `onRetry` reports each wait:
+
+```ts
+retry: { attempts: 3, onRetry: ({ attempt, delay, status }) => log.warn({ attempt, delay, status }) }
 ```
 
 ## Next.js and custom fetch
