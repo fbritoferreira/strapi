@@ -393,6 +393,52 @@ are separate files and work side by side.
 Routes whose path is a raw regex (Strapi emits `/connect/(.*)` for provider
 callbacks) are skipped: they cannot be called by name.
 
+## GraphQL
+
+Strapi serves GraphQL at `/graphql` — at the origin, not under `/api` — when
+`@strapi/plugin-graphql` is installed. `strapi.graphql()` runs one operation
+there, with the same bearer token and `[error, data]` tuple as the REST clients:
+
+```ts
+const [err, data] = await strapi.graphql<{ articles: Article[] }>(
+	`query Articles($locale: I18NLocaleCode) {
+		articles(locale: $locale) { documentId title }
+	}`,
+	{ variables: { locale: "fr" } }
+);
+```
+
+GraphQL errors come back as the error tuple, with the whole `errors` array in
+`details` and the single error's `extensions.code` as `name`. A 404 — the plugin
+is not installed — is reported as such. Pass `graphqlEndpoint` to `new Strapi()`
+when the plugin's `endpoint` option is configured; `strapi.graphqlUrl` shows the
+resolved URL.
+
+To type the operations, generate the schema:
+
+```sh
+npx @fbritoferreira/strapi generate --graphql http://localhost:1337/graphql -o src/strapi-graphql.ts
+```
+
+That introspects the endpoint and writes one exported type per object,
+interface, enum, input object and union — so query results and variables can be
+annotated with the schema's own names:
+
+```ts
+import type { Article, ArticleFiltersInput } from "./strapi-graphql";
+
+const [err, data] = await strapi.graphql<{ articles: Article[] }, { filters: ArticleFiltersInput }>(
+	"query Articles($filters: ArticleFiltersInput) { articles(filters: $filters) { documentId title } }",
+	{ variables: { filters: { title: { eq: "Hello" } } } }
+);
+```
+
+Selection sets are not modelled: the generated `Article` has every field, not
+the ones a given query selected. For types derived from the query documents
+themselves, use graphql-codegen. Introspection has to be reachable — Apollo
+disables it when `NODE_ENV=production`, so generate against a development
+instance.
+
 ## Migrating from 0.4
 
 - `id: number` addressing is gone. `find`, `update` and `delete` now take

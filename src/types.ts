@@ -204,6 +204,19 @@ export type StrapiPagination =
 /** Third element of a {@link Result} tuple: Strapi's `meta` object, or `null` when the endpoint returns none. */
 export type StrapiMeta = { pagination?: StrapiPagination } | null;
 
+/** One entry of a GraphQL response's `errors` array. */
+export interface GraphqlError {
+	message: string;
+	path?: (string | number)[];
+	extensions?: { code?: string; [key: string]: unknown };
+}
+
+/** Body a GraphQL endpoint returns: data, errors, or both. */
+export interface GraphqlResponse<T> {
+	data?: T | null;
+	errors?: GraphqlError[];
+}
+
 /** Shape Strapi 5 returns for any non-2xx response. */
 export interface StrapiErrorBody {
 	data: null;

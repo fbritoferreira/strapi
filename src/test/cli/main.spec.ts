@@ -65,14 +65,38 @@ describe("run", () => {
 	it("takes only one source", async () => {
 		const i = io();
 		expect(await run(["generate", "--dir", project, "--openapi", "spec.json"], i)).toBe(2);
-		expect(i.err.join("\n")).toMatch(/exactly one of --dir, --url or --openapi/);
+		expect(i.err.join("\n")).toMatch(/exactly one of --dir, --url, --openapi or --graphql/);
+	});
+
+	it("generates GraphQL types from --graphql", async () => {
+		const dir = await mkdtemp(join(tmpdir(), "strapi-cli-"));
+		const output = join(dir, "graphql.ts");
+		const schema = {
+			queryType: { name: "Query" },
+			types: [{ kind: "OBJECT", name: "Article", fields: [{ name: "title", type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "String" } } }] }],
+		};
+		const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ data: { __schema: schema } }), { status: 200 }));
+		const i = io();
+		expect(await run(["generate", "--graphql", "http://h/graphql", "-o", output], i)).toBe(0);
+		expect(await readFile(output, "utf8")).toContain("export type Article = {\n\ttitle: string;\n};");
+		expect(i.out.join("\n")).toMatch(/1 type/);
+		expect(fetchMock.mock.calls[0]?.[0]).toBe("http://h/graphql");
+		fetchMock.mockRestore();
+	});
+
+	it("reports a missing GraphQL plugin", async () => {
+		const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("Not Found", { status: 404 }));
+		const i = io();
+		expect(await run(["generate", "--graphql", "http://h/graphql"], i)).toBe(1);
+		expect(i.err.join("\n")).toMatch(/@strapi\/plugin-graphql/);
+		fetchMock.mockRestore();
 	});
 
 	it("requires exactly one of --dir or --url", async () => {
 		expect(await run(["generate"], io())).toBe(2);
 		const both = io();
 		expect(await run(["generate", "--dir", project, "--url", "http://h"], both)).toBe(2);
-		expect(both.err.join("\n")).toMatch(/exactly one of --dir, --url or --openapi/);
+		expect(both.err.join("\n")).toMatch(/exactly one of --dir, --url, --openapi or --graphql/);
 	});
 
 	it("requires credentials for --url, from flags or env", async () => {
