@@ -529,7 +529,16 @@ npx @fbritoferreira/strapi generate --openapi spec.json -o src/strapi-routes.ts
 # a URL works too, e.g. the documentation plugin's spec
 npx @fbritoferreira/strapi generate \
   --openapi https://cms.example.com/documentation/v1.0.0/full_documentation.json
+
+# or the documentation plugin's own page, which inlines the spec rather than serving it
+npx @fbritoferreira/strapi generate \
+  --openapi https://cms.example.com/documentation/v1.0.0 -o src/strapi-routes.ts
 ```
+
+The source can be a JSON document or a Swagger UI page: recent versions of
+`@strapi/plugin-documentation` render the spec inline with
+`SwaggerUIBundle({ spec: … })` and serve no JSON endpoint at all, so the loader
+reads it out of the page. `--token` (or `STRAPI_TOKEN`) authenticates either.
 
 The output augments `StrapiRoutes` with one entry per route, keyed
 `"<METHOD> <path>"`, and `strapi.route()` calls them:

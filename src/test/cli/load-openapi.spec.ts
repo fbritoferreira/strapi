@@ -14,6 +14,43 @@ async function writeSpec(body: unknown): Promise<string> {
 	return file;
 }
 
+const swaggerPage = (spec: unknown) =>
+	`<!DOCTYPE html><html><head><title>Swagger UI</title></head><body><div id="swagger-ui"></div>
+<script>window.onload = function() { window.ui = SwaggerUIBundle({ spec: ${JSON.stringify(spec)}, dom_id: "#swagger-ui", deepLinking: true }); };</script>
+</body></html>`;
+
+describe("loadOpenapi from a documentation page", () => {
+	it("reads the spec the Swagger UI page inlines", async () => {
+		const fetchImpl = vi.fn().mockResolvedValue(
+			new Response(swaggerPage(document), { status: 200, headers: { "content-type": "text/html" } })
+		);
+		expect(await loadOpenapi({ source: "https://cms.example.com/documentation/v1.0.0", fetch: fetchImpl })).toEqual(document);
+	});
+
+	it("reads it from a saved page on disk too", async () => {
+		const dir = await mkdtemp(join(tmpdir(), "strapi-openapi-"));
+		const file = join(dir, "documentation.html");
+		await writeFile(file, swaggerPage(document), "utf8");
+		expect(await loadOpenapi({ source: file })).toEqual(document);
+	});
+
+	it("keeps braces inside strings from ending the spec early", async () => {
+		const tricky = { ...document, info: { title: "a } b", version: "1" } };
+		const fetchImpl = vi.fn().mockResolvedValue(new Response(swaggerPage(tricky), { status: 200 }));
+		expect(await loadOpenapi({ source: "https://cms.example.com/documentation", fetch: fetchImpl })).toEqual(tricky);
+	});
+
+	it("rejects a page with no spec in it", async () => {
+		const fetchImpl = vi.fn().mockResolvedValue(new Response("<html><body>nothing here</body></html>", { status: 200 }));
+		await expect(loadOpenapi({ source: "https://cms.example.com/documentation", fetch: fetchImpl })).rejects.toThrow(/not valid JSON/);
+	});
+
+	it("rejects a page whose inlined object is not an OpenAPI document", async () => {
+		const fetchImpl = vi.fn().mockResolvedValue(new Response(swaggerPage({ nope: true }), { status: 200 }));
+		await expect(loadOpenapi({ source: "https://cms.example.com/documentation", fetch: fetchImpl })).rejects.toThrow(/OpenAPI 3/);
+	});
+});
+
 describe("loadOpenapi", () => {
 	it("reads a spec from a file", async () => {
 		expect(await loadOpenapi({ source: await writeSpec(document) })).toEqual(document);
