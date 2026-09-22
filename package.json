@@ -1,6 +1,6 @@
 {
 	"name": "@fbritoferreira/strapi",
-	"version": "0.15.0",
+	"version": "0.15.1",
 	"description": "TypeScript client for the Strapi 5 REST and GraphQL APIs: typed collections, single types, auth, uploads and custom routes, with types generated from your own schema.",
 	"main": "./dist/strapi.cjs",
 	"module": "./dist/strapi.mjs",
