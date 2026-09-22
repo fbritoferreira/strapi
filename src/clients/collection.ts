@@ -5,12 +5,15 @@ import { buildQuery } from "../query";
 import type {
 	CreatePayload,
 	FetchInit,
+	FindQueryParams,
+	ListQueryParams,
 	QueryParams,
 	StrapiFilters,
 	StrapiMeta,
 	StrapiResponse,
 	StrapiSingleResponse,
 	UpdatePayload,
+	WriteQueryParams,
 } from "../types";
 
 /** Shared state a {@link Strapi} instance passes to each sub-client. */
@@ -23,10 +26,10 @@ export interface ClientContext {
 	concurrency: number;
 }
 
-/** Options common to read methods. */
-interface ReadOptions<T> {
+/** Options common to read methods. `P` is the param set the route accepts. */
+interface ReadOptions<T, P = ListQueryParams<T>> {
 	/** Query parameters (filters, populate, sort, pagination, status…). */
-	params?: QueryParams<T>;
+	params?: P;
 	/** Locale override for this call. */
 	locale?: string;
 	/** Extra `fetch` options merged into the request. */
@@ -87,7 +90,7 @@ export class CollectionClient<T extends object> {
 	}
 
 	/** `GET /api/<uid>/<documentId>`. Fails with `NotFoundError` when the document is missing. */
-	async find(options: ReadOptions<T> & { documentId: string }): Promise<Result<T>> {
+	async find(options: ReadOptions<T, FindQueryParams<T>> & { documentId: string }): Promise<Result<T>> {
 		const { documentId, params, locale, init } = options;
 		const [err, body] = await this.http.request<StrapiSingleResponse<T>>(
 			`${this.uid}/${encodeURIComponent(documentId)}${this.query(params, locale)}`,
@@ -137,7 +140,7 @@ export class CollectionClient<T extends object> {
 	 */
 	async create(options: {
 		payload: CreatePayload<T>;
-		params?: Omit<QueryParams<T>, "filters">;
+		params?: WriteQueryParams<T>;
 		locale?: string;
 		filters?: StrapiFilters<T>;
 		init?: FetchInit;
@@ -182,7 +185,7 @@ export class CollectionClient<T extends object> {
 	async update(options: {
 		documentId: string;
 		payload: UpdatePayload<T>;
-		params?: QueryParams<T>;
+		params?: WriteQueryParams<T>;
 		locale?: string;
 		init?: FetchInit;
 	}): Promise<Result<T>> {
@@ -211,7 +214,7 @@ export class CollectionClient<T extends object> {
 	async upsert(options: {
 		payload: CreatePayload<T>;
 		filters?: StrapiFilters<T>;
-		params?: Omit<QueryParams<T>, "filters">;
+		params?: WriteQueryParams<T>;
 		locale?: string;
 		init?: FetchInit;
 	}): Promise<Result<T>> {

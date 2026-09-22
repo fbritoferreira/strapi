@@ -134,7 +134,26 @@ const [err, matching, meta] = await articles.findMany({
 `pagination` accepts either page-based (`page`, `pageSize`) or offset-based
 (`start`, `limit`) options; Strapi picks the mode from whichever fields are
 present. `status` is Strapi 5's Draft & Publish filter (`"draft"` or
-`"published"`).
+`"published"`). `_q` runs Strapi's full-text search.
+
+Each method takes only the params its route accepts, mirroring the contracts
+Strapi declares for its core routes:
+
+| Method | Params |
+| --- | --- |
+| `findMany`, `findFirst`, `count` | `ListQueryParams<T>` — the full read surface, including `pagination`, `sort`, `filters` and `_q` |
+| `find` | `FindQueryParams<T>` — no `pagination`, no `_q` |
+| `create`, `update`, `upsert` | `WriteQueryParams<T>` — `fields` and `populate` only; they shape the response, not which documents are written |
+| `SingleTypeClient.find` | `FindQueryParams<T>` |
+| `SingleTypeClient.update` | `WriteQueryParams<T>` |
+
+All of them keep the conditional params Strapi adds for localized and
+Draft & Publish content types: `locale`, `status`, `publicationFilter` and the
+deprecated `hasPublishedVersion`. `publicationFilter` takes one of Strapi's
+publication cohorts — `never-published`, `has-published-version`, `modified`,
+`unmodified`, `never-published-document`, `has-published-version-document`,
+`published-without-draft`, `published-with-draft` — and Strapi answers a 400
+for anything else.
 
 ## Fetching every page
 

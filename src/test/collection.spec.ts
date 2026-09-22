@@ -248,7 +248,7 @@ describe("CollectionClient", () => {
 				payload,
 				locale: "fr",
 				filters: { title: { $eq: "New" } },
-				params: { status: "published", sort: ["title:asc"] },
+				params: { status: "published", populate: "*" },
 				init: { cache: "no-store" },
 			});
 			const urls = fetchMock.mock.calls.map(([u]) => decodeURIComponent(String(u)));
