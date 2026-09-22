@@ -124,7 +124,7 @@ const [err, matching, meta] = await articles.findMany({
 		filters: { title: { $contains: "strapi" } },
 		populate: ["category", "author"],
 		fields: ["title", "body"],
-		sort: ["title:asc"],
+		sort: ["title:asc"], // keys of T, optionally `:asc`/`:desc`; relation paths like "author.name:asc" are anchored to a key of T
 		pagination: { pageSize: 10 },
 		status: "published",
 	},
@@ -272,10 +272,19 @@ strapi.collection("articles"); // CollectionClient<Article>
 strapi.single("homepage"); // SingleTypeClient<Homepage>
 ```
 
-An explicit type argument still overrides the registry, and an unregistered
-uid falls back to `CollectionClient<object>` / `SingleTypeClient<object>`. See
-Generating types below for a command that emits this augmentation from your
-Strapi schema.
+Once the registry is augmented, a uid it does not declare is a compile error,
+which catches typos like `strapi.collection("aritcles")`. Both escape hatches
+stay open: an explicit type argument overrides the registry and accepts any
+uid (`strapi.collection<Article>("custom-route")`), and adding the uid to the
+augmentation makes it first class. While the registry is empty — no generated
+file imported — any uid is accepted and falls back to `CollectionClient<object>`
+/ `SingleTypeClient<object>`.
+
+`StrapiClient`'s `uid` is constrained the same way; for a uid outside the
+registry use `new Strapi(config).collection<T>(uid)`.
+
+See Generating types below for a command that emits this augmentation from
+your Strapi schema.
 
 ## Generating types
 

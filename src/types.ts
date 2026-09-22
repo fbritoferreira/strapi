@@ -65,11 +65,15 @@ export type Populate<T> =
 /** Sort direction suffix, as in `title:asc`. */
 export type SortDirection = "asc" | "desc";
 
-/** One entry of the `sort` query parameter: a field name, optionally suffixed with `:asc` or `:desc`. */
+/**
+ * One entry of the `sort` query parameter: a field name, optionally suffixed
+ * with `:asc` or `:desc`. Relation paths (`author.name:asc`) are anchored to a
+ * field of `T`, so a typo in the first segment is a compile error.
+ */
 export type SortField<T> =
 	| (keyof T & string)
 	| `${keyof T & string}:${SortDirection}`
-	| `${string}:${SortDirection}`;
+	| `${keyof T & string}.${string}`;
 
 /** Recursively optional version of `T`. Used for create and update payloads. */
 export type DeepPartial<T> = {

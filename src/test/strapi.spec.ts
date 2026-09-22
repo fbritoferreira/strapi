@@ -67,10 +67,9 @@ describe("Strapi", () => {
 		expect(lastCall(fetchMock).url).toBe("http://h/api/articles");
 	});
 
-	it("types an unregistered uid as CollectionClient<object>", () => {
+	it("types a uid from an explicit type argument", () => {
 		const strapi = new Strapi({ baseURL: "http://h", defaultLocale: "en" });
-		const anon = strapi.collection("anything");
-		expectTypeOf(anon).toEqualTypeOf<CollectionClient<object>>();
+		expectTypeOf(strapi.collection<Article>("anything")).toEqualTypeOf<CollectionClient<Article>>();
 		expectTypeOf(strapi.collection<Article>("articles")).toEqualTypeOf<CollectionClient<Article>>();
 	});
 });
