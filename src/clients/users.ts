@@ -1,15 +1,22 @@
 import { fail, ok, type Result } from "../errors";
 import type { HttpClient } from "../http";
 import { buildQuery } from "../query";
-import type { DeepPartial, FetchInit, QueryParams, StrapiUser } from "../types";
+import type {
+	DeepPartial,
+	FetchInit,
+	PluginFindQueryParams,
+	PluginListQueryParams,
+	QueryParams,
+	StrapiUser,
+} from "../types";
 import type { ClientContext } from "./collection";
 
 const NOT_FOUND = { status: 404, name: "NotFoundError", message: "Not Found" } as const;
 
 /** Options common to read methods. */
-interface ReadOptions<T> {
+interface ReadOptions<T, P = PluginListQueryParams<T>> {
 	/** Query parameters (filters, populate, sort, pagination). */
-	params?: QueryParams<T>;
+	params?: P;
 	/** Extra `fetch` options merged into the request. */
 	init?: FetchInit;
 }
@@ -45,7 +52,7 @@ export class UsersClient<T extends object = StrapiUser> {
 	}
 
 	/** `GET /api/users/<id>`. */
-	async find(options: ReadOptions<T> & { id: number | string }): Promise<Result<T>> {
+	async find(options: ReadOptions<T, PluginFindQueryParams<T>> & { id: number | string }): Promise<Result<T>> {
 		return this.single(`users/${encodeURIComponent(String(options.id))}${this.query(options.params)}`, {
 			...options.init,
 			method: "GET",
@@ -53,12 +60,12 @@ export class UsersClient<T extends object = StrapiUser> {
 	}
 
 	/** `GET /api/users/me`. The user the configured token belongs to. */
-	async me(options: ReadOptions<T> = {}): Promise<Result<T>> {
+	async me(options: ReadOptions<T, PluginFindQueryParams<T>> = {}): Promise<Result<T>> {
 		return this.single(`users/me${this.query(options.params)}`, { ...options.init, method: "GET" });
 	}
 
 	/** `GET /api/users/count`. */
-	async count(options: ReadOptions<T> = {}): Promise<Result<number>> {
+	async count(options: ReadOptions<T, Pick<QueryParams<T>, "filters">> = {}): Promise<Result<number>> {
 		const [err, body] = await this.http.request<number>(`users/count${this.query(options.params)}`, {
 			...options.init,
 			method: "GET",
