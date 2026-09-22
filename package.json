@@ -30,7 +30,7 @@
 	],
 	"sideEffects": false,
 	"engines": {
-		"node": ">=20"
+		"node": ">=20.3"
 	},
 	"scripts": {
 		"build": "tsc --noEmit && vite build && vite build --config vite.cli.config.mts",
@@ -42,7 +42,8 @@
 		"test:coverage": "vitest run --coverage",
 		"jsr:check": "jsr publish --dry-run --allow-dirty",
 		"prepare": "husky",
-		"lint-staged": "lint-staged"
+		"lint-staged": "lint-staged",
+		"smoke": "node scripts/smoke.mjs"
 	},
 	"keywords": [
 		"strapi",

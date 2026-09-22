@@ -53,7 +53,8 @@ pnpm add @fbritoferreira/strapi
 yarn add @fbritoferreira/strapi
 ```
 
-Requires Node.js >= 20. Ships ESM and CommonJS builds with bundled type
+Requires Node.js >= 20.3 (for `AbortSignal.any`, which merges your `signal`
+with the client's timeout). Ships ESM and CommonJS builds with bundled type
 declarations.
 
 ### From JSR
@@ -822,7 +823,7 @@ await articles.update({ documentId, payload: { data: { title } }, locale: "fr" }
 ## Development
 
 1. Clone and install: `git clone <repo> && pnpm install` (Node.js 24, see `.nvmrc`)
-2. Run tests: `pnpm test` (Vitest), `pnpm test:coverage` for coverage — thresholds are 100% on statements, branches, functions and lines
+2. Run tests: `pnpm test` (Vitest), `pnpm test:coverage` for coverage — thresholds are 100% on statements, branches, functions and lines. `pnpm smoke` exercises the built package the way CI does on the oldest supported Node, where Vitest itself cannot run
 3. Lint and typecheck: `pnpm lint && pnpm typecheck`
 4. Build: `pnpm build` (outputs ESM, CJS and bundled `.d.ts` to `dist/`; also builds the `generate` CLI to `dist/cli.mjs`, used by `bin/strapi-client.mjs`)
 5. Add a changeset for user-facing changes: `pnpm changeset`
