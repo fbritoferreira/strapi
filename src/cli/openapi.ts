@@ -181,7 +181,7 @@ export function routesModel(document: OpenApiDocument): RoutesModel {
 	const names = new Map(Object.keys(schemas).map((key) => [key, pascalCase(key)]));
 	return {
 		schemas: Object.entries(schemas).map(([key, schema]) => ({
-			name: names.get(key) ?? pascalCase(key),
+			name: pascalCase(key),
 			type: tsTypeOf(schema, names),
 		})),
 		routes: collectRoutes(document, names),

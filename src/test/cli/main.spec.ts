@@ -92,6 +92,49 @@ describe("run", () => {
 		fetchMock.mockRestore();
 	});
 
+	it("sends a token with an --openapi URL and honours --check", async () => {
+		const dir = await mkdtemp(join(tmpdir(), "strapi-cli-"));
+		const output = join(dir, "routes.ts");
+		const spec = { openapi: "3.1.0", info: { title: "t", version: "1" }, paths: { "/ping": { get: { responses: {} } } } };
+		// A Response body can only be read once, so hand out a fresh one per call.
+		const fetchMock = vi
+			.spyOn(globalThis, "fetch")
+			.mockImplementation(() => Promise.resolve(new Response(JSON.stringify(spec), { status: 200 })));
+
+		const write = io();
+		expect(await run(["generate", "--openapi", "https://cms.example.com/spec.json", "--token", "tok", "-o", output], write)).toBe(0);
+		expect(new Headers(fetchMock.mock.calls[0]?.[1]?.headers).get("authorization")).toBe("Bearer tok");
+
+		const upToDate = io();
+		expect(await run(["generate", "--openapi", "https://cms.example.com/spec.json", "-o", output, "--check"], upToDate)).toBe(0);
+		expect(upToDate.out.join("\n")).toMatch(/Up to date/);
+		fetchMock.mockRestore();
+	});
+
+	it("sends a token with --graphql and reports a stale file under --check", async () => {
+		const dir = await mkdtemp(join(tmpdir(), "strapi-cli-"));
+		const output = join(dir, "graphql.ts");
+		const schema = { queryType: { name: "Query" }, types: [{ kind: "ENUM", name: "Status", enumValues: [{ name: "DRAFT" }] }] };
+		const fetchMock = vi
+			.spyOn(globalThis, "fetch")
+			.mockImplementation(() => Promise.resolve(new Response(JSON.stringify({ data: { __schema: schema } }), { status: 200 })));
+
+		const stale = io({ STRAPI_TOKEN: "env-tok" });
+		expect(await run(["generate", "--graphql", "http://h/graphql", "-o", output, "--check"], stale)).toBe(1);
+		expect(stale.err.join("\n")).toMatch(/Out of date/);
+		expect(new Headers(fetchMock.mock.calls[0]?.[1]?.headers).get("authorization")).toBe("Bearer env-tok");
+		fetchMock.mockRestore();
+	});
+
+	it("treats a file with no newline as out of date under --check", async () => {
+		const dir = await mkdtemp(join(tmpdir(), "strapi-cli-"));
+		const output = join(dir, "strapi-types.ts");
+		await writeFile(output, "not even a header", "utf8");
+		const i = io();
+		expect(await run(["generate", "--dir", project, "-o", output, "--check"], i)).toBe(1);
+		expect(i.err.join("\n")).toMatch(/Out of date/);
+	});
+
 	it("requires exactly one of --dir or --url", async () => {
 		expect(await run(["generate"], io())).toBe(2);
 		const both = io();

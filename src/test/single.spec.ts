@@ -76,4 +76,12 @@ describe("SingleTypeClient", () => {
 		const [err] = await home.delete();
 		expect(err?.status).toBe(404);
 	});
+
+	it("keeps the meta a delete answers with", async () => {
+		fetchMock.mockResolvedValueOnce(jsonResponse({ data: { documentId: "h", heading: "H" }, meta: { pagination: { page: 1, pageSize: 1, pageCount: 1, total: 1 } } }));
+		const [err, deleted, meta] = await home.delete();
+		expect(err).toBeNull();
+		expect(deleted?.heading).toBe("H");
+		expect(meta?.pagination).toEqual({ page: 1, pageSize: 1, pageCount: 1, total: 1 });
+	});
 });

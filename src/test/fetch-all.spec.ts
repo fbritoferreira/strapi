@@ -123,4 +123,46 @@ describe("fetchAll", () => {
 		expect(err?.status).toBe(500);
 		expect(data).toBeNull();
 	});
+
+	it("treats a page with no body as empty", async () => {
+		fetchMock.mockResolvedValueOnce(new Response(null, { status: 204 }));
+		const [err, data, meta] = await fetchAll<Item>({ http, ...base });
+		expect(err).toBeNull();
+		expect(data).toEqual([]);
+		expect(meta).toBeNull();
+	});
+
+	it("follows offset pagination the server reports, without being asked for it", async () => {
+		fetchMock.mockResolvedValueOnce(offset([1, 2], 0, 2, 4)).mockResolvedValueOnce(offset([3, 4], 2, 2, 4));
+		const [err, data] = await fetchAll<Item>({ http, ...base });
+		expect(err).toBeNull();
+		expect(data?.map((i) => i.id)).toEqual([1, 2, 3, 4]);
+		expect(urlsOf(fetchMock)[1]).toContain("pagination[start]=2");
+	});
+
+	it("reports the first failure when several pages fail", async () => {
+		fetchMock
+			.mockResolvedValueOnce(page([1, 2], 1, 2, 6))
+			.mockResolvedValueOnce(errorResponse(500, "InternalServerError", "first"))
+			.mockResolvedValueOnce(errorResponse(503, "ServiceUnavailable", "second"));
+		const [err, data] = await fetchAll<Item>({ http, ...base, params: { pagination: { pageSize: 2 } } });
+		expect(err?.status).toBe(500);
+		expect(data).toBeNull();
+	});
+
+	it("falls back to defaults when offset params are partial", async () => {
+		fetchMock.mockResolvedValueOnce(page([1, 2], 1, 2, 3)).mockResolvedValueOnce(page([3], 2, 2, 3));
+		const [err, data] = await fetchAll<Item>({ http, ...base, params: { pagination: { limit: 2 } } });
+		expect(err).toBeNull();
+		expect(data?.map((i) => i.id)).toEqual([1, 2, 3]);
+		expect(urlsOf(fetchMock)[1]).toContain("pagination[start]=2");
+	});
+
+	it("falls back to the default page size when only start is given", async () => {
+		fetchMock.mockResolvedValueOnce(page([1], 1, 25, 26)).mockResolvedValueOnce(page([2], 2, 25, 26));
+		const [err, data] = await fetchAll<Item>({ http, ...base, params: { pagination: { start: 0 } } });
+		expect(err).toBeNull();
+		expect(data?.map((i) => i.id)).toEqual([1, 2]);
+		expect(urlsOf(fetchMock)[1]).toContain("pagination[limit]=25");
+	});
 });

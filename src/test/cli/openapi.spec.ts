@@ -16,6 +16,14 @@ describe("tsTypeOf", () => {
 		[{ type: "string", const: "*" }, '"*"'],
 		[{ type: "array", items: { type: "string" } }, "string[]"],
 		[{ type: "array", items: {} }, "unknown[]"],
+		[{ type: "array" }, "unknown[]"],
+		[{ type: "file" }, "unknown"],
+		[{ enum: [] }, "unknown"],
+		[{ type: ["string", "null"] }, "string | null"],
+		[{ type: ["string", "weird"] }, "string | unknown"],
+		[{ type: "array", items: { anyOf: [{ type: "string" }, { type: "null" }] } }, "(string | null)[]"],
+		[{ type: "array", items: { allOf: [{ type: "object", properties: { a: { type: "string" } }, required: ["a"] }, { type: "object", properties: { b: { type: "number" } } }] } }, "({ a: string } & { b?: number })[]"],
+		[{ properties: { a: { type: "string" } }, required: ["a"] }, "{ a: string }"],
 		[{ $ref: "#/components/schemas/PluginUploadFileDocument" }, "PluginUploadFile"],
 		[{ anyOf: [{ type: "string" }, { type: "null" }] }, "string | null"],
 		[{ oneOf: [{ type: "string" }, { type: "number" }] }, "string | number"],
@@ -78,6 +86,10 @@ describe("collectRoutes", () => {
 		]);
 	});
 
+	it("handles a document with no paths at all", () => {
+		expect(collectRoutes({ openapi: "3.1.0", info: { title: "t", version: "1" } } as OpenApiDocument, names)).toEqual([]);
+	});
+
 	it("skips paths that are not literal routes", () => {
 		expect(collectRoutes(doc, names).some((r) => r.key.includes("(.*)"))).toBe(false);
 	});
@@ -102,6 +114,26 @@ describe("collectRoutes", () => {
 		const route = collectRoutes(doc, names).find((r) => r.key === "GET /articles/{id}");
 		expect(route?.body).toBeUndefined();
 		expect(route?.query).toBeUndefined();
+	});
+
+	it("types a parameter that declares no schema as unknown", () => {
+		const bare: OpenApiDocument = {
+			...doc,
+			paths: { "/ping": { get: { parameters: [{ name: "trace", in: "query" }], responses: {} } } },
+		};
+		expect(collectRoutes(bare, names)[0]?.query).toBe("{ trace?: unknown }");
+	});
+
+	it("falls back to the 201 response when there is no 200", () => {
+		const created: OpenApiDocument = {
+			...doc,
+			paths: {
+				"/things": {
+					post: { responses: { "201": { content: { "application/json": { schema: { type: "object", properties: { id: { type: "number" } }, required: ["id"] } } } } } },
+				},
+			},
+		};
+		expect(collectRoutes(created, names)[0]?.response).toBe("{ id: number }");
 	});
 
 	it("types a response with no JSON content as unknown", () => {

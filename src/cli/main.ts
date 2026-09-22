@@ -99,9 +99,9 @@ function parse(args: string[]): Parsed {
 		...(values.password !== undefined && { password: values.password }),
 		...(values.token !== undefined && { token: values.token }),
 		...(values.output !== undefined && { output: values.output }),
-		includePlugins: values["include-plugins"] ?? false,
-		check: values.check ?? false,
-		help: values.help ?? false,
+		includePlugins: values["include-plugins"] === true,
+		check: values.check === true,
+		help: values.help === true,
 	};
 }
 
