@@ -10,6 +10,7 @@ import type {
 	QueryParams,
 	StrapiFilters,
 	StrapiMeta,
+	SelectedDoc,
 	StrapiResponse,
 	StrapiSingleResponse,
 	UpdatePayload,
@@ -63,15 +64,17 @@ export class CollectionClient<T extends object> {
 	}
 
 	/**
-	 * `GET /api/<uid>`. Lists documents.
-	 *
-	 * With `all: true`, follows pagination and fetches every page (up to
-	 * `concurrency` in parallel), returning the concatenated data.
+	 * Requests a list of documents. `R` is the row shape the caller's params
+	 * select; the params themselves stay typed against the full document.
 	 */
-	async findMany(options: ReadOptions<T> & { all?: boolean } = {}): Promise<Result<T[]>> {
-		const { params, locale, all = false, init } = options;
+	private async list<R>(
+		params: ListQueryParams<T> | undefined,
+		locale: string | undefined,
+		init: FetchInit | undefined,
+		all: boolean
+	): Promise<Result<R[]>> {
 		if (all) {
-			return fetchAll<T>({
+			return fetchAll<R, T>({
 				http: this.http,
 				path: this.uid,
 				defaultLocale: this.defaultLocale,
@@ -81,7 +84,7 @@ export class CollectionClient<T extends object> {
 				...(init && { init }),
 			});
 		}
-		const [err, body] = await this.http.request<StrapiResponse<T>>(`${this.uid}${this.query(params, locale)}`, {
+		const [err, body] = await this.http.request<StrapiResponse<R>>(`${this.uid}${this.query(params, locale)}`, {
 			...init,
 			method: "GET",
 		});
@@ -89,10 +92,29 @@ export class CollectionClient<T extends object> {
 		return ok(body?.data ?? [], toMeta(body));
 	}
 
+	/**
+	 * `GET /api/<uid>`. Lists documents.
+	 *
+	 * With `all: true`, follows pagination and fetches every page (up to
+	 * `concurrency` in parallel), returning the concatenated data.
+	 *
+	 * The result is narrowed by `params`: with a literal `fields` only those
+	 * attributes come back, and populatable fields appear only when `populate`
+	 * asks for them. See {@link SelectedDoc}.
+	 */
+	async findMany<const P extends ListQueryParams<T> = object>(
+		options: ReadOptions<T, P> & { all?: boolean } = {}
+	): Promise<Result<SelectedDoc<T, P>[]>> {
+		const { params, locale, all = false, init } = options;
+		return this.list<SelectedDoc<T, P>>(params, locale, init, all);
+	}
+
 	/** `GET /api/<uid>/<documentId>`. Fails with `NotFoundError` when the document is missing. */
-	async find(options: ReadOptions<T, FindQueryParams<T>> & { documentId: string }): Promise<Result<T>> {
+	async find<const P extends FindQueryParams<T> = object>(
+		options: ReadOptions<T, P> & { documentId: string }
+	): Promise<Result<SelectedDoc<T, P>>> {
 		const { documentId, params, locale, init } = options;
-		const [err, body] = await this.http.request<StrapiSingleResponse<T>>(
+		const [err, body] = await this.http.request<StrapiSingleResponse<SelectedDoc<T, P>>>(
 			`${this.uid}/${encodeURIComponent(documentId)}${this.query(params, locale)}`,
 			{ ...init, method: "GET" }
 		);
@@ -102,18 +124,18 @@ export class CollectionClient<T extends object> {
 	}
 
 	/** First document matching `params`, or `null`. Forces a page size of 1. */
-	async findFirst(options: ReadOptions<T> = {}): Promise<Result<T | null>> {
+	async findFirst<const P extends ListQueryParams<T> = object>(
+		options: ReadOptions<T, P> = {}
+	): Promise<Result<SelectedDoc<T, P> | null>> {
 		const { params, locale, init } = options;
 		const pagination = params?.pagination;
 		const isOffsetShaped = pagination?.start !== undefined || pagination?.limit !== undefined;
-		const [err, data, meta] = await this.findMany({
-			params: {
-				...params,
-				pagination: isOffsetShaped ? { ...pagination, limit: 1 } : { ...pagination, pageSize: 1 },
-			},
-			...(locale !== undefined && { locale }),
-			...(init && { init }),
-		});
+		const [err, data, meta] = await this.list<SelectedDoc<T, P>>(
+			{ ...params, pagination: isOffsetShaped ? { ...pagination, limit: 1 } : { ...pagination, pageSize: 1 } },
+			locale,
+			init,
+			false
+		);
 		if (err) return fail(err);
 		return ok(data[0] ?? null, meta);
 	}
@@ -121,11 +143,7 @@ export class CollectionClient<T extends object> {
 	/** Total number of documents matching `params`, read from `meta.pagination.total`. */
 	async count(options: ReadOptions<T> = {}): Promise<Result<number>> {
 		const { params, locale, init } = options;
-		const [err, data, meta] = await this.findMany({
-			params: { ...params, pagination: { pageSize: 1 } },
-			...(locale !== undefined && { locale }),
-			...(init && { init }),
-		});
+		const [err, data, meta] = await this.list<T>({ ...params, pagination: { pageSize: 1 } }, locale, init, false);
 		if (err) return fail(err);
 		return ok(meta?.pagination?.total ?? data.length, meta);
 	}
@@ -138,18 +156,18 @@ export class CollectionClient<T extends object> {
 	 * via `filters` (creating it when nothing matches) and then `PUT`s the
 	 * localized payload against its `documentId`.
 	 */
-	async create(options: {
+	async create<const P extends WriteQueryParams<T> = object>(options: {
 		payload: CreatePayload<T>;
-		params?: WriteQueryParams<T>;
+		params?: P;
 		locale?: string;
 		filters?: StrapiFilters<T>;
 		init?: FetchInit;
-	}): Promise<Result<T>> {
+	}): Promise<Result<SelectedDoc<T, P>>> {
 		const { payload, params, filters, init } = options;
 		const locale = options.locale ?? this.defaultLocale;
 
 		if (locale === this.defaultLocale) {
-			return this.post(`${this.uid}${this.query(params, undefined)}`, payload, init);
+			return this.post<SelectedDoc<T, P>>(`${this.uid}${this.query(params, undefined)}`, payload, init);
 		}
 
 		// Non-default locale: find or create the default-locale document, then add the localization.
@@ -182,15 +200,15 @@ export class CollectionClient<T extends object> {
 	}
 
 	/** `PUT /api/<uid>/<documentId>`. Updates (or adds a localization to) a document. */
-	async update(options: {
+	async update<const P extends WriteQueryParams<T> = object>(options: {
 		documentId: string;
 		payload: UpdatePayload<T>;
-		params?: WriteQueryParams<T>;
+		params?: P;
 		locale?: string;
 		init?: FetchInit;
-	}): Promise<Result<T>> {
+	}): Promise<Result<SelectedDoc<T, P>>> {
 		const { documentId, payload, params, locale, init } = options;
-		const [err, body] = await this.http.request<StrapiSingleResponse<T>>(
+		const [err, body] = await this.http.request<StrapiSingleResponse<SelectedDoc<T, P>>>(
 			`${this.uid}/${encodeURIComponent(documentId)}${this.query(params, locale)}`,
 			{ ...init, method: "PUT", body: JSON.stringify(payload) }
 		);
@@ -211,13 +229,13 @@ export class CollectionClient<T extends object> {
 	}
 
 	/** Updates the first document matching `filters`, or creates one when none matches. */
-	async upsert(options: {
+	async upsert<const P extends WriteQueryParams<T> = object>(options: {
 		payload: CreatePayload<T>;
 		filters?: StrapiFilters<T>;
-		params?: WriteQueryParams<T>;
+		params?: P;
 		locale?: string;
 		init?: FetchInit;
-	}): Promise<Result<T>> {
+	}): Promise<Result<SelectedDoc<T, P>>> {
 		const { payload, filters, params, locale, init } = options;
 		const [searchErr, existing] = await this.findFirst({
 			params: { ...params, ...(filters && { filters }) },

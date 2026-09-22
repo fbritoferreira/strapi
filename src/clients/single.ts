@@ -5,6 +5,7 @@ import type {
 	FetchInit,
 	FindQueryParams,
 	QueryParams,
+	SelectedDoc,
 	StrapiMeta,
 	StrapiSingleResponse,
 	UpdatePayload,
@@ -35,21 +36,26 @@ export class SingleTypeClient<T extends object> {
 		return buildQuery(params, { defaultLocale: this.defaultLocale, ...(locale !== undefined && { locale }) });
 	}
 
-	/** `GET /api/<uid>`. Fails with `NotFoundError` when the single type has no document yet. */
-	async find(options: { params?: FindQueryParams<T>; locale?: string; init?: FetchInit } = {}): Promise<Result<T>> {
+	/**
+	 * `GET /api/<uid>`. Fails with `NotFoundError` when the single type has no
+	 * document yet. The result is narrowed by `params`, as on collections.
+	 */
+	async find<const P extends FindQueryParams<T> = object>(
+		options: { params?: P; locale?: string; init?: FetchInit } = {}
+	): Promise<Result<SelectedDoc<T, P>>> {
 		const { params, locale, init } = options;
-		return this.single(`${this.uid}${this.query(params, locale)}`, { ...init, method: "GET" });
+		return this.single<SelectedDoc<T, P>>(`${this.uid}${this.query(params, locale)}`, { ...init, method: "GET" });
 	}
 
 	/** `PUT /api/<uid>`. Creates the document on first call, updates it afterwards. */
-	async update(options: {
+	async update<const P extends WriteQueryParams<T> = object>(options: {
 		payload: UpdatePayload<T>;
-		params?: WriteQueryParams<T>;
+		params?: P;
 		locale?: string;
 		init?: FetchInit;
-	}): Promise<Result<T>> {
+	}): Promise<Result<SelectedDoc<T, P>>> {
 		const { payload, params, locale, init } = options;
-		return this.single(`${this.uid}${this.query(params, locale)}`, {
+		return this.single<SelectedDoc<T, P>>(`${this.uid}${this.query(params, locale)}`, {
 			...init,
 			method: "PUT",
 			body: JSON.stringify(payload),
@@ -67,8 +73,8 @@ export class SingleTypeClient<T extends object> {
 		return ok(null);
 	}
 
-	private async single(path: string, init: FetchInit): Promise<Result<T>> {
-		const [err, body] = await this.http.request<StrapiSingleResponse<T>>(path, init);
+	private async single<R>(path: string, init: FetchInit): Promise<Result<R>> {
+		const [err, body] = await this.http.request<StrapiSingleResponse<R>>(path, init);
 		if (err) return fail(err);
 		if (!body?.data) return fail(NOT_FOUND);
 		const meta: StrapiMeta = body.meta === undefined ? null : body.meta;

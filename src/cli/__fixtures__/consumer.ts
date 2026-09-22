@@ -12,6 +12,28 @@ const strapi = new Strapi({ baseURL: "http://localhost:1337", defaultLocale: "en
 const articles = strapi.collection("articles");
 const homepage = strapi.single("homepage");
 
+export async function narrowed() {
+	const [, list] = await articles.findMany({ params: { fields: ["title", "slug"] } });
+	const first = list?.[0];
+	// Only the selected fields, plus the id pair Strapi always returns.
+	const shape: { id: number; documentId: string; title: string; slug: string } | undefined = first;
+
+	const [, populated] = await articles.findMany({ params: { populate: ["author"] } });
+	const withAuthor = populated?.[0];
+	const author: { name: string } | null | undefined = withAuthor?.author;
+
+	return [shape, author] as const;
+}
+
+export async function rejectedSelections() {
+	const [, list] = await articles.findMany();
+	// @ts-expect-error author was not populated, so Strapi does not return it
+	void list?.[0]?.author;
+	const [, selected] = await articles.findMany({ params: { fields: ["title"] } });
+	// @ts-expect-error slug was not selected
+	void selected?.[0]?.slug;
+}
+
 export async function reads() {
 	const [, list] = await articles.findMany({
 		params: {
