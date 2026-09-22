@@ -80,6 +80,20 @@ export type DeepPartial<T> = {
 	[P in keyof T]?: T[P] extends object ? DeepPartial<T[P]> : T[P];
 };
 
+/**
+ * Publication cohort a read is restricted to. Strapi validates this value and
+ * answers a 400 for anything outside this union.
+ */
+export type PublicationFilter =
+	| "never-published"
+	| "has-published-version"
+	| "modified"
+	| "unmodified"
+	| "never-published-document"
+	| "has-published-version-document"
+	| "published-without-draft"
+	| "published-with-draft";
+
 /** Query parameters accepted by Strapi REST read endpoints, typed against the document shape `T`. */
 export interface QueryParams<T = unknown> {
 	/** Filter documents. See {@link StrapiFilters}. */
@@ -104,18 +118,46 @@ export interface QueryParams<T = unknown> {
 		start?: number;
 		limit?: number;
 	};
+	/** Full-text search across the content type's searchable fields. */
+	_q?: string;
 	/** i18n locale. Omitted from the query string when it equals the configured `defaultLocale`. */
 	locale?: string;
 	/** Strapi 5 Draft & Publish status. Defaults to `published` server-side. */
 	status?: "draft" | "published";
 	/**
 	 * Strapi 5 filter on how the draft and published versions of a document
-	 * relate to each other.
+	 * relate to each other. See {@link PublicationFilter}.
 	 */
-	publicationFilter?: "all" | "modified" | "published" | "unpublished";
+	publicationFilter?: PublicationFilter;
+	/** @deprecated Superseded by `publicationFilter`; Strapi keeps it for older clients. */
+	hasPublishedVersion?: boolean | "true" | "false";
 	/** @deprecated Strapi 4 only. Use `status` on Strapi 5. */
 	publicationState?: "live" | "preview" | "draft";
 }
+
+/** Params every content-API route carries when the content type enables i18n or Draft & Publish. */
+type ConditionalParam = "locale" | "status" | "publicationFilter" | "hasPublishedVersion" | "publicationState";
+
+/**
+ * Params a list route accepts (`GET /api/<uid>`): the full read surface.
+ *
+ * The per-route sets below mirror the zod contracts Strapi declares for its
+ * core routes, so a param the endpoint ignores — or rejects outright under
+ * `api.rest.strictParams` — cannot be passed in the first place.
+ */
+export type ListQueryParams<T> = Pick<
+	QueryParams<T>,
+	"fields" | "filters" | "sort" | "populate" | "pagination" | "_q" | ConditionalParam
+>;
+
+/** Params a single-document read accepts (`GET /api/<uid>/<documentId>`): no pagination, no `_q`. */
+export type FindQueryParams<T> = Pick<QueryParams<T>, "fields" | "filters" | "sort" | "populate" | ConditionalParam>;
+
+/** Params a write accepts (`POST`/`PUT`): they shape the returned document, not which documents are touched. */
+export type WriteQueryParams<T> = Pick<QueryParams<T>, "fields" | "populate" | ConditionalParam>;
+
+/** Params a delete accepts (`DELETE /api/<uid>/<documentId>`). */
+export type DeleteQueryParams<T> = Pick<QueryParams<T>, "fields" | "filters" | "populate" | ConditionalParam>;
 
 /** Response body of a collection-type list endpoint. */
 export interface StrapiResponse<T> {

@@ -17,6 +17,10 @@ describe("buildQuery", () => {
 		);
 	});
 
+	it("serializes the _q search param", () => {
+		expect(buildQuery({ _q: "hello world" }, defaults)).toBe("?_q=hello%20world");
+	});
+
 	it("adds locale when it differs from defaultLocale", () => {
 		expect(buildQuery({}, { defaultLocale: "en", locale: "fr" })).toBe("?locale=fr");
 	});

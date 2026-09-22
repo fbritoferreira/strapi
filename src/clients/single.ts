@@ -1,7 +1,15 @@
 import { fail, ok, type Result } from "../errors";
 import type { HttpClient } from "../http";
 import { buildQuery } from "../query";
-import type { FetchInit, QueryParams, StrapiMeta, StrapiSingleResponse, UpdatePayload } from "../types";
+import type {
+	FetchInit,
+	FindQueryParams,
+	QueryParams,
+	StrapiMeta,
+	StrapiSingleResponse,
+	UpdatePayload,
+	WriteQueryParams,
+} from "../types";
 import type { ClientContext } from "./collection";
 
 const NOT_FOUND = { status: 404, name: "NotFoundError", message: "Not Found" } as const;
@@ -28,7 +36,7 @@ export class SingleTypeClient<T extends object> {
 	}
 
 	/** `GET /api/<uid>`. Fails with `NotFoundError` when the single type has no document yet. */
-	async find(options: { params?: QueryParams<T>; locale?: string; init?: FetchInit } = {}): Promise<Result<T>> {
+	async find(options: { params?: FindQueryParams<T>; locale?: string; init?: FetchInit } = {}): Promise<Result<T>> {
 		const { params, locale, init } = options;
 		return this.single(`${this.uid}${this.query(params, locale)}`, { ...init, method: "GET" });
 	}
@@ -36,7 +44,7 @@ export class SingleTypeClient<T extends object> {
 	/** `PUT /api/<uid>`. Creates the document on first call, updates it afterwards. */
 	async update(options: {
 		payload: UpdatePayload<T>;
-		params?: QueryParams<T>;
+		params?: WriteQueryParams<T>;
 		locale?: string;
 		init?: FetchInit;
 	}): Promise<Result<T>> {
