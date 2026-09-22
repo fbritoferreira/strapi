@@ -1,20 +1,32 @@
 import type { ServiceError } from "./errors";
 import type { FetchInit } from "./types";
 
+/** Connection settings shared by every request. */
 export interface HttpConfig {
+	/** Strapi origin, e.g. `http://localhost:1337`. `/api` is appended when missing. */
 	baseURL: string;
+	/** API token or JWT sent as `Authorization: Bearer <token>`. */
 	token?: string;
+	/** Extra headers merged into every request. */
 	headers?: Record<string, string>;
+	/** Custom `fetch` implementation. Defaults to `globalThis.fetch`. */
 	fetch?: typeof fetch;
 	/** Milliseconds before a request is aborted. Default 10_000. */
 	timeout?: number;
 }
 
+/** Low-level result of {@link HttpClient.request}: `[error, null]` or `[null, parsedBody | null]`. */
 export type HttpResult<R> = [ServiceError, null] | [null, R | null];
 
 const DEFAULT_TIMEOUT_MS = 10_000;
 
+/**
+ * Thin `fetch` wrapper used by all sub-clients. Adds the bearer token, a
+ * timeout, JSON parsing, and converts non-2xx responses and network failures
+ * into {@link ServiceError} values instead of throwing.
+ */
 export class HttpClient {
+	/** Normalised API root, always ending in `/api`. */
 	readonly baseURL: string;
 	private readonly token: string | undefined;
 	private readonly headers: Record<string, string>;
@@ -34,6 +46,13 @@ export class HttpClient {
 		this.timeout = config.timeout ?? DEFAULT_TIMEOUT_MS;
 	}
 
+	/**
+	 * Performs one request against `baseURL/path`.
+	 *
+	 * @param path Path relative to the API root, e.g. `articles?populate=*`.
+	 * @param init Standard `fetch` options; `headers` are merged over the configured defaults.
+	 * @returns The parsed JSON body, `null` for an empty body, or a {@link ServiceError}.
+	 */
 	async request<R>(path: string, init: FetchInit = {}): Promise<HttpResult<R>> {
 		const url = `${this.baseURL}/${path.replace(/^\/+/, "")}`;
 
