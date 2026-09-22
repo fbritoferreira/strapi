@@ -4,12 +4,16 @@ import { mapWithConcurrency } from "./pool";
 import { buildQuery } from "./query";
 import type { FetchInit, QueryParams, StrapiPagination, StrapiResponse } from "./types";
 
-/** Options for {@link fetchAll}. */
-export interface FetchAllOptions<T> {
+/**
+ * Options for {@link fetchAll}. `TRow` is the shape of a returned document,
+ * `TDoc` the shape the params are typed against — they differ when a `fields`
+ * selection narrows the rows.
+ */
+export interface FetchAllOptions<TRow, TDoc = TRow> {
 	http: HttpClient;
 	/** Path relative to the API root, e.g. `articles`. */
 	path: string;
-	params?: QueryParams<T>;
+	params?: QueryParams<TDoc>;
 	locale?: string;
 	defaultLocale: string;
 	/** Max pages requested in parallel after the first. */
@@ -26,15 +30,15 @@ const DEFAULT_LIMIT = 25;
  * are then fetched with up to `concurrency` requests in flight. Works with
  * both page-based and offset-based pagination.
  */
-export async function fetchAll<T>(options: FetchAllOptions<T>): Promise<Result<T[]>> {
+export async function fetchAll<TRow, TDoc = TRow>(options: FetchAllOptions<TRow, TDoc>): Promise<Result<TRow[]>> {
 	const { http, path, params = {}, locale, defaultLocale, concurrency, init = {} } = options;
 	const pagination = params.pagination ?? {};
 	const offsetMode = pagination.start !== undefined || pagination.limit !== undefined;
 
-	const getPage = async (page: QueryParams<T>["pagination"]): Promise<Result<StrapiResponse<T>>> => {
-		const requestParams: QueryParams<T> = { ...params, ...(page !== undefined ? { pagination: page } : {}) };
+	const getPage = async (page: QueryParams<TDoc>["pagination"]): Promise<Result<StrapiResponse<TRow>>> => {
+		const requestParams: QueryParams<TDoc> = { ...params, ...(page !== undefined ? { pagination: page } : {}) };
 		const query = buildQuery(requestParams, { defaultLocale, ...(locale !== undefined ? { locale } : {}) });
-		const [err, body] = await http.request<StrapiResponse<T>>(`${path}${query}`, { ...init, method: "GET" });
+		const [err, body] = await http.request<StrapiResponse<TRow>>(`${path}${query}`, { ...init, method: "GET" });
 		if (err) return fail(err);
 		return ok(body ?? { data: [] });
 	};
@@ -45,7 +49,7 @@ export async function fetchAll<T>(options: FetchAllOptions<T>): Promise<Result<T
 	const meta = first.meta?.pagination;
 	if (!meta) return ok(first.data, null);
 
-	const rest: NonNullable<QueryParams<T>["pagination"]>[] = [];
+	const rest: NonNullable<QueryParams<TDoc>["pagination"]>[] = [];
 	let start = 0;
 	let limit = DEFAULT_LIMIT;
 

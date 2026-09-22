@@ -144,6 +144,36 @@ The marker is type-level only — Strapi never returns it, and it is excluded
 from `filters`, `sort` and create/update payloads. Hand-written types without a
 marker keep accepting any key in both params.
 
+### The result follows the selection
+
+Params passed inline also narrow what comes back, so the returned type is what
+Strapi actually sends:
+
+```ts
+const [, articles] = await strapi.collection("articles").findMany({
+	params: { fields: ["title", "slug"], populate: ["author"] },
+});
+// articles: { id: number; documentId: string; title: string; slug: string;
+//             author: Author | null }[]
+
+const [, plain] = await strapi.collection("articles").findMany();
+plain[0]?.author; // error: nothing populated it, so Strapi does not return it
+```
+
+Two rules behind that: Strapi selects `[id, documentId, ...fields]` when
+`fields` is given, and returns a populatable field only when `populate` asks
+for it — where it then stops being optional. `populate: "*"` populates every
+first-level relation, component, media and dynamic zone.
+
+Narrowing needs a generated type (the `__populatable` marker) and params
+literal enough to read. Params held in a variable, or a hand-written type, give
+the full document back as before:
+
+```ts
+const params: ListQueryParams<Article> = { fields: ["title"] };
+const [, all] = await articles.findMany({ params }); // Article[], unchanged
+```
+
 `pagination` accepts either page-based (`page`, `pageSize`) or offset-based
 (`start`, `limit`) options; Strapi picks the mode from whichever fields are
 present. `status` is Strapi 5's Draft & Publish filter (`"draft"` or

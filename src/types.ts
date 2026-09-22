@@ -53,6 +53,54 @@ export type ScalarKey<T> = PopulatableMarker extends keyof T
 /** Document behind a populatable field, with arrays and `| null` unwrapped. */
 type Related<V> = NonNullable<V> extends readonly (infer E)[] ? E : NonNullable<V>;
 
+/** Fields Strapi returns whatever `fields` asks for: the selection is `[id, documentId, ...fields]`. */
+type SystemKey = "id" | "documentId";
+
+/** First segment of a dotted populate path: `"author.avatar"` populates `author`. */
+type Head<S> = S extends `${infer H}.${string}` ? H : S;
+
+/** The document without its populatable fields or the marker: what a plain read returns. */
+type ScalarPart<T> = Omit<T, PopulatableKey<T> | PopulatableMarker>;
+
+/** The document restricted to a literal `fields` list, plus the keys Strapi always returns. */
+type PickFields<T, F> = F extends readonly (infer K)[]
+	? Pick<T, Extract<K | SystemKey, keyof T>>
+	: ScalarPart<T>;
+
+/** Keys a literal `populate` value asks for. */
+type PopulatedKeys<T, P> = P extends "*"
+	? PopulatableKey<T> & keyof T
+	: P extends readonly (infer K)[]
+		? Extract<Head<K>, keyof T>
+		: P extends string
+			? Extract<Head<P>, keyof T>
+			: P extends object
+				? Extract<keyof P, keyof T>
+				: never;
+
+/** True when a param is present but not a literal, so nothing can be narrowed from it. */
+type Loose<P> =
+	| ("fields" extends keyof P ? (undefined extends P["fields"] ? true : false) : false)
+	| ("populate" extends keyof P ? (undefined extends P["populate"] ? true : false) : false);
+
+/**
+ * The document as one read with params `P` actually returns it.
+ *
+ * With a literal `fields`, only those attributes come back, plus `id` and
+ * `documentId`, which Strapi always selects. Populatable fields appear only
+ * when `populate` asks for them, and are no longer optional when it does.
+ *
+ * Narrowing needs two things: a type carrying the generator's `__populatable`
+ * marker, and params literal enough to read — pass them inline. Anything else
+ * (a hand-written type, params held in a variable) yields `T` unchanged.
+ */
+export type SelectedDoc<T, P> = PopulatableMarker extends keyof T
+	? true extends Loose<P>
+		? T
+		: ("fields" extends keyof P ? PickFields<T, P["fields"]> : ScalarPart<T>) &
+				("populate" extends keyof P ? Required<Pick<T, PopulatedKeys<T, P["populate"]>>> : unknown)
+	: T;
+
 /** Typed `filters` object for a document of shape `T`. Nested objects filter on relations and components. */
 export type StrapiFilters<T> = {
 	[K in Exclude<keyof T, PopulatableMarker>]?: T[K] extends object
