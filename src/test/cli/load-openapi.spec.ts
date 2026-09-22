@@ -45,6 +45,31 @@ describe("loadOpenapi from a documentation page", () => {
 		await expect(loadOpenapi({ source: "https://cms.example.com/documentation", fetch: fetchImpl })).rejects.toThrow(/not valid JSON/);
 	});
 
+	it("keeps an escaped quote from ending a string early", async () => {
+		const quoted = { ...document, info: { title: 'say "hi" }', version: "1" } };
+		const fetchImpl = vi.fn().mockResolvedValue(new Response(swaggerPage(quoted), { status: 200 }));
+		expect(await loadOpenapi({ source: "https://cms.example.com/documentation", fetch: fetchImpl })).toEqual(quoted);
+	});
+
+	it("rejects a page that mentions a spec but inlines no object", async () => {
+		const fetchImpl = vi.fn().mockResolvedValue(new Response("<html><script>spec: null</script></html>", { status: 200 }));
+		await expect(loadOpenapi({ source: "https://cms.example.com/documentation", fetch: fetchImpl })).rejects.toThrow(/not valid JSON/);
+	});
+
+	it("rejects a page whose spec object is never closed", async () => {
+		const truncated = '<html><script>SwaggerUIBundle({ spec: { "openapi": "3.1.0", "paths": {';
+		const fetchImpl = vi.fn().mockResolvedValue(new Response(truncated, { status: 200 }));
+		await expect(loadOpenapi({ source: "https://cms.example.com/documentation", fetch: fetchImpl })).rejects.toThrow(/not valid JSON/);
+	});
+
+	it("rejects a spec written as a JavaScript literal rather than JSON", async () => {
+		const literal = "<html><script>SwaggerUIBundle({ spec: { openapi: '3.1.0', paths: {} } });</script></html>";
+		const fetchImpl = vi.fn().mockResolvedValue(new Response(literal, { status: 200 }));
+		await expect(loadOpenapi({ source: "https://cms.example.com/documentation", fetch: fetchImpl })).rejects.toThrow(
+			/has a spec that is not valid JSON/
+		);
+	});
+
 	it("rejects a page whose inlined object is not an OpenAPI document", async () => {
 		const fetchImpl = vi.fn().mockResolvedValue(new Response(swaggerPage({ nope: true }), { status: 200 }));
 		await expect(loadOpenapi({ source: "https://cms.example.com/documentation", fetch: fetchImpl })).rejects.toThrow(/OpenAPI 3/);
