@@ -35,6 +35,7 @@ interfaces and the content-type registry from your Strapi schema.
 [Fetching every page](#fetching-every-page) ·
 [i18n](#i18n) · [Errors](#errors) · [Next.js and custom fetch](#nextjs-and-custom-fetch) ·
 [Typed registry](#typed-registry) · [Generating types](#generating-types) ·
+[One config for every source](#one-config-for-every-source) ·
 [Route types from OpenAPI](#route-types-from-openapi) · [GraphQL](#graphql) ·
 [Recipes](#recipes) · [Development](#development)
 
@@ -512,6 +513,55 @@ What is generated:
 - `--include-plugins` registers plugin content types under their `pluralName` even when the plugin does not expose a matching `/api/<pluralName>` route.
 
 The `--url` source calls `POST /admin/login` and the Content-Type Builder routes, which require an admin user with the `plugin::content-type-builder.read` permission. Strapi does not accept API tokens on admin routes.
+
+## One config for every source
+
+Three sources means three invocations. `--config` runs them together, from a
+TypeScript file that type-checks itself:
+
+```ts
+// strapi-codegen.config.ts
+import { generateConfig } from "@fbritoferreira/strapi";
+
+export default generateConfig({
+	types: {
+		url: "https://cms.example.com",
+		password: process.env.STRAPI_ADMIN_PASSWORD,
+		output: "src/strapi-types.ts",
+	},
+	routes: {
+		openapi: "https://cms.example.com/documentation/v1.0.0",
+		output: "src/strapi-routes.ts",
+	},
+	graphql: {
+		url: "https://cms.example.com/graphql",
+		output: "src/strapi-graphql.ts",
+	},
+});
+```
+
+```sh
+npx @fbritoferreira/strapi generate --config          # all of it
+npx @fbritoferreira/strapi generate --config --check  # CI: fail on a stale file
+```
+
+`generateConfig` is an identity function — it exists so the file is checked as
+you write it. Naming both `dir` and `url` under `types`, or leaving a section
+without its source, is a compile error; being a `.ts` file, it can also read
+`process.env` directly rather than inventing an interpolation syntax.
+
+Every section is optional and they run in order, each writing its own file. A
+failing section does not stop the others: the command reports `2 of 3
+generated` and exits 1, so one broken source cannot hide the rest.
+
+Configs are looked up as `strapi-codegen.config.ts`, `.mts`, `.js`, `.mjs`,
+then `.json`, or pass a path: `--config config/strapi.ts`. A `.ts` config needs
+a Node that strips types (22.6 or newer); on anything older the command says so
+and a `.mjs` or `.json` config works instead.
+
+Credentials fall back to the same environment variables as the flags:
+`STRAPI_ADMIN_EMAIL`, `STRAPI_ADMIN_PASSWORD`, `STRAPI_TOKEN`,
+`STRAPI_DOCS_PASSWORD`.
 
 ## Route types from OpenAPI
 

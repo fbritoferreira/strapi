@@ -11,7 +11,15 @@ const project = fileURLToPath(new URL("../../cli/__fixtures__/project", import.m
 function io(env: Record<string, string | undefined> = {}): Io & { out: string[]; err: string[] } {
 	const out: string[] = [];
 	const err: string[] = [];
-	return { out, err, stdout: (l) => out.push(l), stderr: (l) => err.push(l), env, now: () => new Date("2026-09-20T10:00:00.000Z") };
+	return {
+		out,
+		err,
+		stdout: (l) => out.push(l),
+		stderr: (l) => err.push(l),
+		env,
+		now: () => new Date("2026-09-20T10:00:00.000Z"),
+		cwd: process.cwd(),
+	};
 }
 
 describe("run", () => {
@@ -152,6 +160,210 @@ describe("run", () => {
 		expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toEqual({ password: "secret" });
 		expect(new Headers(fetchMock.mock.calls[1]?.[1]?.headers).get("cookie")).toBe("koa.sess=abc");
 		fetchMock.mockRestore();
+	});
+
+	it("runs every section of a config file", async () => {
+		const dir = await mkdtemp(join(tmpdir(), "strapi-cli-"));
+		const spec = { openapi: "3.1.0", info: { title: "t", version: "1" }, paths: { "/ping": { get: { responses: {} } } } };
+		const schema = { queryType: { name: "Query" }, types: [{ kind: "ENUM", name: "Status", enumValues: [{ name: "DRAFT" }] }] };
+		await writeFile(join(dir, "spec.json"), JSON.stringify(spec), "utf8");
+		await writeFile(
+			join(dir, "strapi-codegen.config.json"),
+			JSON.stringify({
+				types: { dir: project, output: join(dir, "types.ts") },
+				routes: { openapi: join(dir, "spec.json"), output: join(dir, "routes.ts") },
+				graphql: { url: "http://h/graphql", output: join(dir, "graphql.ts") },
+			}),
+			"utf8"
+		);
+		const fetchMock = vi
+			.spyOn(globalThis, "fetch")
+			.mockImplementation(() => Promise.resolve(new Response(JSON.stringify({ data: { __schema: schema } }), { status: 200 })));
+
+		const i = io();
+		expect(await run(["generate", "--config"], { ...i, cwd: dir })).toBe(0);
+		expect(await readFile(join(dir, "types.ts"), "utf8")).toContain("export interface Article");
+		expect(await readFile(join(dir, "routes.ts"), "utf8")).toContain('"GET /ping"');
+		expect(await readFile(join(dir, "graphql.ts"), "utf8")).toContain("export type Status");
+		expect(i.out.join("\n")).toMatch(/3 of 3/);
+		fetchMock.mockRestore();
+	});
+
+	it("keeps going when one section of a config fails, and exits 1", async () => {
+		const dir = await mkdtemp(join(tmpdir(), "strapi-cli-"));
+		await writeFile(
+			join(dir, "strapi-codegen.config.json"),
+			JSON.stringify({
+				types: { dir: project, output: join(dir, "types.ts") },
+				routes: { openapi: join(dir, "missing.json"), output: join(dir, "routes.ts") },
+			}),
+			"utf8"
+		);
+		const i = io();
+		expect(await run(["generate", "--config"], { ...i, cwd: dir })).toBe(1);
+		expect(await readFile(join(dir, "types.ts"), "utf8")).toContain("export interface Article");
+		expect(i.err.join("\n")).toMatch(/routes/);
+		expect(i.out.join("\n")).toMatch(/1 of 2/);
+	});
+
+	it("reads a config at an explicit path, from a running instance", async () => {
+		const dir = await mkdtemp(join(tmpdir(), "strapi-cli-"));
+		const ctData = [
+			{
+				uid: "api::page.page",
+				apiID: "page",
+				schema: { displayName: "Page", singularName: "page", pluralName: "pages", kind: "collectionType", attributes: { title: { type: "string" } } },
+			},
+		];
+		const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
+			const url = String(input);
+			if (url.endsWith("/admin/login")) return Promise.resolve(new Response(JSON.stringify({ data: { token: "t" } }), { status: 200 }));
+			if (url.endsWith("/content-type-builder/content-types")) return Promise.resolve(new Response(JSON.stringify({ data: ctData }), { status: 200 }));
+			return Promise.resolve(new Response(JSON.stringify({ data: [] }), { status: 200 }));
+		});
+		await writeFile(
+			join(dir, "custom.config.json"),
+			JSON.stringify({ types: { url: "https://cms.example.com", output: join(dir, "types.ts") } }),
+			"utf8"
+		);
+
+		const i = io({ STRAPI_ADMIN_EMAIL: "me@example.com", STRAPI_ADMIN_PASSWORD: "pw" });
+		expect(await run(["generate", "--config", join(dir, "custom.config.json")], { ...i, cwd: dir })).toBe(0);
+		expect(await readFile(join(dir, "types.ts"), "utf8")).toContain("export interface Page");
+		fetchMock.mockRestore();
+	});
+
+	it("reports a config section missing its credentials", async () => {
+		const dir = await mkdtemp(join(tmpdir(), "strapi-cli-"));
+		await writeFile(join(dir, "strapi-codegen.config.json"), JSON.stringify({ types: { url: "https://cms.example.com" } }), "utf8");
+		const i = io();
+		expect(await run(["generate", "--config"], { ...i, cwd: dir })).toBe(1);
+		expect(i.err.join("\n")).toMatch(/types needs admin credentials/);
+		expect(i.out.join("\n")).toMatch(/0 of 1/);
+	});
+
+	it("checks every section, and counts a stale file as a failure", async () => {
+		const dir = await mkdtemp(join(tmpdir(), "strapi-cli-"));
+		await writeFile(join(dir, "strapi-codegen.config.json"), JSON.stringify({ types: { dir: project } }), "utf8");
+
+		const write = io();
+		expect(await run(["generate", "--config"], { ...write, cwd: dir })).toBe(0);
+		expect(write.out.join("\n")).toMatch(/strapi-types\.ts/);
+
+		const fresh = io();
+		expect(await run(["generate", "--config", "--check"], { ...fresh, cwd: dir })).toBe(0);
+		expect(fresh.out.join("\n")).toMatch(/Up to date/);
+
+		await writeFile(join(dir, "strapi-types.ts"), "// stale\n", "utf8");
+		const stale = io();
+		expect(await run(["generate", "--config", "--check"], { ...stale, cwd: dir })).toBe(1);
+		expect(stale.err.join("\n")).toMatch(/Out of date/);
+		expect(stale.out.join("\n")).toMatch(/0 of 1/);
+	});
+
+	it("takes routes and graphql credentials from the environment", async () => {
+		const dir = await mkdtemp(join(tmpdir(), "strapi-cli-"));
+		const spec = { openapi: "3.1.0", info: { title: "t", version: "1" }, paths: {} };
+		const schema = { queryType: { name: "Query" }, types: [] };
+		const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation((input) =>
+			Promise.resolve(
+				String(input).includes("/graphql")
+					? new Response(JSON.stringify({ data: { __schema: schema } }), { status: 200 })
+					: new Response(JSON.stringify(spec), { status: 200 })
+			)
+		);
+		await writeFile(
+			join(dir, "strapi-codegen.config.json"),
+			JSON.stringify({
+				routes: { openapi: "https://cms.example.com/spec.json" },
+				graphql: { url: "https://cms.example.com/graphql" },
+			}),
+			"utf8"
+		);
+
+		const i = io({ STRAPI_TOKEN: "tok" });
+		expect(await run(["generate", "--config"], { ...i, cwd: dir })).toBe(0);
+		expect(new Headers(fetchMock.mock.calls[0]?.[1]?.headers).get("authorization")).toBe("Bearer tok");
+		expect(i.out.join("\n")).toMatch(/2 of 2/);
+		fetchMock.mockRestore();
+	});
+
+	it("ignores empty credentials in the environment", async () => {
+		const dir = await mkdtemp(join(tmpdir(), "strapi-cli-"));
+		const spec = { openapi: "3.1.0", info: { title: "t", version: "1" }, paths: {} };
+		const fetchMock = vi
+			.spyOn(globalThis, "fetch")
+			.mockImplementation(() => Promise.resolve(new Response(JSON.stringify(spec), { status: 200 })));
+		await writeFile(
+			join(dir, "strapi-codegen.config.json"),
+			JSON.stringify({ routes: { openapi: "https://cms.example.com/spec.json", output: join(dir, "routes.ts") } }),
+			"utf8"
+		);
+
+		const i = io({ STRAPI_TOKEN: "", STRAPI_DOCS_PASSWORD: "" });
+		expect(await run(["generate", "--config"], { ...i, cwd: dir })).toBe(0);
+		expect(new Headers(fetchMock.mock.calls[0]?.[1]?.headers).get("authorization")).toBeNull();
+		expect(fetchMock.mock.calls.every(([u]) => !String(u).endsWith("/documentation/login"))).toBe(true);
+		fetchMock.mockRestore();
+	});
+
+	it("checks a graphql section too", async () => {
+		const dir = await mkdtemp(join(tmpdir(), "strapi-cli-"));
+		const schema = { queryType: { name: "Query" }, types: [] };
+		const fetchMock = vi
+			.spyOn(globalThis, "fetch")
+			.mockImplementation(() => Promise.resolve(new Response(JSON.stringify({ data: { __schema: schema } }), { status: 200 })));
+		await writeFile(
+			join(dir, "strapi-codegen.config.json"),
+			JSON.stringify({ graphql: { url: "https://cms.example.com/graphql", output: join(dir, "graphql.ts") } }),
+			"utf8"
+		);
+
+		expect(await run(["generate", "--config"], { ...io(), cwd: dir })).toBe(0);
+		const fresh = io();
+		expect(await run(["generate", "--config", "--check"], { ...fresh, cwd: dir })).toBe(0);
+		expect(fresh.out.join("\n")).toMatch(/Up to date/);
+		fetchMock.mockRestore();
+	});
+
+	it("signs in for a restricted routes section, and rechecks it", async () => {
+		const dir = await mkdtemp(join(tmpdir(), "strapi-cli-"));
+		const spec = { openapi: "3.1.0", info: { title: "t", version: "1" }, paths: {} };
+		const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation((input) =>
+			Promise.resolve(
+				String(input).endsWith("/documentation/login")
+					? new Response(null, { status: 302, headers: { location: "/documentation", "set-cookie": "koa.sess=abc; path=/" } })
+					: new Response(JSON.stringify(spec), { status: 200 })
+			)
+		);
+		await writeFile(
+			join(dir, "strapi-codegen.config.json"),
+			JSON.stringify({
+				routes: { openapi: "https://cms.example.com/documentation/v1.0.0", password: "docs-pw", output: join(dir, "routes.ts") },
+			}),
+			"utf8"
+		);
+
+		expect(await run(["generate", "--config"], { ...io(), cwd: dir })).toBe(0);
+		expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toEqual({ password: "docs-pw" });
+
+		const fresh = io();
+		expect(await run(["generate", "--config", "--check"], { ...fresh, cwd: dir })).toBe(0);
+		expect(fresh.out.join("\n")).toMatch(/Up to date/);
+		fetchMock.mockRestore();
+	});
+
+	it("reports a config file that is not there", async () => {
+		const dir = await mkdtemp(join(tmpdir(), "strapi-cli-"));
+		const i = io();
+		expect(await run(["generate", "--config"], { ...i, cwd: dir })).toBe(1);
+		expect(i.err.join("\n")).toMatch(/No config file found/);
+	});
+
+	it("refuses a config alongside a source flag", async () => {
+		const i = io();
+		expect(await run(["generate", "--config", "--dir", project], i)).toBe(2);
+		expect(i.err.join("\n")).toMatch(/--config cannot be combined/);
 	});
 
 	it("requires exactly one of --dir or --url", async () => {
