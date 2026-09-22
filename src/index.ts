@@ -35,5 +35,6 @@ export { Strapi, type StrapiConfig, type RegistryKey, type Uid, type DocOf } fro
 export { StrapiClient, type StrapiClientConfig } from "./client";
 export { CollectionClient, type ClientContext } from "./clients/collection";
 export { SingleTypeClient } from "./clients/single";
+export { AuthClient } from "./clients/auth";
 export { UsersClient } from "./clients/users";
 export { FilesClient, type FileInfo, type UploadOptions } from "./clients/files";

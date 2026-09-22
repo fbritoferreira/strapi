@@ -1,3 +1,4 @@
+import { AuthClient } from "./clients/auth";
 import { CollectionClient, type ClientContext } from "./clients/collection";
 import { FilesClient } from "./clients/files";
 import { SingleTypeClient } from "./clients/single";
@@ -87,6 +88,8 @@ export class Strapi {
 	readonly concurrency: number;
 	/** Upload plugin client (`/api/upload`). */
 	readonly files: FilesClient;
+	/** users-permissions auth client (`/api/auth/*`). */
+	readonly auth: AuthClient;
 	/** Absolute URL of the GraphQL endpoint. */
 	readonly graphqlUrl: string;
 
@@ -99,6 +102,7 @@ export class Strapi {
 		this.defaultLocale = config.defaultLocale;
 		this.concurrency = config.concurrency ?? DEFAULT_CONCURRENCY;
 		this.files = new FilesClient(this.context());
+		this.auth = new AuthClient(this.context());
 		const origin = this.http.baseURL.replace(/\/api$/, "");
 		const endpoint = config.graphqlEndpoint ?? DEFAULT_GRAPHQL_ENDPOINT;
 		this.graphqlUrl = `${origin}/${endpoint.replace(/^\/+/, "")}`;
@@ -214,6 +218,14 @@ export class Strapi {
 			return fail({ name: "GraphQLError", message: `Strapi: GraphQL response from ${this.graphqlUrl} had no data` });
 		}
 		return ok(body.data);
+	}
+
+	/**
+	 * Sets the bearer token sent with every later request, or clears it with
+	 * `undefined`. Use it to adopt the JWT {@link AuthClient.login} returned.
+	 */
+	setToken(token: string | undefined): void {
+		this.http.setToken(token);
 	}
 
 	/** Client for the users-permissions plugin at `/api/users`. */

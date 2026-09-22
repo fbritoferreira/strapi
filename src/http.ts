@@ -28,7 +28,7 @@ const DEFAULT_TIMEOUT_MS = 10_000;
 export class HttpClient {
 	/** Normalised API root, always ending in `/api`. */
 	readonly baseURL: string;
-	private readonly token: string | undefined;
+	private token: string | undefined;
 	private readonly headers: Record<string, string>;
 	private readonly fetchImpl: typeof fetch;
 	private readonly timeout: number;
@@ -44,6 +44,11 @@ export class HttpClient {
 		this.headers = config.headers ?? {};
 		this.fetchImpl = config.fetch ?? ((input, init) => globalThis.fetch(input, init));
 		this.timeout = config.timeout ?? DEFAULT_TIMEOUT_MS;
+	}
+
+	/** Replaces the bearer token sent with every request; `undefined` clears it. */
+	setToken(token: string | undefined): void {
+		this.token = token;
 	}
 
 	/**

@@ -113,6 +113,40 @@ const articles = new StrapiClient<Article>({
 });
 ```
 
+## Authentication
+
+`strapi.auth` covers the users-permissions routes at `/api/auth/*`:
+
+```ts
+const [err, session] = await strapi.auth.login({ identifier: "me@example.com", password: "…" });
+if (err) throw new Error(err.message);
+
+strapi.setToken(session.jwt); // every later request carries it
+```
+
+`setToken(undefined)` clears it again. The JWT is not adopted automatically:
+one client instance is often shared, and silently rebinding its identity is
+rarely what you want.
+
+| Method | Route | Notes |
+| --- | --- | --- |
+| `login` | `POST /api/auth/local` | `{ jwt, refreshToken?, user }` |
+| `register` | `POST /api/auth/local/register` | `jwt` is **absent** when email confirmation is enabled |
+| `forgotPassword` | `POST /api/auth/forgot-password` | `{ ok: true }` |
+| `resetPassword` | `POST /api/auth/reset-password` | completes the forgot-password flow |
+| `changePassword` | `POST /api/auth/change-password` | needs the signed-in user's token |
+| `sendEmailConfirmation` | `POST /api/auth/send-email-confirmation` | `{ email, sent }` |
+| `refresh` | `POST /api/auth/refresh` | rotates a refresh token |
+| `logout` | `POST /api/auth/logout` | `scope` and `deviceId` narrow what is revoked |
+
+`refresh` and `logout` exist only when the plugin runs with
+`jwtManagement: "refresh"`; otherwise Strapi answers 404 and the error says so.
+With an httpOnly refresh cookie, the token travels in the cookie and the
+response carries no `refreshToken`.
+
+`strapi.users()` covers `/api/users` — including `me()` — and takes the same
+user type.
+
 ## Query parameters
 
 Pass `params: QueryParams<T>` to filter, sort, select fields, set the
