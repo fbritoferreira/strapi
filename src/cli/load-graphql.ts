@@ -21,7 +21,11 @@ const INTROSPECTION_QUERY = `query StrapiClientIntrospection {
     types {
       kind
       name
-      fields(includeDeprecated: true) { name type { ...TypeRef } }
+      fields(includeDeprecated: true) {
+        name
+        type { ...TypeRef }
+        args { name type { ...TypeRef } }
+      }
       inputFields { name type { ...TypeRef } }
       enumValues(includeDeprecated: true) { name }
       possibleTypes { ...TypeRef }

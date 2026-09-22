@@ -11,6 +11,27 @@ const model: GraphqlModel = {
 		{ name: "Article", kind: "OBJECT", type: "{\n\tdocumentId: string;\n}" },
 		{ name: "PublicationStatus", kind: "ENUM", type: '"DRAFT" | "PUBLISHED"' },
 	],
+	queries: [
+		{
+			name: "articles",
+			args: [
+				{ name: "filters", gqlType: "ArticleFiltersInput", tsType: "ArticleFiltersInput | null", required: false },
+				{ name: "locale", gqlType: "I18NLocaleCode", tsType: "string | null", required: false },
+			],
+			result: "Article[]",
+			resultType: "Article",
+			list: true,
+		},
+	],
+	mutations: [
+		{
+			name: "createArticle",
+			args: [{ name: "data", gqlType: "ArticleInput!", tsType: "ArticleInput", required: true }],
+			result: "Article | null",
+			resultType: "Article",
+			list: false,
+		},
+	],
 };
 
 describe("emitGraphql", () => {
@@ -29,9 +50,44 @@ describe("emitGraphql", () => {
 		expect(out).toContain("// Root operation types: Query, Mutation");
 	});
 
+	it("registers each root field with its arguments and result", () => {
+		expect(out).toContain('declare module "@fbritoferreira/strapi" {');
+		expect(out).toContain("\tinterface StrapiGraphqlQueries {");
+		expect(out).toContain(
+			'\t\tarticles: {\n\t\t\targs: { filters?: ArticleFiltersInput | null; locale?: string | null };\n\t\t\tresult: Article[];\n\t\t};'
+		);
+	});
+
+	it("marks a required argument as required", () => {
+		expect(out).toContain("\tinterface StrapiGraphqlMutations {");
+		expect(out).toContain('\t\tcreateArticle: {\n\t\t\targs: { data: ArticleInput };\n\t\t\tresult: Article | null;\n\t\t};');
+	});
+
+	it("exports the GraphQL type of every argument, which the client needs at runtime", () => {
+		expect(out).toContain("export const strapiGraphqlArgs = {");
+		expect(out).toContain('\tqueries: { articles: { filters: "ArticleFiltersInput", locale: "I18NLocaleCode" } },');
+		expect(out).toContain('\tmutations: { createArticle: { data: "ArticleInput!" } },');
+		expect(out).toContain("} as const;");
+	});
+
+	it("types a field with no arguments as taking none", () => {
+		const noArgs = emitGraphql(
+			{
+				types: [],
+				queries: [{ name: "me", args: [], result: "User | null", resultType: "User", list: false }],
+				mutations: [],
+			},
+			{ source: "s", generatedAt }
+		);
+		expect(noArgs).toContain("args: Record<string, never>;");
+		expect(noArgs).toContain("\tqueries: { me: {  } },");
+	});
+
 	it("handles a schema with no types", () => {
-		const empty = emitGraphql({ types: [] }, { source: "s", generatedAt });
+		const empty = emitGraphql({ types: [], queries: [], mutations: [] }, { source: "s", generatedAt });
 		expect(empty).not.toContain("export type");
 		expect(empty).not.toContain("Root operation types");
+		expect(empty).not.toContain("StrapiGraphqlQueries");
+		expect(empty).not.toContain("strapiGraphqlArgs");
 	});
 });

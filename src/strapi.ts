@@ -6,16 +6,25 @@ import { UsersClient } from "./clients/users";
 import { HttpClient, type HttpConfig } from "./http";
 import { fail, ok, type Result } from "./errors";
 import { buildRoutePath } from "./route";
+import { buildOperation, type Selection } from "./graphql-query";
 import type {
+	FetchInit,
+	GraphqlArgTypes,
 	GraphqlArgs,
 	GraphqlOptions,
 	GraphqlResponse,
-	TypedDocument,
+	NoExtraKeys,
+	OperationOptions,
 	RouteArgs,
+	SelectedResult,
+	SelectionFor,
 	StrapiContentTypes,
+	StrapiGraphqlMutations,
+	StrapiGraphqlQueries,
 	StrapiRoutes,
 	StrapiSingleTypes,
 	StrapiUser,
+	TypedDocument,
 } from "./types";
 
 /** Options for the root {@link Strapi} class. */
@@ -30,6 +39,11 @@ export interface StrapiConfig extends HttpConfig {
 	 * when the plugin's `endpoint` option is configured.
 	 */
 	graphqlEndpoint?: string;
+	/**
+	 * The generated `strapiGraphqlArgs`, which {@link Strapi.query} reads to
+	 * declare each operation's variables.
+	 */
+	graphqlArgs?: GraphqlArgTypes;
 }
 
 /** Keys of a registry interface, minus the brand marker. */
@@ -53,6 +67,12 @@ type RequireTypeArgument<T> = [T] extends [never] ? [never] : [];
 
 const DEFAULT_CONCURRENCY = 5;
 const DEFAULT_GRAPHQL_ENDPOINT = "/graphql";
+
+/** The result type an operation declares. */
+type ResultOf<O> = O extends { result: infer R } ? R : unknown;
+
+/** The node a selection picks fields from: the result, past any list or null. */
+type NodeOf<O> = NonNullable<ResultOf<O>> extends readonly (infer E)[] ? NonNullable<E> : NonNullable<ResultOf<O>>;
 
 /** Source text of a GraphQL document, whichever form graphql-codegen emitted. */
 function documentSource(document: string | TypedDocument<unknown, never>): string {
@@ -92,6 +112,7 @@ export class Strapi {
 	readonly auth: AuthClient;
 	/** Absolute URL of the GraphQL endpoint. */
 	readonly graphqlUrl: string;
+	private readonly graphqlArgs: GraphqlArgTypes | undefined;
 
 	/** @throws {TypeError} when `defaultLocale` or `baseURL` is missing or blank. */
 	constructor(config: StrapiConfig) {
@@ -106,6 +127,7 @@ export class Strapi {
 		const origin = this.http.baseURL.replace(/\/api$/, "");
 		const endpoint = config.graphqlEndpoint ?? DEFAULT_GRAPHQL_ENDPOINT;
 		this.graphqlUrl = `${origin}/${endpoint.replace(/^\/+/, "")}`;
+		this.graphqlArgs = config.graphqlArgs;
 	}
 
 	/**
@@ -226,6 +248,73 @@ export class Strapi {
 	 */
 	setToken(token: string | undefined): void {
 		this.http.setToken(token);
+	}
+
+	/**
+	 * Runs one root field of the generated {@link StrapiGraphqlQueries}
+	 * registry, building the document from the arguments and selection.
+	 *
+	 * The result is narrowed to what was selected, the same way `fields` and
+	 * `populate` narrow a REST read.
+	 *
+	 * @example
+	 * ```ts
+	 * const [err, articles] = await strapi.query("articles", {
+	 *   args: { locale: "fr" },
+	 *   select: { documentId: true, title: true, author: { name: true } },
+	 * });
+	 * ```
+	 */
+	async query<
+		K extends RegistryKey<StrapiGraphqlQueries>,
+		const S extends SelectionFor<NodeOf<StrapiGraphqlQueries[K]>> & NoExtraKeys<S, NodeOf<StrapiGraphqlQueries[K]>>,
+	>(
+		field: K,
+		options: OperationOptions<StrapiGraphqlQueries[K], S>
+	): Promise<Result<SelectedResult<ResultOf<StrapiGraphqlQueries[K]>, S>>> {
+		return this.operation("query", String(field), options);
+	}
+
+	/** Same as {@link Strapi.query}, for the schema's mutations. */
+	async mutate<
+		K extends RegistryKey<StrapiGraphqlMutations>,
+		const S extends SelectionFor<NodeOf<StrapiGraphqlMutations[K]>> & NoExtraKeys<S, NodeOf<StrapiGraphqlMutations[K]>>,
+	>(
+		field: K,
+		options: OperationOptions<StrapiGraphqlMutations[K], S>
+	): Promise<Result<SelectedResult<ResultOf<StrapiGraphqlMutations[K]>, S>>> {
+		return this.operation("mutation", String(field), options);
+	}
+
+	/** Shared body of {@link Strapi.query} and {@link Strapi.mutate}. */
+	private async operation<R>(
+		operation: "query" | "mutation",
+		field: string,
+		options: { args?: unknown; select: unknown; init?: FetchInit | undefined }
+	): Promise<Result<R>> {
+		const registry = operation === "query" ? this.graphqlArgs?.queries : this.graphqlArgs?.mutations;
+		const argTypes = registry?.[field];
+		if (argTypes === undefined) {
+			return fail({
+				name: "TypeError",
+				message: `Strapi: no GraphQL schema registered for "${field}"; pass graphqlArgs from the generated file`,
+			});
+		}
+
+		let built: { query: string; variables: Record<string, unknown> };
+		try {
+			const args = (options.args ?? {}) as Record<string, unknown>;
+			built = buildOperation(operation, field, args, options.select as Selection, argTypes);
+		} catch (error) {
+			return fail({ name: "TypeError", message: (error as Error).message, cause: error });
+		}
+
+		const [err, data] = await this.graphql<Record<string, R>>(built.query, {
+			variables: built.variables,
+			...(options.init && { init: options.init }),
+		});
+		if (err) return fail(err);
+		return ok(data[field] as R);
 	}
 
 	/** Client for the users-permissions plugin at `/api/users`. */

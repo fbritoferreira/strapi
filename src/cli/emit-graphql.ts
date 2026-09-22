@@ -1,9 +1,37 @@
-import type { GraphqlModel } from "./graphql";
+import type { GraphqlModel, Operation } from "./graphql";
 
 /** Header details shared with the other emitters. */
 export interface EmitGraphqlOptions {
 	source: string;
 	generatedAt: Date;
+}
+
+/** `{ filters?: ArticleFiltersInput | null; data: ArticleInput }` for one operation. */
+function argsType(operation: Operation): string {
+	if (operation.args.length === 0) return "Record<string, never>";
+	const members = operation.args.map((arg) => `${arg.name}${arg.required ? "" : "?"}: ${arg.tsType}`);
+	return `{ ${members.join("; ")} }`;
+}
+
+function renderOperations(name: string, operations: Operation[]): string[] {
+	if (operations.length === 0) return [];
+	return [
+		`\tinterface ${name} {`,
+		...operations.map(
+			(operation) =>
+				`\t\t${operation.name}: {\n\t\t\targs: ${argsType(operation)};\n\t\t\tresult: ${operation.result};\n\t\t};`
+		),
+		"\t}",
+	];
+}
+
+/** `{ articles: { filters: "ArticleFiltersInput" } }`, which the client reads to declare variables. */
+function renderArgTypes(operations: Operation[]): string {
+	const entries = operations.map((operation) => {
+		const args = operation.args.map((arg) => `${arg.name}: ${JSON.stringify(arg.gqlType)}`).join(", ");
+		return `${operation.name}: { ${args} }`;
+	});
+	return `{ ${entries.join(", ")} }`;
 }
 
 /**
@@ -24,6 +52,22 @@ export function emitGraphql(model: GraphqlModel, options: EmitGraphqlOptions): s
 	}
 	for (const type of model.types) {
 		parts.push(`/** GraphQL ${type.kind} \`${type.name}\`. */`, `export type ${type.name} = ${type.type};`, "");
+	}
+
+	const registry = [
+		...renderOperations("StrapiGraphqlQueries", model.queries),
+		...renderOperations("StrapiGraphqlMutations", model.mutations),
+	];
+	if (registry.length > 0) {
+		parts.push('declare module "@fbritoferreira/strapi" {', ...registry, "}", "");
+		parts.push(
+			"/** GraphQL type of every argument, which `strapi.query()` needs to declare its variables. */",
+			"export const strapiGraphqlArgs = {",
+			`\tqueries: ${renderArgTypes(model.queries)},`,
+			`\tmutations: ${renderArgTypes(model.mutations)},`,
+			"} as const;",
+			""
+		);
 	}
 	return parts.join("\n");
 }
