@@ -7,10 +7,17 @@ export interface TypeRef {
 	ofType?: TypeRef | null;
 }
 
+/** One argument of a root field. */
+export interface IntrospectionArg {
+	name: string;
+	type: TypeRef;
+}
+
 /** One field of an object, interface or input type. */
 export interface IntrospectionField {
 	name: string;
 	type: TypeRef;
+	args?: IntrospectionArg[] | null;
 }
 
 /** One entry of `__schema.types`. */
@@ -30,6 +37,27 @@ export interface IntrospectionSchema {
 	types: IntrospectionType[];
 }
 
+/** One argument of a root operation, in both languages. */
+export interface OperationArg {
+	name: string;
+	/** How GraphQL spells the type, for the variable declaration: `ArticleFiltersInput`, `ID!`. */
+	gqlType: string;
+	/** How TypeScript spells it, for the generated registry. */
+	tsType: string;
+	required: boolean;
+}
+
+/** One root field: what it takes, and what it answers with. */
+export interface Operation {
+	name: string;
+	args: OperationArg[];
+	/** Result as TypeScript: `Article[]`, `Article | null`. */
+	result: string;
+	/** The named type inside that result, which a selection picks from. */
+	resultType: string;
+	list: boolean;
+}
+
 /** One schema type rendered as TypeScript. */
 export interface GraphqlTypeDecl {
 	name: string;
@@ -40,6 +68,8 @@ export interface GraphqlTypeDecl {
 /** Everything the emitter needs from a schema. */
 export interface GraphqlModel {
 	types: GraphqlTypeDecl[];
+	queries: Operation[];
+	mutations: Operation[];
 	queryType?: string;
 	mutationType?: string;
 }
@@ -69,6 +99,50 @@ function scalar(name: string | null | undefined): string {
 /** Wraps a union so it reads correctly as an array element. */
 function element(type: string): string {
 	return type.includes(" | ") ? `(${type})` : type;
+}
+
+/**
+ * Spells a type reference the way GraphQL does, for a variable declaration.
+ */
+export function gqlTypeName(ref: TypeRef): string {
+	if (ref.kind === "NON_NULL") {
+		return ref.ofType === undefined || ref.ofType === null ? "Unknown" : `${gqlTypeName(ref.ofType)}!`;
+	}
+	if (ref.kind === "LIST") {
+		return ref.ofType === undefined || ref.ofType === null ? "[Unknown]" : `[${gqlTypeName(ref.ofType)}]`;
+	}
+	return ref.name ?? "Unknown";
+}
+
+/** The named type inside a reference, past any list and non-null wrappers. */
+function namedTypeOf(ref: TypeRef): string {
+	if (ref.ofType !== undefined && ref.ofType !== null) return namedTypeOf(ref.ofType);
+	if (ref.kind === "SCALAR") return scalar(ref.name);
+	return ref.name ?? "unknown";
+}
+
+function isList(ref: TypeRef): boolean {
+	if (ref.kind === "LIST") return true;
+	return ref.ofType === undefined || ref.ofType === null ? false : isList(ref.ofType);
+}
+
+/** Turns a root object's fields into operations. */
+function operationsOf(schema: IntrospectionSchema, rootName: string | undefined): Operation[] {
+	if (rootName === undefined) return [];
+	const root = schema.types.find((type) => type.name === rootName);
+	if (root === undefined) return [];
+	return (root.fields ?? []).map((field) => ({
+		name: field.name,
+		args: (field.args ?? []).map((arg) => ({
+			name: arg.name,
+			gqlType: gqlTypeName(arg.type),
+			tsType: tsTypeOfRef(arg.type),
+			required: arg.type.kind === "NON_NULL",
+		})),
+		result: tsTypeOfRef(field.type),
+		resultType: namedTypeOf(field.type),
+		list: isList(field.type),
+	}));
 }
 
 /** Renders a type reference, adding `| null` wherever the schema allows null. */
@@ -118,15 +192,22 @@ function declare(type: IntrospectionType): GraphqlTypeDecl | null {
 
 /** Turns an introspection result into the types to emit. */
 export function graphqlModel(schema: IntrospectionSchema): GraphqlModel {
+	const queryType = schema.queryType?.name;
+	const mutationType = schema.mutationType?.name;
+	const roots = new Set([queryType, mutationType].filter((name): name is string => name !== undefined));
+
 	const types: GraphqlTypeDecl[] = [];
 	for (const type of schema.types) {
+		// The roots become operations rather than types: nobody selects a `Query`.
+		if (roots.has(type.name)) continue;
 		const declaration = declare(type);
 		if (declaration !== null) types.push(declaration);
 	}
-	const queryType = schema.queryType?.name;
-	const mutationType = schema.mutationType?.name;
+
 	return {
 		types,
+		queries: operationsOf(schema, queryType),
+		mutations: operationsOf(schema, mutationType),
 		...(queryType !== undefined && { queryType }),
 		...(mutationType !== undefined && { mutationType }),
 	};

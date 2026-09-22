@@ -12,7 +12,10 @@ describe("loadGraphqlSchema", () => {
 		const [url, init] = fetchImpl.mock.calls[0] ?? [];
 		expect(url).toBe("http://h/graphql");
 		expect(init?.method).toBe("POST");
-		expect(JSON.parse(String(init?.body)).query).toMatch(/__schema/);
+		const query = JSON.parse(String(init?.body)).query as string;
+		expect(query).toMatch(/__schema/);
+		// Without args the root fields would look like they take none.
+		expect(query).toMatch(/args \{ name type \{ \.\.\.TypeRef \} \}/);
 	});
 
 	it("sends a bearer token when given one", async () => {

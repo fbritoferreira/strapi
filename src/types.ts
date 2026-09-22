@@ -339,6 +339,81 @@ export type StrapiPagination =
 /** Third element of a {@link Result} tuple: Strapi's `meta` object, or `null` when the endpoint returns none. */
 export type StrapiMeta = { pagination?: StrapiPagination } | null;
 
+/** Element behind a GraphQL field: unwraps lists and nullability. */
+type GraphqlNode<V> = NonNullable<V> extends readonly (infer E)[] ? NonNullable<E> : NonNullable<V>;
+
+/**
+ * What can be asked for from `T`: `true` for a scalar, a nested selection for
+ * an object or a list of them.
+ */
+export type SelectionFor<T> = {
+	[K in keyof T]?: GraphqlNode<T[K]> extends object ? SelectionFor<GraphqlNode<T[K]>> : true;
+};
+
+/**
+ * Rejects keys the target does not have. A generic constraint alone would let
+ * them through: excess-property checking does not apply there.
+ */
+export type NoExtraKeys<S, T> = { [K in keyof S]: K extends keyof T ? S[K] : never };
+
+/** One node of a result, restricted to the selection `S`. */
+type SelectedNode<T, S> = {
+	[K in keyof S & keyof T]: S[K] extends true
+		? T[K]
+		: NonNullable<T[K]> extends readonly (infer E)[]
+			? SelectedNode<NonNullable<E>, S[K]>[]
+			: SelectedNode<NonNullable<T[K]>, S[K]> | Extract<T[K], null>;
+};
+
+/**
+ * The result of an operation once a selection has been applied: the shape the
+ * server will actually send back, with the operation's own list-ness and
+ * nullability intact.
+ */
+export type SelectedResult<R, S> = NonNullable<R> extends readonly (infer E)[]
+	? SelectedNode<NonNullable<E>, S>[]
+	: SelectedNode<NonNullable<R>, S> | Extract<R, null>;
+
+/** What one root field takes and answers with. */
+export interface GraphqlOperation {
+	args: Record<string, unknown>;
+	result: unknown;
+}
+
+/**
+ * Augment from generated code so `strapi.query()` knows the schema's root
+ * query fields. Keys are field names.
+ */
+export interface StrapiGraphqlQueries {
+	/** Marker so the interface is not empty; never set. */
+	readonly __brand?: never;
+}
+
+/** Same as {@link StrapiGraphqlQueries} for mutations. */
+export interface StrapiGraphqlMutations {
+	/** Marker so the interface is not empty; never set. */
+	readonly __brand?: never;
+}
+
+/**
+ * GraphQL type of every argument of every root field, as the generated file
+ * exports it. The client needs the names at runtime to declare its variables.
+ */
+export interface GraphqlArgTypes {
+	queries: Record<string, Record<string, string>>;
+	mutations: Record<string, Record<string, string>>;
+}
+
+/** Options for one built operation: its arguments, and the fields to take. */
+export type OperationOptions<O, S> = (O extends { args: infer A }
+	? Record<string, never> extends A
+		? { args?: A }
+		: { args: A }
+	: { args?: never }) & {
+	select: S;
+	init?: FetchInit;
+};
+
 /** One entry of a GraphQL response's `errors` array. */
 export interface GraphqlError {
 	message: string;

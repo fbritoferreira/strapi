@@ -723,6 +723,45 @@ is not installed — is reported as such. Pass `graphqlEndpoint` to `new Strapi(
 when the plugin's `endpoint` option is configured; `strapi.graphqlUrl` shows the
 resolved URL.
 
+### Queries without writing GraphQL
+
+`--graphql` also registers every root field with its arguments and result, so
+the common operations need no document at all:
+
+```ts
+import { strapiGraphqlArgs } from "./strapi-graphql";
+
+const strapi = new Strapi({ baseURL, defaultLocale: "en", graphqlArgs: strapiGraphqlArgs });
+
+const [err, articles] = await strapi.query("articles", {
+	args: { locale: "fr", pagination: { limit: 10 } },
+	select: { documentId: true, title: true, author: { name: true } },
+});
+// articles: { documentId: string; title: string; author: { name: string } | null }[]
+```
+
+The client builds the document and the variables:
+
+```graphql
+query Articles($locale: I18NLocaleCode, $pagination: PaginationArg) {
+	articles(locale: $locale, pagination: $pagination) { documentId title author { name } }
+}
+```
+
+Arguments travel as variables rather than inline literals, so the server parses
+them as JSON — a string that looks like an enum stays a string, and nothing has
+to be escaped by hand. Their GraphQL types come from `strapiGraphqlArgs`, which
+is why the client needs it; passing an argument the field does not declare is
+refused before anything is sent.
+
+`select` is checked against the schema and narrows the result, the same way
+`fields` and `populate` narrow a REST read: ask for two fields and the type has
+two fields, descend into a relation and it keeps its own nullability. Mutations
+work identically through `strapi.mutate()`.
+
+What this does not cover: fragments, aliases, directives, unions and multiple
+operations in one document. Those are what the typed documents below are for.
+
 ### Typed documents
 
 `graphql()` also takes a document that carries its own types — a
