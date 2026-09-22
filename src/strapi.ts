@@ -3,7 +3,9 @@ import { FilesClient } from "./clients/files";
 import { SingleTypeClient } from "./clients/single";
 import { UsersClient } from "./clients/users";
 import { HttpClient, type HttpConfig } from "./http";
-import type { StrapiContentTypes, StrapiSingleTypes, StrapiUser } from "./types";
+import { fail, ok, type Result } from "./errors";
+import { buildRoutePath } from "./route";
+import type { RouteArgs, StrapiContentTypes, StrapiRoutes, StrapiSingleTypes, StrapiUser } from "./types";
 
 /** Options for the root {@link Strapi} class. */
 export interface StrapiConfig extends HttpConfig {
@@ -90,6 +92,28 @@ export class Strapi {
 	single<T extends object = never>(uid: string, ...requireTypeArgument: RequireTypeArgument<T>): SingleTypeClient<T>;
 	single(uid: string): SingleTypeClient<object> {
 		return new SingleTypeClient<object>(this.context(), uid);
+	}
+
+	/**
+	 * Calls a route of the generated {@link StrapiRoutes} registry by name.
+	 *
+	 * Path params are substituted into the path, `query` is serialised the same
+	 * way as collection params, and `body` is sent as JSON. The body is returned
+	 * as Strapi sends it — these routes have no `data`/`meta` envelope.
+	 *
+	 * @example
+	 * ```ts
+	 * const [err, session] = await strapi.route("POST /auth/local", { body: { identifier, password } });
+	 * ```
+	 */
+	async route<K extends RegistryKey<StrapiRoutes>>(
+		key: K,
+		...options: RouteArgs<StrapiRoutes[K]>
+	): Promise<Result<StrapiRoutes[K] extends { response: infer R } ? R | null : null>> {
+		const request = buildRoutePath(String(key), options[0] as Record<string, unknown> | undefined);
+		const [err, body] = await this.http.request(request.path, request.init);
+		if (err) return fail(err);
+		return ok(body as StrapiRoutes[K] extends { response: infer R } ? R | null : null);
 	}
 
 	/** Client for the users-permissions plugin at `/api/users`. */

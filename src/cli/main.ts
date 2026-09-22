@@ -3,9 +3,12 @@ import { dirname, resolve } from "node:path";
 import { parseArgs } from "node:util";
 
 import { emit } from "./emit";
+import { emitRoutes } from "./emit-routes";
 import { loadFromDir } from "./load-dir";
+import { loadOpenapi } from "./load-openapi";
 import { loadFromUrl } from "./load-url";
 import { normalize } from "./normalize";
+import { routesModel } from "./openapi";
 import type { SchemaSet } from "./schema";
 
 export interface Io {
@@ -15,19 +18,22 @@ export interface Io {
 	now: () => Date;
 }
 
-const USAGE = `Usage: strapi-client generate (--dir <path> | --url <baseURL>) [options]
+const USAGE = `Usage: strapi-client generate (--dir <path> | --url <baseURL> | --openapi <spec>) [options]
 
 Generate TypeScript types and the StrapiContentTypes/StrapiSingleTypes
-registry from a Strapi 5 project's content-type schemas.
+registry from a Strapi 5 project's content-type schemas, or the StrapiRoutes
+registry from an OpenAPI document.
 
 Sources (exactly one):
   --dir <path>          Strapi project root (reads src/api/**/schema.json and src/components/**/*.json)
   --url <baseURL>       Running Strapi instance; logs in to the admin API and reads the Content-Type Builder
+  --openapi <spec>      OpenAPI document (file path or URL) from \`strapi openapi generate\`; emits route types
 
 Options:
   --email <email>       Admin email for --url (or STRAPI_ADMIN_EMAIL)
   --password <pass>     Admin password for --url (or STRAPI_ADMIN_PASSWORD)
-  -o, --output <file>   Output file (default: strapi-types.ts)
+  --token <token>       Bearer token sent when --openapi is a URL (or STRAPI_TOKEN)
+  -o, --output <file>   Output file (default: strapi-types.ts, or strapi-routes.ts for --openapi)
   --include-plugins     Also emit plugin content types (api::* only by default)
   --check               Exit 1 if the output file is missing or out of date; write nothing
   -h, --help            Show this help`;
@@ -35,15 +41,17 @@ Options:
 interface Parsed {
 	dir?: string;
 	url?: string;
+	openapi?: string;
 	email?: string;
 	password?: string;
-	output: string;
+	token?: string;
+	output?: string;
 	includePlugins: boolean;
 	check: boolean;
 	help: boolean;
 }
 
-type Source = { kind: "dir"; root: string } | { kind: "url"; url: string };
+type Source = { kind: "dir"; root: string } | { kind: "url"; url: string } | { kind: "openapi"; spec: string };
 
 function parse(args: string[]): Parsed {
 	const { values } = parseArgs({
@@ -53,9 +61,11 @@ function parse(args: string[]): Parsed {
 		options: {
 			dir: { type: "string" },
 			url: { type: "string" },
+			openapi: { type: "string" },
 			email: { type: "string" },
 			password: { type: "string" },
-			output: { type: "string", short: "o", default: "strapi-types.ts" },
+			token: { type: "string" },
+			output: { type: "string", short: "o" },
 			"include-plugins": { type: "boolean", default: false },
 			check: { type: "boolean", default: false },
 			help: { type: "boolean", short: "h", default: false },
@@ -64,9 +74,11 @@ function parse(args: string[]): Parsed {
 	return {
 		...(values.dir !== undefined && { dir: values.dir }),
 		...(values.url !== undefined && { url: values.url }),
+		...(values.openapi !== undefined && { openapi: values.openapi }),
 		...(values.email !== undefined && { email: values.email }),
 		...(values.password !== undefined && { password: values.password }),
-		output: values.output ?? "strapi-types.ts",
+		...(values.token !== undefined && { token: values.token }),
+		...(values.output !== undefined && { output: values.output }),
 		includePlugins: values["include-plugins"] ?? false,
 		check: values.check ?? false,
 		help: values.help ?? false,
@@ -76,6 +88,32 @@ function parse(args: string[]): Parsed {
 function stripHeader(text: string): string {
 	const newline = text.indexOf("\n");
 	return newline === -1 ? "" : text.slice(newline + 1);
+}
+
+/**
+ * Writes `output` to `target`, or compares against it under `--check`.
+ *
+ * @returns the exit code to return, or `null` when the file was written and the
+ * caller should print its own summary line.
+ */
+async function write(output: string, target: string, check: boolean, io: Io): Promise<number | null> {
+	if (check) {
+		let existing: string | null;
+		try {
+			existing = await readFile(target, "utf8");
+		} catch {
+			existing = null;
+		}
+		if (existing !== null && stripHeader(existing) === stripHeader(output)) {
+			io.stdout(`Up to date: ${target}`);
+			return 0;
+		}
+		io.stderr(`Out of date: ${target} (run without --check to update)`);
+		return 1;
+	}
+	await mkdir(dirname(target), { recursive: true });
+	await writeFile(target, output, "utf8");
+	return null;
 }
 
 export async function run(argv: string[], io: Io): Promise<number> {
@@ -98,21 +136,36 @@ export async function run(argv: string[], io: Io): Promise<number> {
 		return 2;
 	}
 
-	const parsedSource: Source | null =
-		parsed.dir !== undefined && parsed.url === undefined
-			? { kind: "dir", root: resolve(parsed.dir) }
-			: parsed.url !== undefined && parsed.dir === undefined
-				? { kind: "url", url: parsed.url }
-				: null;
-	if (parsedSource === null) {
-		io.stderr("Error: pass exactly one of --dir or --url");
+	const sources: Source[] = [
+		...(parsed.dir !== undefined ? [{ kind: "dir", root: resolve(parsed.dir) } as const] : []),
+		...(parsed.url !== undefined ? [{ kind: "url", url: parsed.url } as const] : []),
+		...(parsed.openapi !== undefined ? [{ kind: "openapi", spec: parsed.openapi } as const] : []),
+	];
+	const parsedSource = sources.length === 1 ? sources[0] : undefined;
+	if (parsedSource === undefined) {
+		io.stderr("Error: pass exactly one of --dir, --url or --openapi");
 		io.stderr(USAGE);
 		return 2;
 	}
+	const target = resolve(parsed.output ?? (parsedSource.kind === "openapi" ? "strapi-routes.ts" : "strapi-types.ts"));
 
-	let set: SchemaSet;
-	let source: string;
 	try {
+		if (parsedSource.kind === "openapi") {
+			const token = parsed.token ?? io.env["STRAPI_TOKEN"];
+			const document = await loadOpenapi({
+				source: parsedSource.spec,
+				...(token !== undefined && token !== "" && { token }),
+			});
+			const model = routesModel(document);
+			const output = emitRoutes(model, { source: `openapi ${parsedSource.spec}`, generatedAt: io.now() });
+			const status = await write(output, target, parsed.check, io);
+			if (status !== null) return status;
+			io.stdout(`Wrote ${target} (${model.routes.length} routes)`);
+			return 0;
+		}
+
+		let set: SchemaSet;
+		let source: string;
 		if (parsedSource.kind === "dir") {
 			source = `dir ${parsedSource.root}`;
 			set = await loadFromDir(parsedSource.root);
@@ -129,25 +182,8 @@ export async function run(argv: string[], io: Io): Promise<number> {
 
 		const model = normalize(set, { includePlugins: parsed.includePlugins });
 		const output = emit(model, { source, generatedAt: io.now() });
-		const target = resolve(parsed.output);
-
-		if (parsed.check) {
-			let existing: string | null = null;
-			try {
-				existing = await readFile(target, "utf8");
-			} catch {
-				existing = null;
-			}
-			if (existing !== null && stripHeader(existing) === stripHeader(output)) {
-				io.stdout(`Up to date: ${target}`);
-				return 0;
-			}
-			io.stderr(`Out of date: ${target} (run without --check to update)`);
-			return 1;
-		}
-
-		await mkdir(dirname(target), { recursive: true });
-		await writeFile(target, output, "utf8");
+		const status = await write(output, target, parsed.check, io);
+		if (status !== null) return status;
 		io.stdout(`Wrote ${target} (${model.types.length} types)`);
 		return 0;
 	} catch (error) {

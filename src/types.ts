@@ -286,6 +286,40 @@ export interface StrapiContentTypes {
 	readonly __brand?: never;
 }
 
+/**
+ * Contract of one route: what it takes and what it answers. Generated from an
+ * OpenAPI document; `params` and `body` are required when the route declares
+ * them, `query` is always optional.
+ */
+export interface RouteContract {
+	params?: Record<string, string | number>;
+	query?: unknown;
+	body?: unknown;
+	response: unknown;
+}
+
+/**
+ * Augment this from generated code to call routes by name with
+ * {@link Strapi.route}. Keys are `"<METHOD> <path>"`, e.g. `"GET /upload/files"`.
+ */
+export interface StrapiRoutes {
+	/** Marker so the interface is not empty; never set. */
+	readonly __brand?: never;
+}
+
+/** Options {@link Strapi.route} takes for the route `C`: its own contract, minus the response. */
+export type RouteOptions<C> = Omit<C, "response"> & { init?: FetchInit };
+
+/**
+ * Argument list of {@link Strapi.route}. Options are required for a route that
+ * declares path params or a body, and optional for one that declares neither.
+ */
+export type RouteArgs<C> = C extends { params: unknown }
+	? [options: RouteOptions<C>]
+	: C extends { body: unknown }
+		? [options: RouteOptions<C>]
+		: [options?: RouteOptions<C>];
+
 /** Same as {@link StrapiContentTypes} for single types. */
 export interface StrapiSingleTypes {
 	/** Marker so the interface is not empty; never set. */
