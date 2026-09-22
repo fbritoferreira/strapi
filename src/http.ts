@@ -1,4 +1,5 @@
 import type { ServiceError } from "./errors";
+import { backoffFor, resolveRetry, retryAfterMs, shouldRetry, type ResolvedRetry, type RetryOptions } from "./retry";
 import type { FetchInit } from "./types";
 
 /** Connection settings shared by every request. */
@@ -11,8 +12,15 @@ export interface HttpConfig {
 	headers?: Record<string, string>;
 	/** Custom `fetch` implementation. Defaults to `globalThis.fetch`. */
 	fetch?: typeof fetch;
-	/** Milliseconds before a request is aborted. Default 10_000. */
+	/** Milliseconds before a request is aborted. Default 10_000, per attempt. */
 	timeout?: number;
+	/**
+	 * Repeat failed requests. A number is the extra attempts to make; an object
+	 * tunes the backoff, statuses and methods. Off by default.
+	 *
+	 * @see {@link RetryOptions}
+	 */
+	retry?: number | RetryOptions;
 }
 
 /** Low-level result of {@link HttpClient.request}: `[error, null]` or `[null, parsedBody | null]`. */
@@ -32,6 +40,7 @@ export class HttpClient {
 	private readonly headers: Record<string, string>;
 	private readonly fetchImpl: typeof fetch;
 	private readonly timeout: number;
+	private readonly retry: ResolvedRetry | null;
 
 	constructor(config: HttpConfig) {
 		if (typeof config.baseURL !== "string" || config.baseURL.trim() === "") {
@@ -44,6 +53,34 @@ export class HttpClient {
 		this.headers = config.headers ?? {};
 		this.fetchImpl = config.fetch ?? ((input, init) => globalThis.fetch(input, init));
 		this.timeout = config.timeout ?? DEFAULT_TIMEOUT_MS;
+		this.retry = resolveRetry(config.retry);
+	}
+
+	/**
+	 * Waits out the backoff before another attempt, when the policy calls for
+	 * one. An aborted caller signal stops the retrying: the caller asked for
+	 * the request to stop, not to be repeated.
+	 *
+	 * @returns whether to make another attempt.
+	 */
+	private async waitToRetry(
+		method: string,
+		status: number | null,
+		headers: Headers | null,
+		made: number,
+		signal: AbortSignal | null | undefined
+	): Promise<boolean> {
+		// Read through a function: the signal can abort while we wait, which
+		// narrowing from an earlier check would hide.
+		const aborted = () => signal?.aborted === true;
+		if (this.retry === null) return false;
+		if (aborted()) return false;
+		if (!shouldRetry(this.retry, method, status, made)) return false;
+
+		const delay = backoffFor(this.retry, made, headers === null ? null : retryAfterMs(headers, Date.now()));
+		this.retry.onRetry?.({ attempt: made + 1, delay, status });
+		await new Promise((resolve) => setTimeout(resolve, delay));
+		return !aborted();
 	}
 
 	/** Replaces the bearer token sent with every request; `undefined` clears it. */
@@ -66,14 +103,32 @@ export class HttpClient {
 		if (typeof init.body === "string") headers.set("Content-Type", "application/json");
 		new Headers(init.headers).forEach((value, key) => headers.set(key, value));
 
-		const timeoutSignal = AbortSignal.timeout(this.timeout);
-		const signal = init.signal ? AbortSignal.any([init.signal, timeoutSignal]) : timeoutSignal;
-
+		const method = init.method ?? "GET";
+		let made = 0;
 		let response: Response;
-		try {
-			response = await this.fetchImpl(url, { ...init, headers, signal });
-		} catch (thrown) {
-			return [toNetworkError(thrown, this.timeout), null];
+
+		// Each attempt gets its own timeout: the budget is per request, not
+		// shared across retries.
+		for (;;) {
+			const timeoutSignal = AbortSignal.timeout(this.timeout);
+			const signal = init.signal ? AbortSignal.any([init.signal, timeoutSignal]) : timeoutSignal;
+
+			try {
+				response = await this.fetchImpl(url, { ...init, headers, signal });
+			} catch (thrown) {
+				const error = toNetworkError(thrown, this.timeout);
+				if (await this.waitToRetry(method, null, null, made, init.signal)) {
+					made += 1;
+					continue;
+				}
+				return [error, null];
+			}
+
+			if (!response.ok && (await this.waitToRetry(method, response.status, response.headers, made, init.signal))) {
+				made += 1;
+				continue;
+			}
+			break;
 		}
 
 		const text = await response.text();
