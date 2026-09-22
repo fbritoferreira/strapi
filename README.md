@@ -414,7 +414,48 @@ is not installed — is reported as such. Pass `graphqlEndpoint` to `new Strapi(
 when the plugin's `endpoint` option is configured; `strapi.graphqlUrl` shows the
 resolved URL.
 
-To type the operations, generate the schema:
+### Typed documents
+
+`graphql()` also takes a document that carries its own types — a
+`TypedDocumentNode`, or the `TypedDocumentString` graphql-codegen emits with
+`documentMode: "string"`. Both type arguments are then inferred, `variables` is
+required exactly when the document declares a required one, and the selection
+set itself is typed, which a raw string cannot be:
+
+```ts
+import { ArticlesDocument } from "./gql/graphql";
+
+const [err, data] = await strapi.graphql(ArticlesDocument, { variables: { locale: "fr" } });
+// data: { articles: { documentId: string; title: string }[] }
+```
+
+Point [graphql-codegen](https://the-guild.dev/graphql/codegen) at your Strapi
+instance to produce those documents:
+
+```ts
+// codegen.ts
+import type { CodegenConfig } from "@graphql-codegen/cli";
+
+const config: CodegenConfig = {
+	schema: "http://localhost:1337/graphql",
+	documents: ["src/**/*.{ts,tsx}"],
+	generates: {
+		"./src/gql/": { preset: "client", config: { documentMode: "string" } },
+	},
+};
+
+export default config;
+```
+
+`documentMode: "string"` keeps the query as text, so nothing has to parse an AST
+at runtime. The default AST form works too — its source text is read from
+`loc`. A document with neither (an AST built without location info) comes back
+as an error tuple naming the fix rather than sending an empty query.
+
+No dependency is added for this: `TypedDocument<TData, TVariables>` matches the
+`__apiType` marker both forms carry.
+
+To type the operations without codegen, generate the schema:
 
 ```sh
 npx @fbritoferreira/strapi generate --graphql http://localhost:1337/graphql -o src/strapi-graphql.ts
@@ -433,9 +474,9 @@ const [err, data] = await strapi.graphql<{ articles: Article[] }, { filters: Art
 );
 ```
 
-Selection sets are not modelled: the generated `Article` has every field, not
-the ones a given query selected. For types derived from the query documents
-themselves, use graphql-codegen. Introspection has to be reachable — Apollo
+Those types describe the schema, not a selection: the generated `Article` has
+every field, not the ones a given query selected. Typed documents above cover
+that case. Introspection has to be reachable — Apollo
 disables it when `NODE_ENV=production`, so generate against a development
 instance.
 

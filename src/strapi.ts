@@ -6,8 +6,10 @@ import { HttpClient, type HttpConfig } from "./http";
 import { fail, ok, type Result } from "./errors";
 import { buildRoutePath } from "./route";
 import type {
-	FetchInit,
+	GraphqlArgs,
+	GraphqlOptions,
 	GraphqlResponse,
+	TypedDocument,
 	RouteArgs,
 	StrapiContentTypes,
 	StrapiRoutes,
@@ -50,6 +52,20 @@ type RequireTypeArgument<T> = [T] extends [never] ? [never] : [];
 
 const DEFAULT_CONCURRENCY = 5;
 const DEFAULT_GRAPHQL_ENDPOINT = "/graphql";
+
+/** Source text of a GraphQL document, whichever form graphql-codegen emitted. */
+function documentSource(document: string | TypedDocument<unknown, never>): string {
+	if (typeof document === "string") return document;
+	// TypedDocumentNode keeps the text it was parsed from.
+	const body = (document as { loc?: { source?: { body?: unknown } } }).loc?.source?.body;
+	if (typeof body === "string") return body;
+	// TypedDocumentString is a String subclass, so its own toString is the query.
+	const text = String(document);
+	if (text !== "[object Object]" && text.trim() !== "") return text;
+	throw new TypeError(
+		'Strapi: this GraphQL document carries no source text; pass the query as a string, or configure graphql-codegen with documentMode: "string"'
+	);
+}
 
 /**
  * Root client for a Strapi 5 instance. Hands out typed sub-clients for
@@ -152,11 +168,25 @@ export class Strapi {
 	 * );
 	 * ```
 	 */
+	async graphql<TData, TVariables extends Record<string, unknown>>(
+		document: TypedDocument<TData, TVariables>,
+		...args: GraphqlArgs<TVariables>
+	): Promise<Result<TData>>;
 	async graphql<TData = unknown, TVariables extends Record<string, unknown> = Record<string, unknown>>(
 		query: string,
-		options: { variables?: TVariables; operationName?: string; init?: FetchInit } = {}
+		options?: GraphqlOptions<TVariables>
+	): Promise<Result<TData>>;
+	async graphql<TData = unknown, TVariables extends Record<string, unknown> = Record<string, unknown>>(
+		document: string | TypedDocument<TData, TVariables>,
+		options: GraphqlOptions<TVariables> = {}
 	): Promise<Result<TData>> {
 		const { variables, operationName, init } = options;
+		let query: string;
+		try {
+			query = documentSource(document);
+		} catch (error) {
+			return fail({ name: "TypeError", message: (error as Error).message, cause: error });
+		}
 		const [err, body] = await this.http.request<GraphqlResponse<TData>>(this.graphqlUrl, {
 			...init,
 			method: "POST",
