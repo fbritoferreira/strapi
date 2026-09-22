@@ -350,6 +350,49 @@ What is generated:
 
 The `--url` source calls `POST /admin/login` and the Content-Type Builder routes, which require an admin user with the `plugin::content-type-builder.read` permission. Strapi does not accept API tokens on admin routes.
 
+## Route types from OpenAPI
+
+Content-type schemas describe documents, not routes. For custom routes and the
+plugin endpoints (`/auth/local`, `/users`, `/upload/files`), generate a
+`StrapiRoutes` registry from an OpenAPI document instead:
+
+```sh
+# Strapi 5 writes one with its own CLI (experimental)
+cd ../my-strapi && npx strapi openapi generate --output ../my-app/spec.json
+
+# then, in your app
+npx @fbritoferreira/strapi generate --openapi spec.json -o src/strapi-routes.ts
+
+# a URL works too, e.g. the documentation plugin's spec
+npx @fbritoferreira/strapi generate \
+  --openapi https://cms.example.com/documentation/v1.0.0/full_documentation.json
+```
+
+The output augments `StrapiRoutes` with one entry per route, keyed
+`"<METHOD> <path>"`, and `strapi.route()` calls them:
+
+```ts
+import "./strapi-routes";
+
+const [err, session] = await strapi.route("POST /auth/local", {
+	body: { identifier: "me@example.com", password: "…" },
+});
+const [, file] = await strapi.route("GET /upload/files/{id}", { params: { id: 7 } });
+```
+
+Path params are substituted into the path, `query` is serialized like collection
+params, and the body is returned exactly as Strapi sends it — these routes have
+no `data`/`meta` envelope, so `route()` does not unwrap one.
+
+**Use OpenAPI for routes, not for documents.** Strapi's generated spec is lossier
+than its schemas: a dynamic zone arrives as `{"type":"array","items":{}}` with the
+component union gone, responses carry no `meta`, and `documentId` is described as
+a UUID. Keep generating document types from `--dir` or `--url`; the two outputs
+are separate files and work side by side.
+
+Routes whose path is a raw regex (Strapi emits `/connect/(.*)` for provider
+callbacks) are skipped: they cannot be called by name.
+
 ## Migrating from 0.4
 
 - `id: number` addressing is gone. `find`, `update` and `delete` now take

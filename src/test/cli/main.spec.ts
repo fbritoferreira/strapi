@@ -34,11 +34,45 @@ describe("run", () => {
 		expect(i.err.join("\n")).toMatch(/--bogus/);
 	});
 
+	it("generates a routes file from --openapi", async () => {
+		const dir = await mkdtemp(join(tmpdir(), "strapi-cli-"));
+		const spec = join(dir, "spec.json");
+		await writeFile(
+			spec,
+			JSON.stringify({
+				openapi: "3.1.0",
+				info: { title: "t", version: "1" },
+				paths: { "/auth/local": { post: { requestBody: { content: { "application/json": { schema: { type: "object", properties: { identifier: { type: "string" } }, required: ["identifier"] } } } }, responses: { "200": { content: { "application/json": { schema: { type: "object", properties: { jwt: { type: "string" } }, required: ["jwt"] } } } } } } } },
+			}),
+			"utf8"
+		);
+		const output = join(dir, "routes.ts");
+		const i = io();
+		expect(await run(["generate", "--openapi", spec, "-o", output], i)).toBe(0);
+		const written = await readFile(output, "utf8");
+		expect(written).toContain('"POST /auth/local": {');
+		expect(written).toContain("\t\t\tbody: { identifier: string };");
+		expect(written).toContain("\t\t\tresponse: { jwt: string };");
+		expect(i.out.join("\n")).toMatch(/1 route/);
+	});
+
+	it("defaults the --openapi output to strapi-routes.ts", async () => {
+		const i = io();
+		expect(await run(["generate", "--openapi", "/does/not/exist.json"], i)).toBe(1);
+		expect(i.err.join("\n")).toMatch(/exist\.json/);
+	});
+
+	it("takes only one source", async () => {
+		const i = io();
+		expect(await run(["generate", "--dir", project, "--openapi", "spec.json"], i)).toBe(2);
+		expect(i.err.join("\n")).toMatch(/exactly one of --dir, --url or --openapi/);
+	});
+
 	it("requires exactly one of --dir or --url", async () => {
 		expect(await run(["generate"], io())).toBe(2);
 		const both = io();
 		expect(await run(["generate", "--dir", project, "--url", "http://h"], both)).toBe(2);
-		expect(both.err.join("\n")).toMatch(/exactly one of --dir or --url/);
+		expect(both.err.join("\n")).toMatch(/exactly one of --dir, --url or --openapi/);
 	});
 
 	it("requires credentials for --url, from flags or env", async () => {
