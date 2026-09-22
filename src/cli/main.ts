@@ -3,8 +3,11 @@ import { dirname, resolve } from "node:path";
 import { parseArgs } from "node:util";
 
 import { emit } from "./emit";
+import { emitGraphql } from "./emit-graphql";
 import { emitRoutes } from "./emit-routes";
+import { graphqlModel } from "./graphql";
 import { loadFromDir } from "./load-dir";
+import { loadGraphqlSchema } from "./load-graphql";
 import { loadOpenapi } from "./load-openapi";
 import { loadFromUrl } from "./load-url";
 import { normalize } from "./normalize";
@@ -18,22 +21,24 @@ export interface Io {
 	now: () => Date;
 }
 
-const USAGE = `Usage: strapi-client generate (--dir <path> | --url <baseURL> | --openapi <spec>) [options]
+const USAGE = `Usage: strapi-client generate (--dir <path> | --url <baseURL> | --openapi <spec> | --graphql <url>) [options]
 
 Generate TypeScript types and the StrapiContentTypes/StrapiSingleTypes
 registry from a Strapi 5 project's content-type schemas, or the StrapiRoutes
-registry from an OpenAPI document.
+registry from an OpenAPI document, or TypeScript types from the GraphQL
+schema of a Strapi instance running @strapi/plugin-graphql.
 
 Sources (exactly one):
   --dir <path>          Strapi project root (reads src/api/**/schema.json and src/components/**/*.json)
   --url <baseURL>       Running Strapi instance; logs in to the admin API and reads the Content-Type Builder
   --openapi <spec>      OpenAPI document (file path or URL) from \`strapi openapi generate\`; emits route types
+  --graphql <url>       GraphQL endpoint of a running instance (e.g. http://localhost:1337/graphql); emits schema types
 
 Options:
   --email <email>       Admin email for --url (or STRAPI_ADMIN_EMAIL)
   --password <pass>     Admin password for --url (or STRAPI_ADMIN_PASSWORD)
-  --token <token>       Bearer token sent when --openapi is a URL (or STRAPI_TOKEN)
-  -o, --output <file>   Output file (default: strapi-types.ts, or strapi-routes.ts for --openapi)
+  --token <token>       Bearer token sent with --openapi URLs and --graphql (or STRAPI_TOKEN)
+  -o, --output <file>   Output file (default: strapi-types.ts; strapi-routes.ts for --openapi, strapi-graphql.ts for --graphql)
   --include-plugins     Also emit plugin content types (api::* only by default)
   --check               Exit 1 if the output file is missing or out of date; write nothing
   -h, --help            Show this help`;
@@ -42,6 +47,7 @@ interface Parsed {
 	dir?: string;
 	url?: string;
 	openapi?: string;
+	graphql?: string;
 	email?: string;
 	password?: string;
 	token?: string;
@@ -51,7 +57,19 @@ interface Parsed {
 	help: boolean;
 }
 
-type Source = { kind: "dir"; root: string } | { kind: "url"; url: string } | { kind: "openapi"; spec: string };
+type Source =
+	| { kind: "dir"; root: string }
+	| { kind: "url"; url: string }
+	| { kind: "openapi"; spec: string }
+	| { kind: "graphql"; url: string };
+
+/** Default output file per source kind. */
+const DEFAULT_OUTPUT: Record<Source["kind"], string> = {
+	dir: "strapi-types.ts",
+	url: "strapi-types.ts",
+	openapi: "strapi-routes.ts",
+	graphql: "strapi-graphql.ts",
+};
 
 function parse(args: string[]): Parsed {
 	const { values } = parseArgs({
@@ -62,6 +80,7 @@ function parse(args: string[]): Parsed {
 			dir: { type: "string" },
 			url: { type: "string" },
 			openapi: { type: "string" },
+			graphql: { type: "string" },
 			email: { type: "string" },
 			password: { type: "string" },
 			token: { type: "string" },
@@ -75,6 +94,7 @@ function parse(args: string[]): Parsed {
 		...(values.dir !== undefined && { dir: values.dir }),
 		...(values.url !== undefined && { url: values.url }),
 		...(values.openapi !== undefined && { openapi: values.openapi }),
+		...(values.graphql !== undefined && { graphql: values.graphql }),
 		...(values.email !== undefined && { email: values.email }),
 		...(values.password !== undefined && { password: values.password }),
 		...(values.token !== undefined && { token: values.token }),
@@ -140,18 +160,33 @@ export async function run(argv: string[], io: Io): Promise<number> {
 		...(parsed.dir !== undefined ? [{ kind: "dir", root: resolve(parsed.dir) } as const] : []),
 		...(parsed.url !== undefined ? [{ kind: "url", url: parsed.url } as const] : []),
 		...(parsed.openapi !== undefined ? [{ kind: "openapi", spec: parsed.openapi } as const] : []),
+		...(parsed.graphql !== undefined ? [{ kind: "graphql", url: parsed.graphql } as const] : []),
 	];
 	const parsedSource = sources.length === 1 ? sources[0] : undefined;
 	if (parsedSource === undefined) {
-		io.stderr("Error: pass exactly one of --dir, --url or --openapi");
+		io.stderr("Error: pass exactly one of --dir, --url, --openapi or --graphql");
 		io.stderr(USAGE);
 		return 2;
 	}
-	const target = resolve(parsed.output ?? (parsedSource.kind === "openapi" ? "strapi-routes.ts" : "strapi-types.ts"));
+	const target = resolve(parsed.output ?? DEFAULT_OUTPUT[parsedSource.kind]);
+
+	const token = parsed.token ?? io.env["STRAPI_TOKEN"];
 
 	try {
+		if (parsedSource.kind === "graphql") {
+			const schema = await loadGraphqlSchema({
+				url: parsedSource.url,
+				...(token !== undefined && token !== "" && { token }),
+			});
+			const model = graphqlModel(schema);
+			const output = emitGraphql(model, { source: `graphql ${parsedSource.url}`, generatedAt: io.now() });
+			const status = await write(output, target, parsed.check, io);
+			if (status !== null) return status;
+			io.stdout(`Wrote ${target} (${model.types.length} types)`);
+			return 0;
+		}
+
 		if (parsedSource.kind === "openapi") {
-			const token = parsed.token ?? io.env["STRAPI_TOKEN"];
 			const document = await loadOpenapi({
 				source: parsedSource.spec,
 				...(token !== undefined && token !== "" && { token }),

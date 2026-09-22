@@ -49,12 +49,12 @@ export class HttpClient {
 	/**
 	 * Performs one request against `baseURL/path`.
 	 *
-	 * @param path Path relative to the API root, e.g. `articles?populate=*`.
+	 * @param path Path relative to the API root, e.g. `articles?populate=*`, or an absolute `http(s)` URL.
 	 * @param init Standard `fetch` options; `headers` are merged over the configured defaults.
 	 * @returns The parsed JSON body, `null` for an empty body, or a {@link ServiceError}.
 	 */
 	async request<R>(path: string, init: FetchInit = {}): Promise<HttpResult<R>> {
-		const url = `${this.baseURL}/${path.replace(/^\/+/, "")}`;
+		const url = /^https?:\/\//i.test(path) ? path : `${this.baseURL}/${path.replace(/^\/+/, "")}`;
 
 		const headers = new Headers(this.headers);
 		if (this.token) headers.set("Authorization", `Bearer ${this.token}`);

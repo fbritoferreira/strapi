@@ -5,7 +5,17 @@ import { UsersClient } from "./clients/users";
 import { HttpClient, type HttpConfig } from "./http";
 import { fail, ok, type Result } from "./errors";
 import { buildRoutePath } from "./route";
-import type { RouteArgs, StrapiContentTypes, StrapiRoutes, StrapiSingleTypes, StrapiUser } from "./types";
+import type {
+	GraphqlArgs,
+	GraphqlOptions,
+	GraphqlResponse,
+	TypedDocument,
+	RouteArgs,
+	StrapiContentTypes,
+	StrapiRoutes,
+	StrapiSingleTypes,
+	StrapiUser,
+} from "./types";
 
 /** Options for the root {@link Strapi} class. */
 export interface StrapiConfig extends HttpConfig {
@@ -13,6 +23,12 @@ export interface StrapiConfig extends HttpConfig {
 	defaultLocale: string;
 	/** Max parallel requests when `all: true`. Default 5. */
 	concurrency?: number;
+	/**
+	 * Path of the GraphQL endpoint, resolved against the origin rather than the
+	 * API root. Default `/graphql`, matching `@strapi/plugin-graphql`; change it
+	 * when the plugin's `endpoint` option is configured.
+	 */
+	graphqlEndpoint?: string;
 }
 
 /** Keys of a registry interface, minus the brand marker. */
@@ -35,6 +51,21 @@ export type DocOf<R, K> = K extends keyof R ? Extract<R[K], object> : object;
 type RequireTypeArgument<T> = [T] extends [never] ? [never] : [];
 
 const DEFAULT_CONCURRENCY = 5;
+const DEFAULT_GRAPHQL_ENDPOINT = "/graphql";
+
+/** Source text of a GraphQL document, whichever form graphql-codegen emitted. */
+function documentSource(document: string | TypedDocument<unknown, never>): string {
+	if (typeof document === "string") return document;
+	// TypedDocumentNode keeps the text it was parsed from.
+	const body = (document as { loc?: { source?: { body?: unknown } } }).loc?.source?.body;
+	if (typeof body === "string") return body;
+	// TypedDocumentString is a String subclass, so its own toString is the query.
+	const text = String(document);
+	if (text !== "[object Object]" && text.trim() !== "") return text;
+	throw new TypeError(
+		'Strapi: this GraphQL document carries no source text; pass the query as a string, or configure graphql-codegen with documentMode: "string"'
+	);
+}
 
 /**
  * Root client for a Strapi 5 instance. Hands out typed sub-clients for
@@ -56,6 +87,8 @@ export class Strapi {
 	readonly concurrency: number;
 	/** Upload plugin client (`/api/upload`). */
 	readonly files: FilesClient;
+	/** Absolute URL of the GraphQL endpoint. */
+	readonly graphqlUrl: string;
 
 	/** @throws {TypeError} when `defaultLocale` or `baseURL` is missing or blank. */
 	constructor(config: StrapiConfig) {
@@ -66,6 +99,9 @@ export class Strapi {
 		this.defaultLocale = config.defaultLocale;
 		this.concurrency = config.concurrency ?? DEFAULT_CONCURRENCY;
 		this.files = new FilesClient(this.context());
+		const origin = this.http.baseURL.replace(/\/api$/, "");
+		const endpoint = config.graphqlEndpoint ?? DEFAULT_GRAPHQL_ENDPOINT;
+		this.graphqlUrl = `${origin}/${endpoint.replace(/^\/+/, "")}`;
 	}
 
 	/**
@@ -114,6 +150,70 @@ export class Strapi {
 		const [err, body] = await this.http.request(request.path, request.init);
 		if (err) return fail(err);
 		return ok(body as StrapiRoutes[K] extends { response: infer R } ? R | null : null);
+	}
+
+	/**
+	 * Runs one GraphQL operation against {@link graphqlUrl}.
+	 *
+	 * The endpoint only exists when `@strapi/plugin-graphql` is installed; when
+	 * it is not, Strapi answers 404 and this returns that as an error tuple.
+	 * GraphQL errors come back as an error tuple too, with the whole `errors`
+	 * array in `details`.
+	 *
+	 * @example
+	 * ```ts
+	 * const [err, data] = await strapi.graphql<{ articles: Article[] }>(
+	 *   "query Articles($locale: I18NLocaleCode) { articles(locale: $locale) { documentId title } }",
+	 *   { variables: { locale: "fr" } }
+	 * );
+	 * ```
+	 */
+	async graphql<TData, TVariables extends Record<string, unknown>>(
+		document: TypedDocument<TData, TVariables>,
+		...args: GraphqlArgs<TVariables>
+	): Promise<Result<TData>>;
+	async graphql<TData = unknown, TVariables extends Record<string, unknown> = Record<string, unknown>>(
+		query: string,
+		options?: GraphqlOptions<TVariables>
+	): Promise<Result<TData>>;
+	async graphql<TData = unknown, TVariables extends Record<string, unknown> = Record<string, unknown>>(
+		document: string | TypedDocument<TData, TVariables>,
+		options: GraphqlOptions<TVariables> = {}
+	): Promise<Result<TData>> {
+		const { variables, operationName, init } = options;
+		let query: string;
+		try {
+			query = documentSource(document);
+		} catch (error) {
+			return fail({ name: "TypeError", message: (error as Error).message, cause: error });
+		}
+		const [err, body] = await this.http.request<GraphqlResponse<TData>>(this.graphqlUrl, {
+			...init,
+			method: "POST",
+			body: JSON.stringify({
+				query,
+				...(variables !== undefined && { variables }),
+				...(operationName !== undefined && { operationName }),
+			}),
+		});
+		if (err) {
+			if (err.status === 404) {
+				return fail({
+					...err,
+					message: `Strapi: no GraphQL endpoint at ${this.graphqlUrl} (is @strapi/plugin-graphql installed?)`,
+				});
+			}
+			return fail(err);
+		}
+		const errors = body?.errors;
+		if (errors !== undefined && errors.length > 0) {
+			const name = errors.length === 1 ? (errors[0]?.extensions?.code ?? "GraphQLError") : "GraphQLError";
+			return fail({ name, message: errors.map((e) => e.message).join("; "), details: errors });
+		}
+		if (body?.data === undefined || body.data === null) {
+			return fail({ name: "GraphQLError", message: `Strapi: GraphQL response from ${this.graphqlUrl} had no data` });
+		}
+		return ok(body.data);
 	}
 
 	/** Client for the users-permissions plugin at `/api/users`. */

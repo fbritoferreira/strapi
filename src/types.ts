@@ -204,6 +204,50 @@ export type StrapiPagination =
 /** Third element of a {@link Result} tuple: Strapi's `meta` object, or `null` when the endpoint returns none. */
 export type StrapiMeta = { pagination?: StrapiPagination } | null;
 
+/** One entry of a GraphQL response's `errors` array. */
+export interface GraphqlError {
+	message: string;
+	path?: (string | number)[];
+	extensions?: { code?: string; [key: string]: unknown };
+}
+
+/**
+ * A GraphQL document carrying its result and variable types, as
+ * `TypedDocumentNode` and graphql-codegen's `TypedDocumentString` do. The
+ * marker exists only in the type system, so this matches either without
+ * depending on `graphql` or `@graphql-typed-document-node/core`.
+ */
+export interface TypedDocument<TData = unknown, TVariables = Record<string, unknown>> {
+	readonly __apiType?: (variables: TVariables) => TData;
+}
+
+/** Options every GraphQL call takes, with `variables` typed by the document. */
+export interface GraphqlOptions<TVariables> {
+	variables?: TVariables;
+	/** Operation to run when the document declares more than one. */
+	operationName?: string;
+	init?: FetchInit;
+}
+
+/** Same, for a document whose variables are not all optional. */
+export interface RequiredGraphqlOptions<TVariables> extends GraphqlOptions<TVariables> {
+	variables: TVariables;
+}
+
+/**
+ * Argument list of {@link Strapi.graphql} for a typed document: `variables` is
+ * required exactly when the document declares a variable that is.
+ */
+export type GraphqlArgs<TVariables> = Record<string, never> extends TVariables
+	? [options?: GraphqlOptions<TVariables>]
+	: [options: RequiredGraphqlOptions<TVariables>];
+
+/** Body a GraphQL endpoint returns: data, errors, or both. */
+export interface GraphqlResponse<T> {
+	data?: T | null;
+	errors?: GraphqlError[];
+}
+
 /** Shape Strapi 5 returns for any non-2xx response. */
 export interface StrapiErrorBody {
 	data: null;
