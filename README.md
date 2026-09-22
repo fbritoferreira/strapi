@@ -540,6 +540,19 @@ The source can be a JSON document or a Swagger UI page: recent versions of
 `SwaggerUIBundle({ spec: … })` and serve no JSON endpoint at all, so the loader
 reads it out of the page. `--token` (or `STRAPI_TOKEN`) authenticates either.
 
+When the plugin runs with `restrictedAccess`, the page is behind a password
+rather than a token — it redirects to `/documentation/login` and keeps a
+session cookie. Pass `--password` (or `STRAPI_DOCS_PASSWORD`) and the loader
+signs in first and reuses that cookie:
+
+```sh
+npx @fbritoferreira/strapi generate \
+  --openapi https://cms.example.com/documentation/v1.0.0 --password "…" -o src/strapi-routes.ts
+```
+
+Without it, a restricted page reports what to do rather than failing on the
+login form's HTML.
+
 The output augments `StrapiRoutes` with one entry per route, keyed
 `"<METHOD> <path>"`, and `strapi.route()` calls them:
 

@@ -14,5 +14,10 @@ out of it:
 strapi-client generate --openapi https://cms.example.com/documentation/v1.0.0 -o src/strapi-routes.ts
 ```
 
+`--password` (or `STRAPI_DOCS_PASSWORD`) signs in to the plugin's
+`restrictedAccess` mode, which gates the page behind a session cookie rather
+than a token, and reuses that cookie for the document request. A restricted page
+reached without a password says so instead of failing on the login form's HTML.
+
 JSON sources are unchanged; the page is only parsed when the body is not JSON,
 and a page with nothing usable in it still reports the original error.

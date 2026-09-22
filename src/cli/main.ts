@@ -31,12 +31,13 @@ schema of a Strapi instance running @strapi/plugin-graphql.
 Sources (exactly one):
   --dir <path>          Strapi project root (reads src/api/**/schema.json and src/components/**/*.json)
   --url <baseURL>       Running Strapi instance; logs in to the admin API and reads the Content-Type Builder
-  --openapi <spec>      OpenAPI document (file path or URL) from \`strapi openapi generate\`; emits route types
+  --openapi <spec>      OpenAPI document (file path or URL), or a documentation-plugin page; emits route types
   --graphql <url>       GraphQL endpoint of a running instance (e.g. http://localhost:1337/graphql); emits schema types
 
 Options:
   --email <email>       Admin email for --url (or STRAPI_ADMIN_EMAIL)
-  --password <pass>     Admin password for --url (or STRAPI_ADMIN_PASSWORD)
+  --password <pass>     Admin password for --url (or STRAPI_ADMIN_PASSWORD); documentation password for a
+                        restricted --openapi page (or STRAPI_DOCS_PASSWORD)
   --token <token>       Bearer token sent with --openapi URLs and --graphql (or STRAPI_TOKEN)
   -o, --output <file>   Output file (default: strapi-types.ts; strapi-routes.ts for --openapi, strapi-graphql.ts for --graphql)
   --include-plugins     Also emit plugin content types (api::* only by default)
@@ -187,9 +188,11 @@ export async function run(argv: string[], io: Io): Promise<number> {
 		}
 
 		if (parsedSource.kind === "openapi") {
+			const docsPassword = parsed.password ?? io.env["STRAPI_DOCS_PASSWORD"];
 			const document = await loadOpenapi({
 				source: parsedSource.spec,
 				...(token !== undefined && token !== "" && { token }),
+				...(docsPassword !== undefined && docsPassword !== "" && { password: docsPassword }),
 			});
 			const model = routesModel(document);
 			const output = emitRoutes(model, { source: `openapi ${parsedSource.spec}`, generatedAt: io.now() });

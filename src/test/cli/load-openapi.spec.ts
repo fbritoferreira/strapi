@@ -76,6 +76,79 @@ describe("loadOpenapi from a documentation page", () => {
 	});
 });
 
+describe("loadOpenapi behind restricted access", () => {
+	const loginOk = () =>
+		new Response(null, {
+			status: 302,
+			headers: { location: "https://cms.example.com/documentation", "set-cookie": "koa.sess=abc; path=/; httponly" },
+		});
+
+	it("logs in with the documentation password and reuses the session", async () => {
+		const fetchImpl = vi
+			.fn()
+			.mockResolvedValueOnce(loginOk())
+			.mockResolvedValueOnce(new Response(swaggerPage(document), { status: 200 }));
+
+		expect(
+			await loadOpenapi({ source: "https://cms.example.com/documentation/v1.0.0", password: "secret", fetch: fetchImpl })
+		).toEqual(document);
+
+		const [loginUrl, loginInit] = fetchImpl.mock.calls[0] ?? [];
+		expect(loginUrl).toBe("https://cms.example.com/documentation/login");
+		expect(loginInit?.method).toBe("POST");
+		expect(JSON.parse(String(loginInit?.body))).toEqual({ password: "secret" });
+
+		const [, specInit] = fetchImpl.mock.calls[1] ?? [];
+		expect(new Headers(specInit?.headers).get("cookie")).toBe("koa.sess=abc");
+	});
+
+	it("reports a wrong password", async () => {
+		const fetchImpl = vi.fn().mockResolvedValue(
+			new Response(null, { status: 302, headers: { location: "https://cms.example.com/documentation?error=password" } })
+		);
+		await expect(
+			loadOpenapi({ source: "https://cms.example.com/documentation", password: "nope", fetch: fetchImpl })
+		).rejects.toThrow(/password/i);
+	});
+
+	it("reports a login that hands back no session", async () => {
+		const fetchImpl = vi.fn().mockResolvedValue(new Response(null, { status: 302, headers: { location: "/documentation" } }));
+		await expect(
+			loadOpenapi({ source: "https://cms.example.com/documentation", password: "secret", fetch: fetchImpl })
+		).rejects.toThrow(/session cookie/);
+	});
+
+	it("reports the status when the login itself fails", async () => {
+		const fetchImpl = vi.fn().mockResolvedValue(new Response("boom", { status: 500, statusText: "Internal Server Error" }));
+		await expect(
+			loadOpenapi({ source: "https://cms.example.com/documentation", password: "secret", fetch: fetchImpl })
+		).rejects.toThrow(/login failed \(500\)/);
+	});
+
+	it("falls back to a bare status when the login has no status text", async () => {
+		const fetchImpl = vi.fn().mockResolvedValue(new Response("boom", { status: 503, statusText: "" }));
+		await expect(
+			loadOpenapi({ source: "https://cms.example.com/documentation", password: "secret", fetch: fetchImpl })
+		).rejects.toThrow(/login failed \(503\): unknown error/);
+	});
+
+	it("reports a login that answers without redirecting at all", async () => {
+		const fetchImpl = vi.fn().mockResolvedValue(new Response("", { status: 200 }));
+		await expect(
+			loadOpenapi({ source: "https://cms.example.com/documentation", password: "secret", fetch: fetchImpl })
+		).rejects.toThrow(/session cookie/);
+	});
+
+	it("says a password is needed when the docs redirect to their login page", async () => {
+		const login = new Response("<html>login form</html>", { status: 200 });
+		Object.defineProperty(login, "url", { value: "https://cms.example.com/documentation/login" });
+		const fetchImpl = vi.fn().mockResolvedValue(login);
+		await expect(loadOpenapi({ source: "https://cms.example.com/documentation", fetch: fetchImpl })).rejects.toThrow(
+			/--password/
+		);
+	});
+});
+
 describe("loadOpenapi", () => {
 	it("reads a spec from a file", async () => {
 		expect(await loadOpenapi({ source: await writeSpec(document) })).toEqual(document);
