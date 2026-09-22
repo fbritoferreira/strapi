@@ -10,8 +10,15 @@ permissions:
 
 jobs:
   test:
-    name: Lint, typecheck, test, build
+    name: Lint, typecheck, test, build (Node ${{ matrix.node }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Vitest needs ^22.12 || ^24 || >=26, so these are the versions the
+        # suite can run on: the active LTS lines plus current. Node 20 is
+        # covered by the smoke job below, where Vitest cannot run at all.
+        node: [22, 24, 26]
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
@@ -24,7 +31,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v7
         with:
-          node-version-file: .nvmrc
+          node-version: ${{ matrix.node }}
           cache: pnpm
 
       - name: Install dependencies
@@ -55,7 +62,7 @@ jobs:
         run: pnpm jsr publish --dry-run
 
       - name: Report coverage to PR
-        if: always()
+        if: always() && matrix.node == 24
         uses: davelosert/vitest-coverage-report-action@v2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -65,3 +72,38 @@ jobs:
           hide-badge: false
           hide-report: false
           report-only-changed-files: true
+
+  smoke:
+    name: Built package on the oldest supported Node
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+
+      # The toolchain needs a newer Node than the library does: vitest will not
+      # run on 20 at all. So build here...
+      - name: Setup Node.js for the build
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm build
+
+      # ...and exercise what ships on the oldest Node the package claims.
+      - name: Setup oldest supported Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 20
+
+      - name: Smoke test the built package
+        run: node scripts/smoke.mjs
