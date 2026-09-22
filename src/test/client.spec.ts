@@ -9,6 +9,12 @@ interface Article {
 	title: string;
 }
 
+declare module "../index" {
+	interface StrapiContentTypes {
+		articles: Article;
+	}
+}
+
 describe("StrapiClient shorthand", () => {
 	let fetchMock: FetchMock;
 
@@ -31,6 +37,6 @@ describe("StrapiClient shorthand", () => {
 	});
 
 	it("validates config like Strapi", () => {
-		expect(() => new StrapiClient({ baseURL: "http://h", defaultLocale: "", uid: "x" })).toThrow(TypeError);
+		expect(() => new StrapiClient({ baseURL: "http://h", defaultLocale: "", uid: "articles" })).toThrow(TypeError);
 	});
 });

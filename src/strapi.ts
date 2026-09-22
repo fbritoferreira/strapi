@@ -16,6 +16,22 @@ export interface StrapiConfig extends HttpConfig {
 /** Keys of a registry interface, minus the brand marker. */
 export type RegistryKey<R> = Exclude<keyof R, "__brand">;
 
+/**
+ * Uid accepted for a registry: any string while the registry is empty, and only
+ * its declared keys once generated code augments it. Import the file emitted by
+ * `strapi-client generate` to turn a typo in a uid into a compile error.
+ */
+export type Uid<R> = [RegistryKey<R>] extends [never] ? string : RegistryKey<R> & string;
+
+/** Document type a registry maps `K` to; `object` when `K` is not one of its keys. */
+export type DocOf<R, K> = K extends keyof R ? Extract<R[K], object> : object;
+
+/**
+ * Makes an overload uncallable unless the caller passes a type argument: with
+ * `T` left at `never` the rest parameter is `[never]`, which nothing satisfies.
+ */
+type RequireTypeArgument<T> = [T] extends [never] ? [never] : [];
+
 const DEFAULT_CONCURRENCY = 5;
 
 /**
@@ -54,10 +70,11 @@ export class Strapi {
 	 * Client for a collection type at `/api/<uid>`.
 	 *
 	 * Pass a key of the augmented {@link StrapiContentTypes} registry to get the
-	 * document type inferred, or an explicit type argument otherwise.
+	 * document type inferred. A uid outside the registry needs an explicit type
+	 * argument: `strapi.collection<Article>("articles")`.
 	 */
-	collection<K extends RegistryKey<StrapiContentTypes>>(uid: K): CollectionClient<Extract<StrapiContentTypes[K], object>>;
-	collection<T extends object = object>(uid: string): CollectionClient<T>;
+	collection<K extends Uid<StrapiContentTypes>>(uid: K): CollectionClient<DocOf<StrapiContentTypes, K>>;
+	collection<T extends object = never>(uid: string, ...requireTypeArgument: RequireTypeArgument<T>): CollectionClient<T>;
 	collection(uid: string): CollectionClient<object> {
 		return new CollectionClient<object>(this.context(), uid);
 	}
@@ -66,10 +83,11 @@ export class Strapi {
 	 * Client for a single type at `/api/<uid>`.
 	 *
 	 * Pass a key of the augmented {@link StrapiSingleTypes} registry to get the
-	 * document type inferred, or an explicit type argument otherwise.
+	 * document type inferred. A uid outside the registry needs an explicit type
+	 * argument: `strapi.single<Homepage>("homepage")`.
 	 */
-	single<K extends RegistryKey<StrapiSingleTypes>>(uid: K): SingleTypeClient<Extract<StrapiSingleTypes[K], object>>;
-	single<T extends object = object>(uid: string): SingleTypeClient<T>;
+	single<K extends Uid<StrapiSingleTypes>>(uid: K): SingleTypeClient<DocOf<StrapiSingleTypes, K>>;
+	single<T extends object = never>(uid: string, ...requireTypeArgument: RequireTypeArgument<T>): SingleTypeClient<T>;
 	single(uid: string): SingleTypeClient<object> {
 		return new SingleTypeClient<object>(this.context(), uid);
 	}

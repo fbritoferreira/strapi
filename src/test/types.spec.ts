@@ -2,6 +2,7 @@ import { describe, expectTypeOf, it } from "vitest";
 
 import type {
 	FetchInit,
+	SortField,
 	StrapiDocument,
 	StrapiErrorBody,
 	StrapiMedia,
@@ -9,7 +10,7 @@ import type {
 	StrapiResponse,
 	StrapiSingleResponse,
 } from "../types";
-import type { RegistryKey } from "../strapi";
+import type { RegistryKey, Uid } from "../strapi";
 
 describe("types", () => {
 	it("StrapiDocument has Strapi 5 system fields", () => {
@@ -39,6 +40,32 @@ describe("types", () => {
 	it("RegistryKey drops the brand marker", () => {
 		expectTypeOf<RegistryKey<{ readonly __brand?: never }>>().toEqualTypeOf<never>();
 		expectTypeOf<RegistryKey<{ readonly __brand?: never; articles: { a: 1 } }>>().toEqualTypeOf<"articles">();
+	});
+
+	it("Uid falls back to string while the registry is empty", () => {
+		expectTypeOf<Uid<{ readonly __brand?: never }>>().toEqualTypeOf<string>();
+	});
+
+	it("Uid narrows to the registry keys once augmented", () => {
+		expectTypeOf<Uid<{ readonly __brand?: never; articles: { a: 1 } }>>().toEqualTypeOf<"articles">();
+	});
+
+	it("SortField accepts document keys, directions and relation paths", () => {
+		interface Doc {
+			title: string;
+			author: { name: string };
+		}
+		const sort: SortField<Doc>[] = ["title", "title:asc", "author.name:asc"];
+		expectTypeOf(sort).toEqualTypeOf<SortField<Doc>[]>();
+	});
+
+	it("SortField rejects a field the document does not have", () => {
+		interface Doc {
+			title: string;
+		}
+		// @ts-expect-error "ttile" is not a key of Doc
+		const sort: SortField<Doc>[] = ["ttile:asc"];
+		expectTypeOf(sort).toEqualTypeOf<SortField<Doc>[]>();
 	});
 
 	it("StrapiMedia has url and mime", () => {
