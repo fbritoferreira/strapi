@@ -186,4 +186,27 @@ describe("HttpClient", () => {
 			expect(err?.message).toBe("user cancelled");
 		});
 	});
+
+	it("classifies a rejection that is not an Error", async () => {
+		const http = new HttpClient({ baseURL: "http://h" });
+		fetchMock.mockRejectedValueOnce("socket hang up");
+		const [err] = await http.request("articles");
+		expect(err?.name).toBe("NetworkError");
+		expect(err?.message).toBe("socket hang up");
+		expect(err?.cause).toBe("socket hang up");
+	});
+
+	it("falls back to the response status and HTTPError when the body omits them", async () => {
+		const http = new HttpClient({ baseURL: "http://h" });
+		fetchMock.mockResolvedValueOnce(
+			new Response(JSON.stringify({ data: null, error: { message: "Boom" } }), {
+				status: 502,
+				headers: { "content-type": "application/json" },
+			})
+		);
+		const [err] = await http.request("articles");
+		expect(err?.status).toBe(502);
+		expect(err?.name).toBe("HTTPError");
+		expect(err?.message).toBe("Boom");
+	});
 });

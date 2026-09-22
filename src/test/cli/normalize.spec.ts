@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { loadFromDir } from "../../cli/load-dir";
-import { normalize, pascalCase } from "../../cli/normalize";
+import { byKey, byName, normalize, pascalCase } from "../../cli/normalize";
 import { MEDIA_UID, type ComponentEntry, type ContentTypeEntry, type SchemaSet } from "../../cli/schema";
 import { fileURLToPath } from "node:url";
 
@@ -333,5 +333,19 @@ describe("normalize (edge cases)", () => {
 		);
 		const model = normalize(set, { includePlugins: false });
 		expect(model.collections.filter((c) => c.key === "same-key").map((c) => c.typeName)).toEqual(["B1", "B2"]);
+	});
+});
+
+describe("ordering", () => {
+	it("sorts by name and treats equal names as equal", () => {
+		expect(byName({ name: "a" }, { name: "b" })).toBe(-1);
+		expect(byName({ name: "b" }, { name: "a" })).toBe(1);
+		expect(byName({ name: "a" }, { name: "a" })).toBe(0);
+	});
+
+	it("sorts registry entries by key", () => {
+		expect(byKey({ key: "articles" }, { key: "tags" })).toBe(-1);
+		expect(byKey({ key: "tags" }, { key: "articles" })).toBe(1);
+		expect(byKey({ key: "tags" }, { key: "tags" })).toBe(0);
 	});
 });

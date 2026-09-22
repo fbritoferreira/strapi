@@ -36,6 +36,13 @@ describe("loadOpenapi", () => {
 		await expect(loadOpenapi({ source: await writeSpec([1, 2]) })).rejects.toThrow(/expected a JSON object/);
 	});
 
+	it("uses the global fetch when none is passed", async () => {
+		const globalFetch = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify(document), { status: 200 }));
+		expect(await loadOpenapi({ source: "https://cms.example.com/spec.json" })).toEqual(document);
+		expect(globalFetch).toHaveBeenCalledOnce();
+		globalFetch.mockRestore();
+	});
+
 	it("reports the status when the fetch fails", async () => {
 		const fetchImpl = vi.fn().mockResolvedValue(new Response("nope", { status: 404 }));
 		await expect(loadOpenapi({ source: "https://cms.example.com/spec.json", fetch: fetchImpl })).rejects.toThrow(/404/);

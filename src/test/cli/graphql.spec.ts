@@ -56,6 +56,7 @@ describe("tsTypeOfRef with incomplete references", () => {
 		['{"kind":"LIST"}', "unknown[] | null"],
 		['{"kind":"SCALAR"}', "unknown | null"],
 		['{"kind":"OBJECT"}', "unknown | null"],
+		['{"kind":"NON_NULL","ofType":{"kind":"NON_NULL"}}', "unknown"],
 	])("%s → %s", (json, expected) => {
 		expect(tsTypeOfRef(ref(json))).toBe(expected);
 	});
@@ -79,6 +80,7 @@ describe("graphqlModel edge cases", () => {
 
 	it("renders an enum or union with no members as never", () => {
 		expect(model([{ kind: "ENUM", name: "Empty", enumValues: [] }]).types[0]?.type).toBe("never");
+		expect(model([{ kind: "ENUM", name: "Missing" }]).types[0]?.type).toBe("never");
 		expect(model([{ kind: "UNION", name: "Empty" }]).types[0]?.type).toBe("never");
 	});
 

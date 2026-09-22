@@ -46,14 +46,6 @@ interface Names {
 	components: Map<string, string>; // uid → type name
 }
 
-function mustGet(map: Map<string, string>, uid: string): string {
-	const name = map.get(uid);
-	if (name === undefined) {
-		throw new Error(`No name assigned for ${uid} (unreachable: assignNames should have registered every uid)`);
-	}
-	return name;
-}
-
 function componentName(uid: string): string {
 	const dot = uid.indexOf(".");
 	const category = dot === -1 ? "" : uid.slice(0, dot);
@@ -177,8 +169,11 @@ function fields(attributes: Record<string, RawAttribute>, names: Names, usage: U
 	return out;
 }
 
-const byName = (a: { name: string }, b: { name: string }): number => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0);
-const byKey = (a: { key: string }, b: { key: string }): number => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0);
+/** Orders emitted declarations by name, so the generated file is stable across runs. */
+export const byName = (a: { name: string }, b: { name: string }): number => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0);
+
+/** Same, for registry entries keyed by their REST path segment. */
+export const byKey = (a: { key: string }, b: { key: string }): number => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0);
 
 const RESERVED_DOCUMENT_FIELDS = new Set(["id", "documentId", "createdAt", "updatedAt", "publishedAt"]);
 
@@ -207,7 +202,7 @@ export function normalize(set: SchemaSet, options: NormalizeOptions): Model {
 		const componentFields = fields(entry.schema.attributes, names, usage);
 		assertNoReservedComponentFields(componentFields, uid);
 		components.push({
-			name: mustGet(names.components, uid),
+			name: componentName(uid),
 			kind: "component",
 			uid,
 			localized: false,

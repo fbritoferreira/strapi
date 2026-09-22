@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, expectTypeOf, it, vi } from "vitest";
 
 import { Strapi } from "../index";
+import { buildRoutePath } from "../route";
 import { installFetchMock, jsonResponse, lastCall, type FetchMock } from "./helpers";
 
 interface UploadFile {
@@ -79,5 +80,10 @@ describe("Strapi.route", () => {
 			strapi.route("POST /auth/local");
 		};
 		expect(rejected).toBeTypeOf("function");
+	});
+
+	it("refuses to build a path with a param it was not given", () => {
+		expect(() => buildRoutePath("GET /upload/files/{id}", {})).toThrow(/needs the path param "id"/);
+		expect(() => buildRoutePath("GET /upload/files/{id}", undefined)).toThrow(TypeError);
 	});
 });

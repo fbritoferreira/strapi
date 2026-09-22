@@ -133,6 +133,25 @@ describe("AuthClient", () => {
 		expect(err?.message).not.toMatch(/jwtManagement/);
 	});
 
+	it("passes a non-404 logout error through", async () => {
+		fetchMock.mockResolvedValueOnce(new Response("boom", { status: 500 }));
+		const [err] = await strapi.auth.logout();
+		expect(err?.status).toBe(500);
+		expect(err?.message).not.toMatch(/jwtManagement/);
+	});
+
+	it("returns Strapi's error when the credentials are wrong", async () => {
+		fetchMock.mockResolvedValueOnce(
+			new Response(JSON.stringify({ data: null, error: { status: 400, name: "ValidationError", message: "Invalid identifier or password" } }), {
+				status: 400,
+				headers: { "content-type": "application/json" },
+			})
+		);
+		const [err, session] = await strapi.auth.login({ identifier: "me@x.io", password: "nope" });
+		expect(session).toBeNull();
+		expect(err?.name).toBe("ValidationError");
+	});
+
 	it("sends the jwt on later requests once it is set", async () => {
 		fetchMock.mockResolvedValueOnce(jsonResponse({ jwt: "j", user }));
 		const [err, session] = await strapi.auth.login({ identifier: "me@x.io", password: "pw" });

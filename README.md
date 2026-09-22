@@ -703,7 +703,7 @@ await articles.update({ documentId, payload: { data: { title } }, locale: "fr" }
 ## Development
 
 1. Clone and install: `git clone <repo> && pnpm install` (Node.js 24, see `.nvmrc`)
-2. Run tests: `pnpm test` (Vitest), `pnpm test:coverage` for coverage
+2. Run tests: `pnpm test` (Vitest), `pnpm test:coverage` for coverage — thresholds are 100% on statements, branches, functions and lines
 3. Lint and typecheck: `pnpm lint && pnpm typecheck`
 4. Build: `pnpm build` (outputs ESM, CJS and bundled `.d.ts` to `dist/`; also builds the `generate` CLI to `dist/cli.mjs`, used by `bin/strapi-client.mjs`)
 5. Add a changeset for user-facing changes: `pnpm changeset`

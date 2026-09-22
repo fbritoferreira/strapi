@@ -57,6 +57,13 @@ describe("Strapi.graphql", () => {
 		expect(err?.details).toEqual([{ message: 'Cannot query field "nope"', extensions: { code: "GRAPHQL_VALIDATION_FAILED" } }]);
 	});
 
+	it("names a single error GraphQLError when it carries no code", async () => {
+		fetchMock.mockResolvedValueOnce(jsonResponse({ data: null, errors: [{ message: "boom" }] }));
+		const [err] = await strapi.graphql("{ nope }");
+		expect(err?.name).toBe("GraphQLError");
+		expect(err?.message).toBe("boom");
+	});
+
 	it("joins several GraphQL errors into one message", async () => {
 		fetchMock.mockResolvedValueOnce(jsonResponse({ data: null, errors: [{ message: "one" }, { message: "two" }] }));
 		const [err] = await strapi.graphql("{ nope }");
