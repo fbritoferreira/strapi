@@ -13,6 +13,30 @@ single collection. Every method returns a `[error, data, meta]` tuple instead
 of throwing. The `strapi-client generate` CLI command writes TypeScript
 interfaces and the content-type registry from your Strapi schema.
 
+## What you get
+
+- **Tuples, not throws.** Every method answers `[error, data, meta]`, so a
+  failed request is a value you handle, not an exception you remember to catch.
+- **Types generated from your schema.** `strapi-client generate` reads a Strapi
+  project or a running instance and writes the interfaces plus a registry, so
+  `strapi.collection("articles")` is typed without a type argument.
+- **Params checked against the route.** Each method accepts only the query
+  params its Strapi route declares, and `fields`/`populate` are told apart.
+- **Results that match the request.** Select two fields and the returned type
+  has two fields; a relation appears only once something populates it.
+- **The rest of the API too.** Auth (`/api/auth/*`), users, uploads, custom and
+  plugin routes typed from an OpenAPI document, and GraphQL.
+
+## Contents
+
+[Installation](#installation) · [Quick start](#quick-start) ·
+[Clients](#clients) · [Authentication](#authentication) ·
+[Query parameters](#query-parameters) · [Fetching every page](#fetching-every-page) ·
+[i18n](#i18n) · [Errors](#errors) · [Next.js and custom fetch](#nextjs-and-custom-fetch) ·
+[Typed registry](#typed-registry) · [Generating types](#generating-types) ·
+[Route types from OpenAPI](#route-types-from-openapi) · [GraphQL](#graphql) ·
+[Recipes](#recipes) · [Development](#development)
+
 ## Installation
 
 ```sh
@@ -49,6 +73,14 @@ pnpm dlx jsr add @fbritoferreira/strapi
 
 ```sh
 bunx jsr add @fbritoferreira/strapi
+```
+
+In Deno you can also import it without installing:
+
+```ts
+import { Strapi } from "jsr:@fbritoferreira/strapi";
+
+const strapi = new Strapi({ baseURL: "http://localhost:1337", defaultLocale: "en" });
 ```
 
 The JSR package exports the client library only. The `strapi-client` CLI
@@ -91,8 +123,14 @@ const [, updated] = await articles.update({ documentId: created!.documentId, pay
 | --- | --- | --- |
 | Collection types | `strapi.collection<T>("articles")` | `findMany`, `find`, `findFirst`, `count`, `create`, `update`, `delete`, `upsert` |
 | Single types | `strapi.single<T>("homepage")` | `find`, `update`, `delete` |
+| Auth | `strapi.auth` | `login`, `register`, `forgotPassword`, `resetPassword`, `changePassword`, `sendEmailConfirmation`, `refresh`, `logout` |
 | Users-permissions | `strapi.users<T>()` | `findMany`, `find`, `me`, `count`, `create`, `update`, `delete` |
 | Upload | `strapi.files` | `find`, `findOne`, `upload`, `update`, `delete` |
+| Generated routes | `strapi.route("GET /upload/files")` | any route in the `StrapiRoutes` registry |
+| GraphQL | `strapi.graphql(document)` | one operation against `/graphql` |
+
+`delete` returns the deleted document (or `null` when Strapi answers with an
+empty body), so it is a read as much as a write.
 
 `collection` and `single` accept a `StrapiContentTypes`/`StrapiSingleTypes`
 registry key (see Typed registry below) or any string uid with an explicit
@@ -394,6 +432,11 @@ your Strapi schema.
 
 `strapi-client generate` writes the interfaces and the registry augmentation for you.
 
+It takes exactly one source: `--dir` or `--url` for content-type schemas (this
+section), `--openapi` for [route types](#route-types-from-openapi), or
+`--graphql` for [GraphQL schema types](#graphql). Each writes its own file, and
+they are meant to be used side by side.
+
 ```sh
 # From a Strapi project checked out next to your app
 npx @fbritoferreira/strapi generate --dir ../my-strapi -o src/strapi-types.ts
@@ -417,6 +460,7 @@ What is generated:
 - Relations, media, components and dynamic zones are optional fields (they appear only when populated). `media` is `StrapiMedia | null` or `StrapiMedia[]`; relations to `plugin::users-permissions.user` are `StrapiUser`.
 - Dynamic zones are `Array<(BlocksHero & { __component: "blocks.hero" }) | ...>`.
 - `enumeration` becomes a union of string literals; `json` is `unknown`; `biginteger` is `string`.
+- A `__populatable` marker per type, listing the fields `populate` accepts. It exists only in the type system — Strapi never returns it — and is what lets `fields`, `sort` and `populate` be told apart and results be narrowed.
 - `private` attributes are skipped. Plugin content types are skipped unless `--include-plugins` is passed.
 - `--include-plugins` registers plugin content types under their `pluralName` even when the plugin does not expose a matching `/api/<pluralName>` route.
 
@@ -552,6 +596,93 @@ that case. Introspection has to be reachable — Apollo
 disables it when `NODE_ENV=production`, so generate against a development
 instance.
 
+## Recipes
+
+Every snippet below is compiled as part of the test suite
+(`src/cli/__fixtures__/readme-recipes.ts`), against the same `Article` type the
+generator would emit:
+
+```ts
+interface Article extends StrapiDocument {
+	readonly __populatable?: "cover" | "author";
+	title: string;
+	slug: string;
+	body: string;
+	cover?: StrapiMedia | null;
+	author?: { documentId: string; name: string } | null;
+}
+```
+
+**Search, then walk every page**
+
+```ts
+const [err, all] = await articles.findMany({
+	params: { _q: term, sort: ["publishedAt:desc"], pagination: { pageSize: 100 } },
+	all: true,
+});
+```
+
+**A list view only needs a few columns**
+
+```ts
+const [err, rows] = await articles.findMany({
+	params: { fields: ["title", "slug"], populate: ["cover"], pagination: { pageSize: 20 } },
+});
+if (err) throw new Error(err.message);
+
+rows.map((row) => ({ title: row.title, href: `/blog/${row.slug}`, image: row.cover?.url }));
+// row.body is a compile error here: it was not selected
+```
+
+**Upsert by slug**
+
+```ts
+const [err, article] = await articles.upsert({
+	payload: { data: { slug, title, body: "…" } },
+	filters: { slug: { $eq: slug } },
+	params: { status: "published" },
+});
+```
+
+**Upload a file and attach it in one call**
+
+```ts
+const [err, uploaded] = await strapi.files.upload({
+	files: file,
+	ref: "api::article.article",
+	refId: documentId,
+	field: "cover",
+});
+```
+
+**Sign in, keep the session, refresh it later**
+
+```ts
+const [err, session] = await strapi.auth.login({ identifier, password });
+if (err) throw new Error(err.message);
+strapi.setToken(session.jwt);
+
+if (session.refreshToken !== undefined) {
+	const [refreshErr, refreshed] = await strapi.auth.refresh({ refreshToken: session.refreshToken });
+	if (!refreshErr) strapi.setToken(refreshed.jwt);
+}
+```
+
+**Next.js: cache a read and revalidate it by tag**
+
+```ts
+const [err, data] = await articles.findMany({
+	params: { fields: ["title", "slug"] },
+	init: { next: { revalidate: 3600, tags: ["articles"] } },
+});
+```
+
+**One localization at a time**
+
+```ts
+await articles.update({ documentId, payload: { data: { title } }, locale: "fr" });
+```
+
 ## Migrating from 0.4
 
 - `id: number` addressing is gone. `find`, `update` and `delete` now take
@@ -577,7 +708,8 @@ instance.
 4. Build: `pnpm build` (outputs ESM, CJS and bundled `.d.ts` to `dist/`; also builds the `generate` CLI to `dist/cli.mjs`, used by `bin/strapi-client.mjs`)
 5. Add a changeset for user-facing changes: `pnpm changeset`
 6. After changing `src/cli/emit.ts`, refresh the fixture snapshot: `UPDATE_SNAPSHOT=1 pnpm vitest run src/test/cli/emit.spec.ts`
-7. Check the JSR publish (slow types, included files): `pnpm jsr:check`
+7. README examples live in `src/cli/__fixtures__/readme-recipes.ts` and are type-checked by `pnpm typecheck`; update both together
+8. Check the JSR publish (slow types, included files): `pnpm jsr:check`
 
 Uses Vite for building and Vitest for testing. Releases are cut by the
 `Release` GitHub workflow from `main` via Changesets: it publishes to npm

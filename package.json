@@ -1,7 +1,7 @@
 {
 	"name": "@fbritoferreira/strapi",
 	"version": "0.15.0",
-	"description": "A generic TypeScript client for interacting with Strapi CMS APIs, supporting content fetching, creation, updates, and deletions.",
+	"description": "TypeScript client for the Strapi 5 REST and GraphQL APIs: typed collections, single types, auth, uploads and custom routes, with types generated from your own schema.",
 	"main": "./dist/strapi.cjs",
 	"module": "./dist/strapi.mjs",
 	"types": "./dist/strapi.d.cts",
