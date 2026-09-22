@@ -6,6 +6,8 @@ import type { StrapiBlock, StrapiDocument, StrapiMedia, StrapiUser } from "@fbri
 /** Component blocks.hero (Hero) */
 export interface BlocksHero {
 	id: number;
+	/** Fields `populate` accepts. Type-level marker; Strapi never returns it. */
+	readonly __populatable?: "image";
 	/** string */
 	title: string;
 	/** string */
@@ -26,6 +28,8 @@ export interface BlocksQuote {
 /** Component shared.seo (Seo) */
 export interface SharedSeo {
 	id: number;
+	/** Fields `populate` accepts. Type-level marker; Strapi never returns it. */
+	readonly __populatable?: "shareImage";
 	/** string */
 	metaTitle: string;
 	/** text */
@@ -37,6 +41,8 @@ export interface SharedSeo {
 /** Collection type api::article.article (Article) */
 export interface Article extends StrapiDocument {
 	locale: string;
+	/** Fields `populate` accepts. Type-level marker; Strapi never returns it. */
+	readonly __populatable?: "cover" | "gallery" | "author" | "tags" | "createdByUser" | "seo" | "blocks";
 	/** string */
 	title: string;
 	/** uid */
@@ -77,6 +83,8 @@ export interface Article extends StrapiDocument {
 
 /** Collection type api::author.author (Author) */
 export interface Author extends StrapiDocument {
+	/** Fields `populate` accepts. Type-level marker; Strapi never returns it. */
+	readonly __populatable?: "avatar" | "articles" | "links";
 	/** string */
 	name: string;
 	/** email */
@@ -92,6 +100,8 @@ export interface Author extends StrapiDocument {
 /** Single type api::homepage.homepage (Homepage) */
 export interface Homepage extends StrapiDocument {
 	locale: string;
+	/** Fields `populate` accepts. Type-level marker; Strapi never returns it. */
+	readonly __populatable?: "hero" | "featuredArticle";
 	/** string */
 	heading: string;
 	/** component blocks.hero */

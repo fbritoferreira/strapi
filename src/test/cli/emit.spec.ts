@@ -28,8 +28,8 @@ describe("emit", () => {
 	it("emits locale as required on localized content types and id on components", () => {
 		const model: Model = {
 			types: [
-				{ name: "SharedSeo", kind: "component", uid: "shared.seo", localized: false, fields: [{ name: "t", tsType: "string", optional: false, doc: "string" }], doc: "Component shared.seo (Seo)" },
-				{ name: "Page", kind: "single", uid: "api::page.page", localized: true, fields: [{ name: "seo", tsType: "SharedSeo | null", optional: true }], doc: "Single type api::page.page (Page)" },
+				{ name: "SharedSeo", kind: "component", uid: "shared.seo", localized: false, fields: [{ name: "t", tsType: "string", optional: false, populatable: false, doc: "string" }], doc: "Component shared.seo (Seo)" },
+				{ name: "Page", kind: "single", uid: "api::page.page", localized: true, fields: [{ name: "seo", tsType: "SharedSeo | null", optional: true, populatable: false }], doc: "Single type api::page.page (Page)" },
 			],
 			collections: [],
 			singles: [{ key: "page", typeName: "Page" }],
@@ -44,9 +44,55 @@ describe("emit", () => {
 		expect(out).not.toContain("StrapiContentTypes");
 	});
 
+	it("lists populatable fields on a marker property", () => {
+		const model: Model = {
+			types: [
+				{
+					name: "Article",
+					kind: "collection",
+					uid: "api::article.article",
+					localized: false,
+					fields: [
+						{ name: "title", tsType: "string", optional: false, populatable: false },
+						{ name: "author", tsType: "Author | null", optional: true, populatable: true },
+						{ name: "tags", tsType: "Tag[]", optional: true, populatable: true },
+					],
+					doc: "Collection type api::article.article (Article)",
+				},
+			],
+			collections: [{ key: "articles", typeName: "Article" }],
+			singles: [],
+			usesMedia: false,
+			usesUser: false,
+			usesBlocks: false,
+		};
+		expect(emit(model, { source: "x", generatedAt })).toContain('\treadonly __populatable?: "author" | "tags";');
+	});
+
+	it("omits the marker when nothing is populatable", () => {
+		const model: Model = {
+			types: [
+				{
+					name: "Tag",
+					kind: "collection",
+					uid: "api::tag.tag",
+					localized: false,
+					fields: [{ name: "label", tsType: "string", optional: false, populatable: false }],
+					doc: "Collection type api::tag.tag (Tag)",
+				},
+			],
+			collections: [{ key: "tags", typeName: "Tag" }],
+			singles: [],
+			usesMedia: false,
+			usesUser: false,
+			usesBlocks: false,
+		};
+		expect(emit(model, { source: "x", generatedAt })).not.toContain("__populatable");
+	});
+
 	it("quotes field names that are not identifiers", () => {
 		const model: Model = {
-			types: [{ name: "T", kind: "collection", uid: "api::t.t", localized: false, fields: [{ name: "kebab-case", tsType: "string", optional: true }], doc: "d" }],
+			types: [{ name: "T", kind: "collection", uid: "api::t.t", localized: false, fields: [{ name: "kebab-case", tsType: "string", optional: true, populatable: false }], doc: "d" }],
 			collections: [{ key: "ts", typeName: "T" }],
 			singles: [],
 			usesMedia: false,

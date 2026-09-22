@@ -8,6 +8,8 @@ export interface Field {
 	name: string;
 	tsType: string;
 	optional: boolean;
+	/** Strapi populates this field on request: a relation, component, media or dynamic zone. */
+	populatable: boolean;
 	doc?: string;
 }
 
@@ -168,8 +170,9 @@ function fields(attributes: Record<string, RawAttribute>, names: Names, usage: U
 	for (const [name, attribute] of Object.entries(attributes)) {
 		if (attribute.private === true) continue;
 		const { tsType, doc } = fieldType(attribute, names, usage);
-		const optional = attribute.required !== true || POPULATED_TYPES.has(attribute.type);
-		out.push({ name, tsType, optional, ...(doc !== undefined && { doc }) });
+		const populatable = POPULATED_TYPES.has(attribute.type);
+		const optional = attribute.required !== true || populatable;
+		out.push({ name, tsType, optional, populatable, ...(doc !== undefined && { doc }) });
 	}
 	return out;
 }

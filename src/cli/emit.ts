@@ -18,6 +18,16 @@ function renderField(field: Field): string[] {
 	return lines;
 }
 
+function renderMarker(type: TypeDecl): string[] {
+	const populatable = type.fields.filter((f) => f.populatable);
+	if (populatable.length === 0) return [];
+	const union = populatable.map((f) => JSON.stringify(f.name)).join(" | ");
+	return [
+		"\t/** Fields `populate` accepts. Type-level marker; Strapi never returns it. */",
+		`\treadonly __populatable?: ${union};`,
+	];
+}
+
 function renderType(type: TypeDecl): string {
 	const lines: string[] = [`/** ${type.doc} */`];
 	if (type.kind === "component") {
@@ -26,6 +36,7 @@ function renderType(type: TypeDecl): string {
 		lines.push(`export interface ${type.name} extends StrapiDocument {`);
 		if (type.localized) lines.push("\tlocale: string;");
 	}
+	lines.push(...renderMarker(type));
 	for (const field of type.fields) lines.push(...renderField(field));
 	lines.push("}");
 	return lines.join("\n");

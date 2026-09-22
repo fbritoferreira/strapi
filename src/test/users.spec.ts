@@ -8,6 +8,7 @@ interface User {
 	id: number;
 	username: string;
 	email: string;
+	role?: { id: number; name: string };
 }
 
 const user = (id: number): User => ({ id, username: `u${id}`, email: `u${id}@x.io` });
