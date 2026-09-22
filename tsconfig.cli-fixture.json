@@ -5,6 +5,6 @@
 		"rootDir": ".",
 		"paths": { "@fbritoferreira/strapi": ["./src/index.ts"] }
 	},
-	"include": ["src/cli/__fixtures__/expected-output.ts", "src/cli/__fixtures__/consumer.ts", "src/index.ts"],
+	"include": ["src/cli/__fixtures__/expected-output.ts", "src/cli/__fixtures__/consumer.ts", "src/cli/__fixtures__/readme-recipes.ts", "src/index.ts"],
 	"exclude": ["node_modules", "dist"]
 }
