@@ -131,6 +131,19 @@ const [err, matching, meta] = await articles.findMany({
 });
 ```
 
+`fields` takes scalar fields; relations, components, media and dynamic zones go
+in `populate`. Generated types carry a `__populatable` marker listing which
+fields are which, so selecting one with the wrong param is a compile error:
+
+```ts
+articles.findMany({ params: { fields: ["cover"] } });    // error: cover is populatable
+articles.findMany({ params: { populate: ["title"] } });  // error: title is scalar
+```
+
+The marker is type-level only — Strapi never returns it, and it is excluded
+from `filters`, `sort` and create/update payloads. Hand-written types without a
+marker keep accepting any key in both params.
+
 `pagination` accepts either page-based (`page`, `pageSize`) or offset-based
 (`start`, `limit`) options; Strapi picks the mode from whichever fields are
 present. `status` is Strapi 5's Draft & Publish filter (`"draft"` or

@@ -29,6 +29,17 @@ describe("pascalCase", () => {
 });
 
 describe("normalize (fixture project)", () => {
+	it("marks relations, media, components and dynamic zones as populatable", async () => {
+		const model = normalize(await loadFromDir(project), { includePlugins: false });
+		expect(field(model, "Article", "author").populatable).toBe(true);
+		expect(field(model, "Article", "tags").populatable).toBe(true);
+		expect(field(model, "Article", "cover").populatable).toBe(true);
+		expect(field(model, "Article", "seo").populatable).toBe(true);
+		expect(field(model, "Article", "blocks").populatable).toBe(true);
+		expect(field(model, "Article", "title").populatable).toBe(false);
+		expect(field(model, "Article", "body").populatable).toBe(false);
+	});
+
 	it("names and orders types: components first, then content types", async () => {
 		const model = normalize(await loadFromDir(project), { includePlugins: false });
 		expect(model.types.map((t) => `${t.kind}:${t.name}`)).toEqual([

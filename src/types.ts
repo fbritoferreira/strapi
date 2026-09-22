@@ -28,9 +28,34 @@ export type StrapiOperator =
 /** A filter on one field: either a literal value (`$eq`) or a map of operators to values. */
 export type FieldFilterValue<V> = V | Partial<Record<StrapiOperator, V | V[]>>;
 
+/**
+ * Property the generator adds to a document type, listing the fields Strapi can
+ * populate. It is a type-level marker: Strapi never returns it.
+ */
+export type PopulatableMarker = "__populatable";
+
+/**
+ * Fields `populate` accepts — relations, components, media and dynamic zones.
+ * Falls back to every key for a hand-written type with no marker.
+ */
+export type PopulatableKey<T> = PopulatableMarker extends keyof T
+	? Extract<T[PopulatableMarker & keyof T], string>
+	: keyof T & string;
+
+/**
+ * Fields `fields` and `sort` accept — everything the generator did not mark as
+ * populatable. Falls back to every key for a hand-written type with no marker.
+ */
+export type ScalarKey<T> = PopulatableMarker extends keyof T
+	? Exclude<keyof T & string, Extract<T[PopulatableMarker & keyof T], string> | PopulatableMarker>
+	: keyof T & string;
+
+/** Document behind a populatable field, with arrays and `| null` unwrapped. */
+type Related<V> = NonNullable<V> extends readonly (infer E)[] ? E : NonNullable<V>;
+
 /** Typed `filters` object for a document of shape `T`. Nested objects filter on relations and components. */
 export type StrapiFilters<T> = {
-	[K in keyof T]?: T[K] extends object
+	[K in Exclude<keyof T, PopulatableMarker>]?: T[K] extends object
 		? StrapiFilters<T[K]> | FieldFilterValue<T[K]>
 		: FieldFilterValue<T[K]>;
 } & {
@@ -40,27 +65,17 @@ export type StrapiFilters<T> = {
 };
 
 /** Value for one key of a {@link Populate} map: `true`, `"*"`, or a nested populate. */
-export type PopulateValue<T> =
-	| true
-	| "*"
-	| { populate: Populate<T> }
-	| Partial<
-			Record<
-				keyof T,
-				T[keyof T] extends object ? PopulateValue<T[keyof T]> : never
-			>
-	  >;
+export type PopulateValue<T> = true | "*" | { populate: Populate<T> };
 
-/** Typed `populate` query parameter: `"*"`, a list of field names, or a per-field map. */
+/** One entry of a `populate` list: a populatable field, or a dotted path starting at one. */
+export type PopulatePath<T> = PopulatableKey<T> | `${PopulatableKey<T> & string}.${string}`;
+
+/** Typed `populate` query parameter: `"*"`, a field, a list of fields, or a per-field map. */
 export type Populate<T> =
 	| "*"
-	| Partial<
-			Record<
-				keyof T,
-				T[keyof T] extends object ? PopulateValue<T[keyof T]> : never
-			>
-	  >
-	| string[];
+	| PopulatePath<T>
+	| PopulatePath<T>[]
+	| { [K in PopulatableKey<T> & keyof T]?: PopulateValue<Related<T[K]>> };
 
 /** Sort direction suffix, as in `title:asc`. */
 export type SortDirection = "asc" | "desc";
@@ -71,13 +86,13 @@ export type SortDirection = "asc" | "desc";
  * field of `T`, so a typo in the first segment is a compile error.
  */
 export type SortField<T> =
-	| (keyof T & string)
-	| `${keyof T & string}:${SortDirection}`
-	| `${keyof T & string}.${string}`;
+	| ScalarKey<T>
+	| `${ScalarKey<T>}:${SortDirection}`
+	| `${PopulatableKey<T> & string}.${string}`;
 
 /** Recursively optional version of `T`. Used for create and update payloads. */
 export type DeepPartial<T> = {
-	[P in keyof T]?: T[P] extends object ? DeepPartial<T[P]> : T[P];
+	[P in Exclude<keyof T, PopulatableMarker>]?: T[P] extends object ? DeepPartial<T[P]> : T[P];
 };
 
 /** Query parameters accepted by Strapi REST read endpoints, typed against the document shape `T`. */
@@ -86,8 +101,8 @@ export interface QueryParams<T = unknown> {
 	filters?: StrapiFilters<T>;
 	/** Populate relations, components and media. See {@link Populate}. */
 	populate?: Populate<T>;
-	/** Restrict the returned attributes to these fields. */
-	fields?: (keyof T)[];
+	/** Restrict the returned attributes to these fields. Populatable fields belong in `populate`. */
+	fields?: ScalarKey<T>[];
 	/** Sort order, e.g. `["publishedAt:desc"]`. */
 	sort?: SortField<T>[];
 	/**
