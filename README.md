@@ -145,7 +145,14 @@ With an httpOnly refresh cookie, the token travels in the cookie and the
 response carries no `refreshToken`.
 
 `strapi.users()` covers `/api/users` — including `me()` — and takes the same
-user type.
+user type. A populated `role` is typed as `StrapiRole`; unpopulated it is the
+role id.
+
+The users-permissions and upload routes are not content-API routes, so their
+params are narrower: `findMany` and `files.find` take `fields`, `populate`,
+`sort`, `pagination` and `filters`; `find`, `me` and `files.findOne` take
+`fields` and `populate`; `count` takes `filters` alone. `status`, `locale` and
+`_q` are not part of those routes and are rejected.
 
 ## Query parameters
 
@@ -221,6 +228,7 @@ Strapi declares for its core routes:
 | `findMany`, `findFirst`, `count` | `ListQueryParams<T>` — the full read surface, including `pagination`, `sort`, `filters` and `_q` |
 | `find` | `FindQueryParams<T>` — no `pagination`, no `_q` |
 | `create`, `update`, `upsert` | `WriteQueryParams<T>` — `fields` and `populate` only; they shape the response, not which documents are written |
+| `delete` | `DeleteQueryParams<T>` — `fields`, `populate`, `filters`; returns the deleted document, or `null` when Strapi sends an empty body |
 | `SingleTypeClient.find` | `FindQueryParams<T>` |
 | `SingleTypeClient.update` | `WriteQueryParams<T>` |
 

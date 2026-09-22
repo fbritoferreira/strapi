@@ -62,15 +62,23 @@ export class SingleTypeClient<T extends object> {
 		});
 	}
 
-	/** `DELETE /api/<uid>`. With `locale`, deletes only that localization. */
-	async delete(options: { locale?: string; init?: FetchInit } = {}): Promise<Result<null>> {
-		const { locale, init } = options;
-		const [err] = await this.http.request<unknown>(`${this.uid}${this.query(undefined, locale)}`, {
-			...init,
-			method: "DELETE",
-		});
+	/**
+	 * `DELETE /api/<uid>`. With `locale`, deletes only that localization.
+	 *
+	 * Takes the `fields` and `populate` its route declares, and answers with the
+	 * deleted document — or `null` when Strapi sends an empty body.
+	 */
+	async delete<const P extends WriteQueryParams<T> = object>(
+		options: { params?: P; locale?: string; init?: FetchInit } = {}
+	): Promise<Result<SelectedDoc<T, P> | null>> {
+		const { params, locale, init } = options;
+		const [err, body] = await this.http.request<StrapiSingleResponse<SelectedDoc<T, P>>>(
+			`${this.uid}${this.query(params, locale)}`,
+			{ ...init, method: "DELETE" }
+		);
 		if (err) return fail(err);
-		return ok(null);
+		const meta: StrapiMeta = body?.meta === undefined ? null : body.meta;
+		return ok(body?.data ?? null, meta);
 	}
 
 	private async single<R>(path: string, init: FetchInit): Promise<Result<R>> {

@@ -4,6 +4,7 @@ import type { HttpClient } from "../http";
 import { buildQuery } from "../query";
 import type {
 	CreatePayload,
+	DeleteQueryParams,
 	FetchInit,
 	FindQueryParams,
 	ListQueryParams,
@@ -217,15 +218,27 @@ export class CollectionClient<T extends object> {
 		return ok(body.data, toMeta(body));
 	}
 
-	/** `DELETE /api/<uid>/<documentId>`. With `locale`, deletes only that localization. */
-	async delete(options: { documentId: string; locale?: string; init?: FetchInit }): Promise<Result<null>> {
-		const { documentId, locale, init } = options;
-		const [err] = await this.http.request<unknown>(
-			`${this.uid}/${encodeURIComponent(documentId)}${this.query(undefined, locale)}`,
+	/**
+	 * `DELETE /api/<uid>/<documentId>`. With `locale`, deletes only that
+	 * localization.
+	 *
+	 * Strapi's delete route declares the deleted document as its response and
+	 * takes `fields`, `populate` and `filters` to shape it — but answers some
+	 * deletions with an empty body, so the document may be `null`.
+	 */
+	async delete<const P extends DeleteQueryParams<T> = object>(options: {
+		documentId: string;
+		params?: P;
+		locale?: string;
+		init?: FetchInit;
+	}): Promise<Result<SelectedDoc<T, P> | null>> {
+		const { documentId, params, locale, init } = options;
+		const [err, body] = await this.http.request<StrapiSingleResponse<SelectedDoc<T, P>>>(
+			`${this.uid}/${encodeURIComponent(documentId)}${this.query(params, locale)}`,
 			{ ...init, method: "DELETE" }
 		);
 		if (err) return fail(err);
-		return ok(null);
+		return ok(body?.data ?? null, toMeta(body));
 	}
 
 	/** Updates the first document matching `filters`, or creates one when none matches. */

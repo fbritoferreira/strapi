@@ -219,6 +219,15 @@ export type FindQueryParams<T> = Pick<QueryParams<T>, "fields" | "filters" | "so
 /** Params a write accepts (`POST`/`PUT`): they shape the returned document, not which documents are touched. */
 export type WriteQueryParams<T> = Pick<QueryParams<T>, "fields" | "populate" | ConditionalParam>;
 
+/**
+ * Params the users-permissions and upload list routes accept. They are not
+ * content-API routes, so they carry no `status`, `locale` or `_q`.
+ */
+export type PluginListQueryParams<T> = Pick<QueryParams<T>, "fields" | "filters" | "sort" | "populate" | "pagination">;
+
+/** Params those plugins' single-document routes accept. */
+export type PluginFindQueryParams<T> = Pick<QueryParams<T>, "fields" | "populate">;
+
 /** Params a delete accepts (`DELETE /api/<uid>/<documentId>`). */
 export type DeleteQueryParams<T> = Pick<QueryParams<T>, "fields" | "filters" | "populate" | ConditionalParam>;
 
@@ -345,6 +354,20 @@ export interface StrapiMedia extends StrapiDocument {
 	previewUrl: string | null;
 	provider: string;
 	provider_metadata: unknown;
+	/** `focalPoint` JSON field, when the instance sets one. */
+	focalPoint?: unknown;
+	/** The entry this file is attached to; shape depends on the content type. */
+	related?: unknown;
+}
+
+/** `plugin::users-permissions.role`, as returned when a user's role is populated. */
+export interface StrapiRole {
+	id: number;
+	name: string;
+	description: string | null;
+	type: string;
+	createdAt: string;
+	updatedAt: string;
 }
 
 /** Body the auth routes answer with once a session exists. */
@@ -390,6 +413,8 @@ export interface StrapiUser extends StrapiDocument {
 	provider: string;
 	confirmed: boolean;
 	blocked: boolean;
+	/** The role id, or the role itself when populated. */
+	role?: number | StrapiRole;
 }
 
 /** Minimal node of a Strapi `blocks` (rich text) field. */

@@ -1,7 +1,7 @@
 import { fail, ok, type Result } from "../errors";
 import type { HttpClient } from "../http";
 import { buildQuery } from "../query";
-import type { FetchInit, QueryParams, StrapiMedia } from "../types";
+import type { FetchInit, PluginFindQueryParams, PluginListQueryParams, StrapiMedia } from "../types";
 import type { ClientContext } from "./collection";
 
 const NOT_FOUND = { status: 404, name: "NotFoundError", message: "Not Found" } as const;
@@ -48,7 +48,7 @@ export class FilesClient {
 	}
 
 	/** `GET /api/upload/files`. Lists uploaded files. */
-	async find(options: { params?: QueryParams<StrapiMedia>; init?: FetchInit } = {}): Promise<Result<StrapiMedia[]>> {
+	async find(options: { params?: PluginListQueryParams<StrapiMedia>; init?: FetchInit } = {}): Promise<Result<StrapiMedia[]>> {
 		const query = buildQuery(options.params, { defaultLocale: this.defaultLocale });
 		const [err, body] = await this.http.request<StrapiMedia[]>(`upload/files${query}`, { ...options.init, method: "GET" });
 		if (err) return fail(err);
@@ -56,8 +56,13 @@ export class FilesClient {
 	}
 
 	/** `GET /api/upload/files/<id>`. */
-	async findOne(options: { id: number; init?: FetchInit }): Promise<Result<StrapiMedia>> {
-		return this.single(`upload/files/${options.id}`, { ...options.init, method: "GET" });
+	async findOne(options: {
+		id: number;
+		params?: PluginFindQueryParams<StrapiMedia>;
+		init?: FetchInit;
+	}): Promise<Result<StrapiMedia>> {
+		const query = buildQuery(options.params, { defaultLocale: this.defaultLocale });
+		return this.single(`upload/files/${options.id}${query}`, { ...options.init, method: "GET" });
 	}
 
 	/** `POST /api/upload` as `multipart/form-data`. Returns one media entry per uploaded file. */
