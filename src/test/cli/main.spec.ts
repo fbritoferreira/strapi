@@ -135,6 +135,25 @@ describe("run", () => {
 		expect(i.err.join("\n")).toMatch(/Out of date/);
 	});
 
+	it("signs in to a restricted documentation page with --password", async () => {
+		const dir = await mkdtemp(join(tmpdir(), "strapi-cli-"));
+		const output = join(dir, "routes.ts");
+		const spec = { openapi: "3.1.0", info: { title: "t", version: "1" }, paths: { "/ping": { get: { responses: {} } } } };
+		const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation((url) =>
+			Promise.resolve(
+				String(url).endsWith("/documentation/login")
+					? new Response(null, { status: 302, headers: { location: "/documentation", "set-cookie": "koa.sess=abc; path=/" } })
+					: new Response(JSON.stringify(spec), { status: 200 })
+			)
+		);
+
+		const i = io();
+		expect(await run(["generate", "--openapi", "https://cms.example.com/documentation", "--password", "secret", "-o", output], i)).toBe(0);
+		expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toEqual({ password: "secret" });
+		expect(new Headers(fetchMock.mock.calls[1]?.[1]?.headers).get("cookie")).toBe("koa.sess=abc");
+		fetchMock.mockRestore();
+	});
+
 	it("requires exactly one of --dir or --url", async () => {
 		expect(await run(["generate"], io())).toBe(2);
 		const both = io();
