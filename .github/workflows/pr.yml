@@ -16,8 +16,9 @@ jobs:
       fail-fast: false
       matrix:
         # Vitest needs ^22.12 || ^24 || >=26, so these are the versions the
-        # suite can run on. Node 20 is covered by the smoke job below.
-        node: [22, 24]
+        # suite can run on: the active LTS lines plus current. Node 20 is
+        # covered by the smoke job below, where Vitest cannot run at all.
+        node: [22, 24, 26]
     steps:
       - name: Checkout code
         uses: actions/checkout@v7

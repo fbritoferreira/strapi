@@ -5,8 +5,8 @@
 Test the Node versions this package claims to support.
 
 CI ran on one version — whatever `.nvmrc` said — while `engines` claimed
-`>=20`, so the range was an unverified claim. The test job now runs on Node 22
-and 24, and a second job builds the package and exercises the build on Node 20,
+`>=20`, so the range was an unverified claim. The test job now runs on Node 22,
+24 and 26, and a second job builds the package and exercises the build on Node 20,
 where Vitest cannot run at all (it needs `^22.12 || ^24 || >=26`).
 
 That smoke check runs offline against `dist`: a read, an HTTP failure becoming
