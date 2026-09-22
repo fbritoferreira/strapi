@@ -59,6 +59,13 @@
  */
 
 export * from "./types";
+export {
+	generateConfig,
+	type GenerateConfig,
+	type TypesGeneration,
+	type RoutesGeneration,
+	type GraphqlGeneration,
+} from "./config";
 export type { ServiceError, Result } from "./errors";
 export { HttpClient, type HttpConfig } from "./http";
 export { Strapi, type StrapiConfig, type RegistryKey, type Uid, type DocOf } from "./strapi";
