@@ -8,6 +8,8 @@ export interface BlocksHero {
 	id: number;
 	/** Fields `populate` accepts. Type-level marker; Strapi never returns it. */
 	readonly __populatable?: "image";
+	/** Fields written by reference rather than inline. Type-level marker. */
+	readonly __relations?: "image";
 	/** string */
 	title: string;
 	/** string */
@@ -30,6 +32,8 @@ export interface SharedSeo {
 	id: number;
 	/** Fields `populate` accepts. Type-level marker; Strapi never returns it. */
 	readonly __populatable?: "shareImage";
+	/** Fields written by reference rather than inline. Type-level marker. */
+	readonly __relations?: "shareImage";
 	/** string */
 	metaTitle: string;
 	/** text */
@@ -43,6 +47,8 @@ export interface Article extends StrapiDocument {
 	locale: string;
 	/** Fields `populate` accepts. Type-level marker; Strapi never returns it. */
 	readonly __populatable?: "cover" | "gallery" | "author" | "tags" | "createdByUser" | "seo" | "blocks";
+	/** Fields written by reference rather than inline. Type-level marker. */
+	readonly __relations?: "cover" | "gallery" | "author" | "tags" | "createdByUser";
 	/** string */
 	title: string;
 	/** uid */
@@ -85,6 +91,8 @@ export interface Article extends StrapiDocument {
 export interface Author extends StrapiDocument {
 	/** Fields `populate` accepts. Type-level marker; Strapi never returns it. */
 	readonly __populatable?: "avatar" | "articles" | "links";
+	/** Fields written by reference rather than inline. Type-level marker. */
+	readonly __relations?: "avatar" | "articles";
 	/** string */
 	name: string;
 	/** email */
@@ -102,6 +110,8 @@ export interface Homepage extends StrapiDocument {
 	locale: string;
 	/** Fields `populate` accepts. Type-level marker; Strapi never returns it. */
 	readonly __populatable?: "hero" | "featuredArticle";
+	/** Fields written by reference rather than inline. Type-level marker. */
+	readonly __relations?: "featuredArticle";
 	/** string */
 	heading: string;
 	/** component blocks.hero */

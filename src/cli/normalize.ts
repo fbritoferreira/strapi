@@ -10,6 +10,8 @@ export interface Field {
 	optional: boolean;
 	/** Strapi populates this field on request: a relation, component, media or dynamic zone. */
 	populatable: boolean;
+	/** Strapi writes this field by reference: a relation or a media field. */
+	relation: boolean;
 	doc?: string;
 }
 
@@ -34,6 +36,8 @@ export interface Model {
 const STRING_TYPES = new Set(["string", "text", "richtext", "email", "password", "uid", "date", "time", "datetime", "timestamp"]);
 const NUMBER_TYPES = new Set(["integer", "float", "decimal"]);
 const POPULATED_TYPES = new Set(["relation", "media", "component", "dynamiczone"]);
+/** Written as a reference (documentId or id), not inline like a component. */
+const REFERENCE_TYPES = new Set(["relation", "media"]);
 
 export function pascalCase(input: string): string {
 	const words = input.split(/[^A-Za-z0-9]+|(?<=[a-z0-9])(?=[A-Z])/).filter((w) => w.length > 0);
@@ -163,8 +167,9 @@ function fields(attributes: Record<string, RawAttribute>, names: Names, usage: U
 		if (attribute.private === true) continue;
 		const { tsType, doc } = fieldType(attribute, names, usage);
 		const populatable = POPULATED_TYPES.has(attribute.type);
+		const relation = REFERENCE_TYPES.has(attribute.type);
 		const optional = attribute.required !== true || populatable;
-		out.push({ name, tsType, optional, populatable, ...(doc !== undefined && { doc }) });
+		out.push({ name, tsType, optional, populatable, relation, ...(doc !== undefined && { doc }) });
 	}
 	return out;
 }

@@ -138,6 +138,84 @@ export type SortField<T> =
 	| `${ScalarKey<T>}:${SortDirection}`
 	| `${PopulatableKey<T> & string}.${string}`;
 
+/**
+ * Property the generator adds listing the fields Strapi writes by reference —
+ * relations and media. A subset of {@link PopulatableMarker}: components and
+ * dynamic zones are embedded, so they are written inline.
+ */
+export type RelationMarker = "__relations";
+
+/** Fields written by reference, when the generator marked them. */
+export type RelationKey<T> = RelationMarker extends keyof T
+	? Extract<T[RelationMarker & keyof T], string>
+	: never;
+
+/** Where a connected relation goes in an ordered to-many field. */
+export interface RelationPosition {
+	before?: string | number;
+	after?: string | number;
+	start?: true;
+	end?: true;
+}
+
+/** A related document addressed by its `documentId`, optionally per locale or status. */
+export interface RelationDocumentRef {
+	documentId: string | number;
+	locale?: string;
+	status?: "draft" | "published";
+	position?: RelationPosition;
+}
+
+/** A related row addressed by its numeric `id`. */
+export interface RelationEntityRef {
+	id: string | number;
+	position?: RelationPosition;
+}
+
+/** One relation reference: a `documentId` shorthand, or either longhand form. */
+export type RelationRef = string | number | RelationDocumentRef | RelationEntityRef;
+
+/** `connect`, `disconnect` and `set`, the longhand for changing a relation. */
+export interface RelationCommands<V> {
+	connect?: V;
+	disconnect?: V;
+	set?: V;
+}
+
+/**
+ * Value a relation field accepts on write. To-many fields take a list, to-one
+ * fields take a single reference or `null`; both take the command object.
+ */
+export type RelationInput<V> = NonNullable<V> extends readonly unknown[]
+	? readonly RelationRef[] | RelationCommands<readonly RelationRef[] | RelationRef>
+	: RelationRef | null | RelationCommands<readonly RelationRef[] | RelationRef>;
+
+/**
+ * Value a non-relation field accepts on write: components and dynamic zones
+ * inline and recursively optional, arrays element-wise, scalars as they are.
+ */
+type WriteValue<V> = NonNullable<V> extends readonly (infer E)[]
+	? readonly DeepPartial<E>[] | Extract<V, null>
+	: NonNullable<V> extends object
+		? DeepPartial<NonNullable<V>> | Extract<V, null>
+		: V;
+
+/**
+ * Body of a create or update, typed the way Strapi accepts it: relations and
+ * media by reference, components and dynamic zones inline, and the markers
+ * themselves left out.
+ *
+ * Without the generator's `__relations` marker this is {@link DeepPartial},
+ * the previous behaviour.
+ */
+export type WriteData<T> = RelationMarker extends keyof T
+	? {
+			[K in Exclude<keyof T, PopulatableMarker | RelationMarker>]?: K extends RelationKey<T>
+				? RelationInput<T[K]>
+				: WriteValue<T[K]>;
+		}
+	: DeepPartial<T>;
+
 /** Recursively optional version of `T`. Used for create and update payloads. */
 export type DeepPartial<T> = {
 	[P in Exclude<keyof T, PopulatableMarker>]?: T[P] extends object ? DeepPartial<T[P]> : T[P];
@@ -245,12 +323,12 @@ export interface StrapiSingleResponse<T> {
 
 /** Request body for creating a document. Strapi expects attributes wrapped in `data`. */
 export interface CreatePayload<T> {
-	data: DeepPartial<T>;
+	data: WriteData<T>;
 }
 
 /** Request body for updating a document. Strapi expects attributes wrapped in `data`. */
 export interface UpdatePayload<T> {
-	data: DeepPartial<T>;
+	data: WriteData<T>;
 }
 
 /** Pagination block Strapi returns in `meta`, page-based or offset-based depending on the request. */

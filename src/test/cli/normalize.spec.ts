@@ -29,6 +29,17 @@ describe("pascalCase", () => {
 });
 
 describe("normalize (fixture project)", () => {
+	it("marks relations and media as written by reference", async () => {
+		const model = normalize(await loadFromDir(project), { includePlugins: false });
+		expect(field(model, "Article", "author").relation).toBe(true);
+		expect(field(model, "Article", "tags").relation).toBe(true);
+		expect(field(model, "Article", "cover").relation).toBe(true);
+		expect(field(model, "Article", "gallery").relation).toBe(true);
+		expect(field(model, "Article", "seo").relation).toBe(false);
+		expect(field(model, "Article", "blocks").relation).toBe(false);
+		expect(field(model, "Article", "title").relation).toBe(false);
+	});
+
 	it("marks relations, media, components and dynamic zones as populatable", async () => {
 		const model = normalize(await loadFromDir(project), { includePlugins: false });
 		expect(field(model, "Article", "author").populatable).toBe(true);

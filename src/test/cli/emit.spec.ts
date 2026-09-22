@@ -28,8 +28,8 @@ describe("emit", () => {
 	it("emits locale as required on localized content types and id on components", () => {
 		const model: Model = {
 			types: [
-				{ name: "SharedSeo", kind: "component", uid: "shared.seo", localized: false, fields: [{ name: "t", tsType: "string", optional: false, populatable: false, doc: "string" }], doc: "Component shared.seo (Seo)" },
-				{ name: "Page", kind: "single", uid: "api::page.page", localized: true, fields: [{ name: "seo", tsType: "SharedSeo | null", optional: true, populatable: false }], doc: "Single type api::page.page (Page)" },
+				{ name: "SharedSeo", kind: "component", uid: "shared.seo", localized: false, fields: [{ name: "t", tsType: "string", optional: false, populatable: false, relation: false, doc: "string" }], doc: "Component shared.seo (Seo)" },
+				{ name: "Page", kind: "single", uid: "api::page.page", localized: true, fields: [{ name: "seo", tsType: "SharedSeo | null", optional: true, populatable: false, relation: false }], doc: "Single type api::page.page (Page)" },
 			],
 			collections: [],
 			singles: [{ key: "page", typeName: "Page" }],
@@ -53,9 +53,9 @@ describe("emit", () => {
 					uid: "api::article.article",
 					localized: false,
 					fields: [
-						{ name: "title", tsType: "string", optional: false, populatable: false },
-						{ name: "author", tsType: "Author | null", optional: true, populatable: true },
-						{ name: "tags", tsType: "Tag[]", optional: true, populatable: true },
+						{ name: "title", tsType: "string", optional: false, populatable: false, relation: false },
+						{ name: "author", tsType: "Author | null", optional: true, populatable: true, relation: true },
+						{ name: "tags", tsType: "Tag[]", optional: true, populatable: true, relation: true },
 					],
 					doc: "Collection type api::article.article (Article)",
 				},
@@ -69,6 +69,53 @@ describe("emit", () => {
 		expect(emit(model, { source: "x", generatedAt })).toContain('\treadonly __populatable?: "author" | "tags";');
 	});
 
+	it("lists relation and media fields on a second marker", () => {
+		const model: Model = {
+			types: [
+				{
+					name: "Article",
+					kind: "collection",
+					uid: "api::article.article",
+					localized: false,
+					fields: [
+						{ name: "author", tsType: "Author | null", optional: true, populatable: true, relation: true },
+						{ name: "seo", tsType: "SharedSeo | null", optional: true, populatable: true, relation: false },
+					],
+					doc: "Collection type api::article.article (Article)",
+				},
+			],
+			collections: [{ key: "articles", typeName: "Article" }],
+			singles: [],
+			usesMedia: false,
+			usesUser: false,
+			usesBlocks: false,
+		};
+		const out = emit(model, { source: "x", generatedAt });
+		expect(out).toContain('\treadonly __populatable?: "author" | "seo";');
+		expect(out).toContain('\treadonly __relations?: "author";');
+	});
+
+	it("omits the relations marker when a type has only components", () => {
+		const model: Model = {
+			types: [
+				{
+					name: "Page",
+					kind: "single",
+					uid: "api::page.page",
+					localized: false,
+					fields: [{ name: "seo", tsType: "SharedSeo | null", optional: true, populatable: true, relation: false }],
+					doc: "Single type api::page.page (Page)",
+				},
+			],
+			collections: [],
+			singles: [{ key: "page", typeName: "Page" }],
+			usesMedia: false,
+			usesUser: false,
+			usesBlocks: false,
+		};
+		expect(emit(model, { source: "x", generatedAt })).not.toContain("__relations");
+	});
+
 	it("omits the marker when nothing is populatable", () => {
 		const model: Model = {
 			types: [
@@ -77,7 +124,7 @@ describe("emit", () => {
 					kind: "collection",
 					uid: "api::tag.tag",
 					localized: false,
-					fields: [{ name: "label", tsType: "string", optional: false, populatable: false }],
+					fields: [{ name: "label", tsType: "string", optional: false, populatable: false, relation: false }],
 					doc: "Collection type api::tag.tag (Tag)",
 				},
 			],
@@ -92,7 +139,7 @@ describe("emit", () => {
 
 	it("quotes field names that are not identifiers", () => {
 		const model: Model = {
-			types: [{ name: "T", kind: "collection", uid: "api::t.t", localized: false, fields: [{ name: "kebab-case", tsType: "string", optional: true, populatable: false }], doc: "d" }],
+			types: [{ name: "T", kind: "collection", uid: "api::t.t", localized: false, fields: [{ name: "kebab-case", tsType: "string", optional: true, populatable: false, relation: false }], doc: "d" }],
 			collections: [{ key: "ts", typeName: "T" }],
 			singles: [],
 			usesMedia: false,

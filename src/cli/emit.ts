@@ -18,14 +18,25 @@ function renderField(field: Field): string[] {
 	return lines;
 }
 
+function union(fields: Field[]): string {
+	return fields.map((f) => JSON.stringify(f.name)).join(" | ");
+}
+
 function renderMarker(type: TypeDecl): string[] {
 	const populatable = type.fields.filter((f) => f.populatable);
 	if (populatable.length === 0) return [];
-	const union = populatable.map((f) => JSON.stringify(f.name)).join(" | ");
-	return [
+	const lines = [
 		"\t/** Fields `populate` accepts. Type-level marker; Strapi never returns it. */",
-		`\treadonly __populatable?: ${union};`,
+		`\treadonly __populatable?: ${union(populatable)};`,
 	];
+	const relations = populatable.filter((f) => f.relation);
+	if (relations.length > 0) {
+		lines.push(
+			"\t/** Fields written by reference rather than inline. Type-level marker. */",
+			`\treadonly __relations?: ${union(relations)};`
+		);
+	}
+	return lines;
 }
 
 function renderType(type: TypeDecl): string {
