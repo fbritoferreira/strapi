@@ -125,6 +125,20 @@ describe("loadOpenapi behind restricted access", () => {
 		).rejects.toThrow(/login failed \(500\)/);
 	});
 
+	it("points a 500 at the session middleware the plugin needs", async () => {
+		const fetchImpl = vi.fn().mockResolvedValue(new Response("boom", { status: 500, statusText: "Internal Server Error" }));
+		await expect(
+			loadOpenapi({ source: "https://cms.example.com/documentation", password: "secret", fetch: fetchImpl })
+		).rejects.toThrow(/strapi::session/);
+	});
+
+	it("leaves a 4xx login without that hint", async () => {
+		const fetchImpl = vi.fn().mockResolvedValue(new Response("nope", { status: 403, statusText: "Forbidden" }));
+		await expect(
+			loadOpenapi({ source: "https://cms.example.com/documentation", password: "secret", fetch: fetchImpl })
+		).rejects.toThrow(/login failed \(403\): Forbidden$/);
+	});
+
 	it("falls back to a bare status when the login has no status text", async () => {
 		const fetchImpl = vi.fn().mockResolvedValue(new Response("boom", { status: 503, statusText: "" }));
 		await expect(

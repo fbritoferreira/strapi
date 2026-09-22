@@ -49,7 +49,17 @@ async function login(source: string, password: string, fetchImpl: typeof fetch):
 
 	// A redirect is the success path here, so only 4xx/5xx are failures.
 	if (response.status >= 400) {
-		throw new Error(`POST ${loginUrl} login failed (${response.status}): ${response.statusText || "unknown error"}`);
+		// The plugin stores "logged in" on a koa session. Without the session
+		// middleware there is nothing to write to, and only the branch a correct
+		// password takes reaches that line — so it answers 500 while a wrong
+		// password still redirects cleanly.
+		const hint =
+			response.status >= 500
+				? '; if restrictedAccess is on, the instance needs "strapi::session" in config/middlewares.ts and APP_KEYS set'
+				: "";
+		throw new Error(
+			`POST ${loginUrl} login failed (${response.status}): ${response.statusText || "unknown error"}${hint}`
+		);
 	}
 
 	const cookies = response.headers.getSetCookie();
