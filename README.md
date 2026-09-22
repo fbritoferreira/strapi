@@ -32,7 +32,7 @@ interfaces and the content-type registry from your Strapi schema.
 [Installation](#installation) · [Quick start](#quick-start) ·
 [Clients](#clients) · [Authentication](#authentication) ·
 [Query parameters](#query-parameters) · [Writing](#writing) ·
-[Fetching every page](#fetching-every-page) ·
+[Fetching every page](#fetching-every-page) · [Streaming pages](#streaming-pages) ·
 [i18n](#i18n) · [Errors](#errors) · [Retries](#retries) · [Next.js and custom fetch](#nextjs-and-custom-fetch) ·
 [Typed registry](#typed-registry) · [Generating types](#generating-types) ·
 [One config for every source](#one-config-for-every-source) ·
@@ -356,6 +356,27 @@ Set it on the constructor:
 const strapi = new Strapi({ baseURL: "http://localhost:1337", defaultLocale: "en", concurrency: 10 });
 ```
 
+## Streaming pages
+
+`all: true` concatenates every page in memory, which is fine for hundreds of
+documents and wrong for hundreds of thousands. `pages()` hands each page over
+as it arrives, and only asks for the next when you do:
+
+```ts
+for await (const [err, batch] of articles.pages({ params: { pagination: { pageSize: 100 } } })) {
+	if (err) throw new Error(err.message);
+	await writeRows(batch);
+}
+```
+
+Each iteration yields the same `[error, data, meta]` tuple as everything else,
+and `params` narrows each page exactly as `findMany` does. Breaking out of the
+loop stops the requests. An error ends the walk — there is no cursor to
+continue from — as does an empty page, so a stale `total` cannot spin forever.
+
+Both pagination modes work: pass `page`/`pageSize` or `start`/`limit` and the
+walk continues in the mode you asked for, whichever the server answers in.
+
 ## i18n
 
 `defaultLocale` is required on both `Strapi` and `StrapiClient`; there is no
@@ -402,6 +423,23 @@ export interface ServiceError {
 	cause?: unknown;
 }
 ```
+
+A validation error carries the field-level problems in `details`. Strapi shapes
+that differently per error — a rejected query param reports `{ source, param }`,
+for instance — so `details` stays `unknown` and `validationIssues` reads the
+validation case safely:
+
+```ts
+import { validationIssues } from "@fbritoferreira/strapi";
+
+const [err] = await articles.create({ payload: { data: {} } });
+for (const issue of validationIssues(err)) {
+	form.setError(issue.path.join("."), issue.message); // ["seo", "metaTitle"] → "seo.metaTitle"
+}
+```
+
+It returns `[]` for any error without them, so there is nothing to guard first.
+`isValidationDetails` is exported too, for narrowing `details` directly.
 
 `name` is Strapi's own error name (`"ValidationError"`, `"NotFoundError"`,
 etc.) when Strapi returned one, or one of `"HTTPError"`, `"TimeoutError"`,

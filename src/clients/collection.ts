@@ -40,6 +40,9 @@ interface ReadOptions<T, P = ListQueryParams<T>> {
 
 const NOT_FOUND = { status: 404, name: "NotFoundError", message: "Not Found" } as const;
 
+/** The `pagination` half of a query, in either of Strapi's two modes. */
+type Pagination = NonNullable<QueryParams<unknown>["pagination"]>;
+
 /**
  * CRUD client for one collection type at `/api/<uid>`. Every method returns a
  * {@link Result} tuple; nothing throws for HTTP or network errors.
@@ -108,6 +111,48 @@ export class CollectionClient<T extends object> {
 	): Promise<Result<SelectedDoc<T, P>[]>> {
 		const { params, locale, all = false, init } = options;
 		return this.list<SelectedDoc<T, P>>(params, locale, init, all);
+	}
+
+	/**
+	 * Walks the collection one page at a time, fetching the next only when the
+	 * consumer asks for it.
+	 *
+	 * Unlike `findMany({ all: true })`, which concatenates everything in memory,
+	 * this hands each page over as it arrives — so a large export stays bounded,
+	 * and stopping early stops the requests.
+	 *
+	 * Each iteration yields the same `[error, data, meta]` tuple as the other
+	 * methods; an error ends the walk, since there is no page to continue from.
+	 *
+	 * @example
+	 * ```ts
+	 * for await (const [err, batch] of articles.pages({ params: { pagination: { pageSize: 100 } } })) {
+	 *   if (err) throw new Error(err.message);
+	 *   await writeRows(batch);
+	 * }
+	 * ```
+	 */
+	async *pages<const P extends ListQueryParams<T> = object>(
+		options: ReadOptions<T, P> = {}
+	): AsyncGenerator<Result<SelectedDoc<T, P>[]>, void, undefined> {
+		const { params, locale, init } = options;
+		const requested: Pagination = params?.pagination ?? {};
+		const offsetMode = requested.start !== undefined || requested.limit !== undefined;
+		let pagination: Pagination = requested;
+
+		for (;;) {
+			const result: Result<SelectedDoc<T, P>[]> = await this.list<SelectedDoc<T, P>>(
+				{ ...params, pagination },
+				locale,
+				init,
+				false
+			);
+			yield result;
+
+			const next = nextPagination(requested, offsetMode, result);
+			if (next === null) return;
+			pagination = next;
+		}
 	}
 
 	/** `GET /api/<uid>/<documentId>`. Fails with `NotFoundError` when the document is missing. */
@@ -275,6 +320,31 @@ export class CollectionClient<T extends object> {
 		if (!body?.data) return fail(NOT_FOUND);
 		return ok(body.data, toMeta(body));
 	}
+}
+
+/**
+ * Where the next page starts, or `null` when there is none.
+ *
+ * An error leaves no cursor to continue from, and an empty page would
+ * otherwise loop forever against a stale count. The server decides the shape:
+ * it may answer an offset request with page-shaped meta, so the caller's
+ * original mode is what picks the params to send next.
+ */
+function nextPagination(requested: Pagination, offsetMode: boolean, result: Result<unknown[]>): Pagination | null {
+	const [err, data, meta] = result;
+	if (err || data.length === 0) return null;
+
+	const reported = meta?.pagination;
+	if (reported === undefined) return null;
+
+	if ("start" in reported) {
+		const next = reported.start + reported.limit;
+		return next >= reported.total ? null : { ...requested, start: next, limit: reported.limit };
+	}
+	if (reported.page >= reported.pageCount) return null;
+	return offsetMode
+		? { ...requested, start: reported.page * reported.pageSize, limit: reported.pageSize }
+		: { ...requested, page: reported.page + 1, pageSize: reported.pageSize };
 }
 
 function toMeta(body: { meta?: StrapiResponse<unknown>["meta"] } | null | undefined): StrapiMeta {
