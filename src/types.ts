@@ -1,3 +1,4 @@
+/** Filter operators accepted by the Strapi REST API `filters` query parameter. */
 export type StrapiOperator =
 	| "$eq"
 	| "$eqi"
@@ -24,8 +25,10 @@ export type StrapiOperator =
 	| "$and"
 	| "$not";
 
+/** A filter on one field: either a literal value (`$eq`) or a map of operators to values. */
 export type FieldFilterValue<V> = V | Partial<Record<StrapiOperator, V | V[]>>;
 
+/** Typed `filters` object for a document of shape `T`. Nested objects filter on relations and components. */
 export type StrapiFilters<T> = {
 	[K in keyof T]?: T[K] extends object
 		? StrapiFilters<T[K]> | FieldFilterValue<T[K]>
@@ -36,6 +39,7 @@ export type StrapiFilters<T> = {
 	$not?: StrapiFilters<T>;
 };
 
+/** Value for one key of a {@link Populate} map: `true`, `"*"`, or a nested populate. */
 export type PopulateValue<T> =
 	| true
 	| "*"
@@ -47,6 +51,7 @@ export type PopulateValue<T> =
 			>
 	  >;
 
+/** Typed `populate` query parameter: `"*"`, a list of field names, or a per-field map. */
 export type Populate<T> =
 	| "*"
 	| Partial<
@@ -57,21 +62,29 @@ export type Populate<T> =
 	  >
 	| string[];
 
+/** Sort direction suffix, as in `title:asc`. */
 export type SortDirection = "asc" | "desc";
 
+/** One entry of the `sort` query parameter: a field name, optionally suffixed with `:asc` or `:desc`. */
 export type SortField<T> =
 	| (keyof T & string)
 	| `${keyof T & string}:${SortDirection}`
 	| `${string}:${SortDirection}`;
 
+/** Recursively optional version of `T`. Used for create and update payloads. */
 export type DeepPartial<T> = {
 	[P in keyof T]?: T[P] extends object ? DeepPartial<T[P]> : T[P];
 };
 
+/** Query parameters accepted by Strapi REST read endpoints, typed against the document shape `T`. */
 export interface QueryParams<T = unknown> {
+	/** Filter documents. See {@link StrapiFilters}. */
 	filters?: StrapiFilters<T>;
+	/** Populate relations, components and media. See {@link Populate}. */
 	populate?: Populate<T>;
+	/** Restrict the returned attributes to these fields. */
 	fields?: (keyof T)[];
+	/** Sort order, e.g. `["publishedAt:desc"]`. */
 	sort?: SortField<T>[];
 	/**
 	 * Page-based (`page` + `pageSize`) or offset-based (`start` + `limit`)
@@ -87,6 +100,7 @@ export interface QueryParams<T = unknown> {
 		start?: number;
 		limit?: number;
 	};
+	/** i18n locale. Omitted from the query string when it equals the configured `defaultLocale`. */
 	locale?: string;
 	/** Strapi 5 Draft & Publish status. Defaults to `published` server-side. */
 	status?: "draft" | "published";
@@ -99,28 +113,34 @@ export interface QueryParams<T = unknown> {
 	publicationState?: "live" | "preview" | "draft";
 }
 
+/** Response body of a collection-type list endpoint. */
 export interface StrapiResponse<T> {
 	data: T[];
 	meta?: { pagination?: StrapiPagination };
 }
 
+/** Response body of a single-document endpoint (find one, create, update, single types). */
 export interface StrapiSingleResponse<T> {
 	data: T;
 	meta?: { pagination?: StrapiPagination };
 }
 
+/** Request body for creating a document. Strapi expects attributes wrapped in `data`. */
 export interface CreatePayload<T> {
 	data: DeepPartial<T>;
 }
 
+/** Request body for updating a document. Strapi expects attributes wrapped in `data`. */
 export interface UpdatePayload<T> {
 	data: DeepPartial<T>;
 }
 
+/** Pagination block Strapi returns in `meta`, page-based or offset-based depending on the request. */
 export type StrapiPagination =
 	| { page: number; pageSize: number; pageCount: number; total: number }
 	| { start: number; limit: number; total: number };
 
+/** Third element of a {@link Result} tuple: Strapi's `meta` object, or `null` when the endpoint returns none. */
 export type StrapiMeta = { pagination?: StrapiPagination } | null;
 
 /** Shape Strapi 5 returns for any non-2xx response. */
@@ -144,6 +164,7 @@ export interface StrapiDocument {
 	locale?: string;
 }
 
+/** One generated size of an uploaded image (`thumbnail`, `small`, `medium`, `large`). */
 export interface StrapiMediaFormat {
 	name: string;
 	hash: string;

@@ -13,26 +13,40 @@ import type {
 	UpdatePayload,
 } from "../types";
 
+/** Shared state a {@link Strapi} instance passes to each sub-client. */
 export interface ClientContext {
+	/** Shared HTTP layer. */
 	http: HttpClient;
+	/** Locale omitted from query strings. */
 	defaultLocale: string;
+	/** Max parallel page requests when fetching with `all: true`. */
 	concurrency: number;
 }
 
+/** Options common to read methods. */
 interface ReadOptions<T> {
+	/** Query parameters (filters, populate, sort, pagination, status…). */
 	params?: QueryParams<T>;
+	/** Locale override for this call. */
 	locale?: string;
+	/** Extra `fetch` options merged into the request. */
 	init?: FetchInit;
 }
 
 const NOT_FOUND = { status: 404, name: "NotFoundError", message: "Not Found" } as const;
 
+/**
+ * CRUD client for one collection type at `/api/<uid>`. Every method returns a
+ * {@link Result} tuple; nothing throws for HTTP or network errors.
+ */
 export class CollectionClient<T extends object> {
 	protected readonly http: HttpClient;
 	protected readonly defaultLocale: string;
 	protected readonly concurrency: number;
+	/** Plural API id, e.g. `articles`. */
 	readonly uid: string;
 
+	/** Usually obtained via {@link Strapi.collection} rather than constructed directly. */
 	constructor(context: ClientContext, uid: string) {
 		this.http = context.http;
 		this.defaultLocale = context.defaultLocale;
@@ -40,10 +54,17 @@ export class CollectionClient<T extends object> {
 		this.uid = uid;
 	}
 
+	/** Serialises `params` (and `locale`) into a query string, or `""` when empty. */
 	protected query(params: QueryParams<T> | undefined, locale: string | undefined): string {
 		return buildQuery(params, { defaultLocale: this.defaultLocale, ...(locale !== undefined && { locale }) });
 	}
 
+	/**
+	 * `GET /api/<uid>`. Lists documents.
+	 *
+	 * With `all: true`, follows pagination and fetches every page (up to
+	 * `concurrency` in parallel), returning the concatenated data.
+	 */
 	async findMany(options: ReadOptions<T> & { all?: boolean } = {}): Promise<Result<T[]>> {
 		const { params, locale, all = false, init } = options;
 		if (all) {
@@ -65,6 +86,7 @@ export class CollectionClient<T extends object> {
 		return ok(body?.data ?? [], toMeta(body));
 	}
 
+	/** `GET /api/<uid>/<documentId>`. Fails with `NotFoundError` when the document is missing. */
 	async find(options: ReadOptions<T> & { documentId: string }): Promise<Result<T>> {
 		const { documentId, params, locale, init } = options;
 		const [err, body] = await this.http.request<StrapiSingleResponse<T>>(
@@ -76,6 +98,7 @@ export class CollectionClient<T extends object> {
 		return ok(body.data, toMeta(body));
 	}
 
+	/** First document matching `params`, or `null`. Forces a page size of 1. */
 	async findFirst(options: ReadOptions<T> = {}): Promise<Result<T | null>> {
 		const { params, locale, init } = options;
 		const pagination = params?.pagination;
@@ -92,6 +115,7 @@ export class CollectionClient<T extends object> {
 		return ok(data[0] ?? null, meta);
 	}
 
+	/** Total number of documents matching `params`, read from `meta.pagination.total`. */
 	async count(options: ReadOptions<T> = {}): Promise<Result<number>> {
 		const { params, locale, init } = options;
 		const [err, data, meta] = await this.findMany({
@@ -103,6 +127,14 @@ export class CollectionClient<T extends object> {
 		return ok(meta?.pagination?.total ?? data.length, meta);
 	}
 
+	/**
+	 * `POST /api/<uid>`. Creates a document.
+	 *
+	 * For a non-default `locale`, Strapi requires the localization to be added
+	 * to an existing default-locale document. This method looks that document up
+	 * via `filters` (creating it when nothing matches) and then `PUT`s the
+	 * localized payload against its `documentId`.
+	 */
 	async create(options: {
 		payload: CreatePayload<T>;
 		params?: Omit<QueryParams<T>, "filters">;
@@ -146,6 +178,7 @@ export class CollectionClient<T extends object> {
 		return this.update({ documentId, payload, ...(params && { params }), locale, ...(init && { init }) });
 	}
 
+	/** `PUT /api/<uid>/<documentId>`. Updates (or adds a localization to) a document. */
 	async update(options: {
 		documentId: string;
 		payload: UpdatePayload<T>;
@@ -163,6 +196,7 @@ export class CollectionClient<T extends object> {
 		return ok(body.data, toMeta(body));
 	}
 
+	/** `DELETE /api/<uid>/<documentId>`. With `locale`, deletes only that localization. */
 	async delete(options: { documentId: string; locale?: string; init?: FetchInit }): Promise<Result<null>> {
 		const { documentId, locale, init } = options;
 		const [err] = await this.http.request<unknown>(
@@ -173,6 +207,7 @@ export class CollectionClient<T extends object> {
 		return ok(null);
 	}
 
+	/** Updates the first document matching `filters`, or creates one when none matches. */
 	async upsert(options: {
 		payload: CreatePayload<T>;
 		filters?: StrapiFilters<T>;
@@ -195,6 +230,7 @@ export class CollectionClient<T extends object> {
 		return this.create({ payload, ...(params && { params }), ...(filters && { filters }), ...(locale !== undefined && { locale }), ...(init && { init }) });
 	}
 
+	/** `POST` helper that unwraps `data` and maps an empty body to `NotFoundError`. */
 	protected async post<R extends object = T>(path: string, payload: CreatePayload<T> | { data: unknown }, init?: FetchInit): Promise<Result<R>> {
 		const [err, body] = await this.http.request<StrapiSingleResponse<R>>(path, {
 			...init,

@@ -42,6 +42,18 @@ jobs:
       - name: Build
         run: pnpm build
 
+      - name: Check jsr.json version matches package.json
+        run: |
+          pkg_version=$(jq -r .version package.json)
+          jsr_version=$(jq -r .version jsr.json)
+          if [[ "$pkg_version" != "$jsr_version" ]]; then
+            echo "jsr.json version ($jsr_version) does not match package.json version ($pkg_version)"
+            exit 1
+          fi
+
+      - name: JSR publish dry run
+        run: pnpm jsr publish --dry-run
+
       - name: Report coverage to PR
         if: always()
         uses: davelosert/vitest-coverage-report-action@v2

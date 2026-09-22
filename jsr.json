@@ -1,0 +1,22 @@
+{
+	"$schema": "https://jsr.io/schema/config-file.v1.json",
+	"name": "@fbritoferreira/strapi",
+	"version": "0.7.0",
+	"license": "MIT",
+	"exports": "./src/index.ts",
+	"publish": {
+		"include": [
+			"src/**/*.ts",
+			"README.md",
+			"LICENCE.md",
+			"CHANGELOG.md",
+			"package.json",
+			"jsr.json"
+		],
+		"exclude": [
+			"src/test",
+			"src/cli",
+			"**/*.test.ts"
+		]
+	}
+}

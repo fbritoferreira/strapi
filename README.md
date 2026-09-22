@@ -3,6 +3,8 @@
 [![npm version](https://badge.fury.io/js/%40fbritoferreira%2Fstrapi.svg)](https://badge.fury.io/js/%40fbritoferreira%2Fstrapi)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![npm downloads](https://img.shields.io/npm/dm/@fbritoferreira/strapi.svg)](https://www.npmjs.com/package/@fbritoferreira/strapi)
+[![JSR](https://jsr.io/badges/@fbritoferreira/strapi)](https://jsr.io/@fbritoferreira/strapi)
+[![JSR Score](https://jsr.io/badges/@fbritoferreira/strapi/score)](https://jsr.io/@fbritoferreira/strapi/score)
 
 A TypeScript client for the Strapi 5 REST API. A root `Strapi` class wraps
 collection types, single types, the users-permissions plugin (`/api/users`)
@@ -27,6 +29,30 @@ yarn add @fbritoferreira/strapi
 
 Requires Node.js >= 20. Ships ESM and CommonJS builds with bundled type
 declarations.
+
+### From JSR
+
+The same package is published to [JSR](https://jsr.io/@fbritoferreira/strapi)
+as TypeScript source, for Deno, Bun and npm-compatible projects:
+
+```sh
+deno add jsr:@fbritoferreira/strapi
+```
+
+```sh
+npx jsr add @fbritoferreira/strapi
+```
+
+```sh
+pnpm dlx jsr add @fbritoferreira/strapi
+```
+
+```sh
+bunx jsr add @fbritoferreira/strapi
+```
+
+The JSR package exports the client library only. The `strapi-client` CLI
+(see Generating types) is available from npm.
 
 ## Quick start
 
@@ -308,9 +334,13 @@ The `--url` source calls `POST /admin/login` and the Content-Type Builder routes
 4. Build: `pnpm build` (outputs ESM, CJS and bundled `.d.ts` to `dist/`; also builds the `generate` CLI to `dist/cli.mjs`, used by `bin/strapi-client.mjs`)
 5. Add a changeset for user-facing changes: `pnpm changeset`
 6. After changing `src/cli/emit.ts`, refresh the fixture snapshot: `UPDATE_SNAPSHOT=1 pnpm vitest run src/test/cli/emit.spec.ts`
+7. Check the JSR publish (slow types, included files): `pnpm jsr:check`
 
 Uses Vite for building and Vitest for testing. Releases are cut by the
-`Release` GitHub workflow from `main` via Changesets.
+`Release` GitHub workflow from `main` via Changesets: it publishes to npm
+(Trusted Publishing), creates the GitHub release, then publishes the same
+version to JSR from source (`jsr.json`, OIDC provenance). The workflow keeps
+`jsr.json`'s version in sync with `package.json`; do not bump it by hand.
 
 ## License
 

@@ -6,11 +6,17 @@ import type { ClientContext } from "./collection";
 
 const NOT_FOUND = { status: 404, name: "NotFoundError", message: "Not Found" } as const;
 
+/**
+ * Client for one single type at `/api/<uid>`. Single types hold exactly one
+ * document per locale, so there is no list or `documentId`.
+ */
 export class SingleTypeClient<T extends object> {
 	private readonly http: HttpClient;
 	private readonly defaultLocale: string;
+	/** Singular API id, e.g. `homepage`. */
 	readonly uid: string;
 
+	/** Usually obtained via {@link Strapi.single} rather than constructed directly. */
 	constructor(context: ClientContext, uid: string) {
 		this.http = context.http;
 		this.defaultLocale = context.defaultLocale;
@@ -21,11 +27,13 @@ export class SingleTypeClient<T extends object> {
 		return buildQuery(params, { defaultLocale: this.defaultLocale, ...(locale !== undefined && { locale }) });
 	}
 
+	/** `GET /api/<uid>`. Fails with `NotFoundError` when the single type has no document yet. */
 	async find(options: { params?: QueryParams<T>; locale?: string; init?: FetchInit } = {}): Promise<Result<T>> {
 		const { params, locale, init } = options;
 		return this.single(`${this.uid}${this.query(params, locale)}`, { ...init, method: "GET" });
 	}
 
+	/** `PUT /api/<uid>`. Creates the document on first call, updates it afterwards. */
 	async update(options: {
 		payload: UpdatePayload<T>;
 		params?: QueryParams<T>;
@@ -40,6 +48,7 @@ export class SingleTypeClient<T extends object> {
 		});
 	}
 
+	/** `DELETE /api/<uid>`. With `locale`, deletes only that localization. */
 	async delete(options: { locale?: string; init?: FetchInit } = {}): Promise<Result<null>> {
 		const { locale, init } = options;
 		const [err] = await this.http.request<unknown>(`${this.uid}${this.query(undefined, locale)}`, {

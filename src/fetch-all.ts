@@ -4,18 +4,28 @@ import { mapWithConcurrency } from "./pool";
 import { buildQuery } from "./query";
 import type { FetchInit, QueryParams, StrapiPagination, StrapiResponse } from "./types";
 
+/** Options for {@link fetchAll}. */
 export interface FetchAllOptions<T> {
 	http: HttpClient;
+	/** Path relative to the API root, e.g. `articles`. */
 	path: string;
 	params?: QueryParams<T>;
 	locale?: string;
 	defaultLocale: string;
+	/** Max pages requested in parallel after the first. */
 	concurrency: number;
 	init?: FetchInit;
 }
 
 const DEFAULT_LIMIT = 25;
 
+/**
+ * Fetches every page of a list endpoint and concatenates `data`.
+ *
+ * The first page is requested alone to learn the total; the remaining pages
+ * are then fetched with up to `concurrency` requests in flight. Works with
+ * both page-based and offset-based pagination.
+ */
 export async function fetchAll<T>(options: FetchAllOptions<T>): Promise<Result<T[]>> {
 	const { http, path, params = {}, locale, defaultLocale, concurrency, init = {} } = options;
 	const pagination = params.pagination ?? {};

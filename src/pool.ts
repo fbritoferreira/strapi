@@ -1,3 +1,4 @@
+/** `Promise.all(items.map(fn))` with at most `limit` calls in flight. Results keep input order. */
 export async function mapWithConcurrency<I, O>(
 	items: readonly I[],
 	limit: number,
