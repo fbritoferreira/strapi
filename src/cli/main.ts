@@ -1,5 +1,5 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { dirname, resolve } from "node:path";
+import { dirname, relative, resolve, sep } from "node:path";
 import { parseArgs } from "node:util";
 
 import { emit } from "./emit";
@@ -20,7 +20,6 @@ export interface Io {
 	stdout: (line: string) => void;
 	stderr: (line: string) => void;
 	env: Record<string, string | undefined>;
-	now: () => Date;
 	/** Directory a relative `--config` path and the default config filenames resolve against. */
 	cwd: string;
 }
@@ -115,6 +114,27 @@ function parse(args: string[]): Parsed {
 	};
 }
 
+/**
+ * A local path as the header records it: relative to the output file's
+ * directory, with forward slashes, so the header is the same on every machine
+ * and from any working directory.
+ */
+function headerPath(path: string, target: string): string {
+	return relative(dirname(target), path).split(sep).join("/") || "./";
+}
+
+const HTTP_URL = /^https?:\/\//i;
+
+/** An OpenAPI source, resolved against `cwd` when it is a file rather than a URL. */
+function resolveSpec(spec: string, cwd: string): string {
+	return HTTP_URL.test(spec) ? spec : resolve(cwd, spec);
+}
+
+/** An OpenAPI source as the header records it. */
+function specLabel(spec: string, target: string): string {
+	return HTTP_URL.test(spec) ? spec : headerPath(spec, target);
+}
+
 function stripHeader(text: string): string {
 	const newline = text.indexOf("\n");
 	return newline === -1 ? "" : text.slice(newline + 1);
@@ -162,7 +182,7 @@ function typesTask(section: TypesGeneration, check: boolean, io: Io): Task {
 			let source: string;
 			if (section.dir !== undefined) {
 				const root = resolve(io.cwd, section.dir);
-				source = `dir ${root}`;
+				source = `dir ${headerPath(root, target)}`;
 				set = await loadFromDir(root);
 			} else {
 				const url = section.url;
@@ -175,7 +195,7 @@ function typesTask(section: TypesGeneration, check: boolean, io: Io): Task {
 				set = await loadFromUrl({ baseURL: url, email, password });
 			}
 			const model = normalize(set, { includePlugins: section.includePlugins === true });
-			const output = emit(model, { source, generatedAt: io.now() });
+			const output = emit(model, { source });
 			const status = await write(output, target, check, io);
 			return status === null ? { line: `Wrote ${target} (${model.types.length} types)` } : { status };
 		},
@@ -189,13 +209,14 @@ function routesTask(section: RoutesGeneration, check: boolean, io: Io): Task {
 			const target = resolve(io.cwd, section.output ?? DEFAULT_OUTPUT.openapi);
 			const token = section.token ?? io.env["STRAPI_TOKEN"];
 			const password = section.password ?? io.env["STRAPI_DOCS_PASSWORD"];
+			const spec = resolveSpec(section.openapi, io.cwd);
 			const document = await loadOpenapi({
-				source: section.openapi,
+				source: spec,
 				...(token !== undefined && token !== "" && { token }),
 				...(password !== undefined && password !== "" && { password }),
 			});
 			const model = routesModel(document);
-			const output = emitRoutes(model, { source: `openapi ${section.openapi}`, generatedAt: io.now() });
+			const output = emitRoutes(model, { source: `openapi ${specLabel(spec, target)}` });
 			const status = await write(output, target, check, io);
 			return status === null ? { line: `Wrote ${target} (${model.routes.length} routes)` } : { status };
 		},
@@ -213,7 +234,7 @@ function graphqlTask(section: GraphqlGeneration, check: boolean, io: Io): Task {
 				...(token !== undefined && token !== "" && { token }),
 			});
 			const model = graphqlModel(schema);
-			const output = emitGraphql(model, { source: `graphql ${section.url}`, generatedAt: io.now() });
+			const output = emitGraphql(model, { source: `graphql ${section.url}` });
 			const status = await write(output, target, check, io);
 			return status === null ? { line: `Wrote ${target} (${model.types.length} types)` } : { status };
 		},
@@ -303,9 +324,9 @@ export async function run(argv: string[], io: Io): Promise<number> {
 	}
 
 	const sources: Source[] = [
-		...(parsed.dir !== undefined ? [{ kind: "dir", root: resolve(parsed.dir) } as const] : []),
+		...(parsed.dir !== undefined ? [{ kind: "dir", root: resolve(io.cwd, parsed.dir) } as const] : []),
 		...(parsed.url !== undefined ? [{ kind: "url", url: parsed.url } as const] : []),
-		...(parsed.openapi !== undefined ? [{ kind: "openapi", spec: parsed.openapi } as const] : []),
+		...(parsed.openapi !== undefined ? [{ kind: "openapi", spec: resolveSpec(parsed.openapi, io.cwd) } as const] : []),
 		...(parsed.graphql !== undefined ? [{ kind: "graphql", url: parsed.graphql } as const] : []),
 	];
 	const parsedSource = sources.length === 1 ? sources[0] : undefined;
@@ -314,7 +335,7 @@ export async function run(argv: string[], io: Io): Promise<number> {
 		io.stderr(USAGE);
 		return 2;
 	}
-	const target = resolve(parsed.output ?? DEFAULT_OUTPUT[parsedSource.kind]);
+	const target = resolve(io.cwd, parsed.output ?? DEFAULT_OUTPUT[parsedSource.kind]);
 
 	const token = parsed.token ?? io.env["STRAPI_TOKEN"];
 
@@ -325,7 +346,7 @@ export async function run(argv: string[], io: Io): Promise<number> {
 				...(token !== undefined && token !== "" && { token }),
 			});
 			const model = graphqlModel(schema);
-			const output = emitGraphql(model, { source: `graphql ${parsedSource.url}`, generatedAt: io.now() });
+			const output = emitGraphql(model, { source: `graphql ${parsedSource.url}` });
 			const status = await write(output, target, parsed.check, io);
 			if (status !== null) return status;
 			io.stdout(`Wrote ${target} (${model.types.length} types)`);
@@ -340,7 +361,7 @@ export async function run(argv: string[], io: Io): Promise<number> {
 				...(docsPassword !== undefined && docsPassword !== "" && { password: docsPassword }),
 			});
 			const model = routesModel(document);
-			const output = emitRoutes(model, { source: `openapi ${parsedSource.spec}`, generatedAt: io.now() });
+			const output = emitRoutes(model, { source: `openapi ${specLabel(parsedSource.spec, target)}` });
 			const status = await write(output, target, parsed.check, io);
 			if (status !== null) return status;
 			io.stdout(`Wrote ${target} (${model.routes.length} routes)`);
@@ -350,7 +371,7 @@ export async function run(argv: string[], io: Io): Promise<number> {
 		let set: SchemaSet;
 		let source: string;
 		if (parsedSource.kind === "dir") {
-			source = `dir ${parsedSource.root}`;
+			source = `dir ${headerPath(parsedSource.root, target)}`;
 			set = await loadFromDir(parsedSource.root);
 		} else {
 			const email = parsed.email ?? io.env["STRAPI_ADMIN_EMAIL"];
@@ -364,7 +385,7 @@ export async function run(argv: string[], io: Io): Promise<number> {
 		}
 
 		const model = normalize(set, { includePlugins: parsed.includePlugins });
-		const output = emit(model, { source, generatedAt: io.now() });
+		const output = emit(model, { source });
 		const status = await write(output, target, parsed.check, io);
 		if (status !== null) return status;
 		io.stdout(`Wrote ${target} (${model.types.length} types)`);
