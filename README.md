@@ -226,6 +226,45 @@ The marker is type-level only — Strapi never returns it, and it is excluded
 from `filters`, `sort` and create/update payloads. Hand-written types without a
 marker keep accepting any key in both params.
 
+### Populating with options
+
+In the object form of `populate`, each field takes `true`, `"*"`, or the same
+options a top-level read takes, typed against the document behind it:
+`fields`, `populate`, `filters`, `sort` and `count`. A dynamic zone takes `on`
+instead, keyed by component name:
+
+```ts
+articles.findMany({
+	params: {
+		populate: {
+			author: { fields: ["name"], populate: { avatar: { fields: ["url"] } } },
+			categories: { filters: { slug: { $ne: "hidden" } }, sort: ["name:asc"] },
+			comments: { count: true }, // answers { count: number } instead of the documents
+			blocks: { on: { "blocks.hero": { populate: ["image"] }, "blocks.quote": true } },
+		},
+	},
+});
+```
+
+### Filtering on relations
+
+A relation or component filters on the related document's fields, with the
+same operators and `$and`/`$or`/`$not` at every depth, `id` and `documentId`
+included:
+
+```ts
+articles.findMany({
+	params: {
+		filters: {
+			author: { documentId: { $eq: "abc" } },
+			createdBy: { id: { $in: [1, 2] } }, // a relation to plugin::users-permissions.user
+			categories: { parent: { slug: { $eq: "news" } } },
+			$or: [{ views: { $null: true } }, { author: { name: { $startsWith: "A" } } }],
+		},
+	},
+});
+```
+
 ### The result follows the selection
 
 Params passed inline also narrow what comes back, so the returned type is what
@@ -246,6 +285,12 @@ Two rules behind that: Strapi selects `[id, documentId, ...fields]` when
 `fields` is given, and returns a populatable field only when `populate` asks
 for it — where it then stops being optional. `populate: "*"` populates every
 first-level relation, component, media and dynamic zone.
+
+The same rules apply inside a populate map entry with options, at every depth:
+`populate: { author: { fields: ["name"] } }` gives `author: { id; documentId;
+name } | null`, and a to-many relation is narrowed element by element.
+`count: true` makes the field `{ count: number }`. `true`, `"*"` and dynamic
+zones leave the related document whole.
 
 Narrowing needs a generated type (the `__populatable` marker) and params
 literal enough to read. Params held in a variable, or a hand-written type, give
