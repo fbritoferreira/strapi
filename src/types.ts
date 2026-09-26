@@ -25,8 +25,14 @@ export type StrapiOperator =
 	| "$and"
 	| "$not";
 
+/** Operators that test for presence and take a boolean rather than a value of the field. */
+type PresenceOperator = "$null" | "$notNull";
+
 /** A filter on one field: either a literal value (`$eq`) or a map of operators to values. */
-export type FieldFilterValue<V> = V | Partial<Record<StrapiOperator, V | V[]>>;
+export type FieldFilterValue<V> =
+	| V
+	| (Partial<Record<Exclude<StrapiOperator, PresenceOperator>, V | V[]>> &
+			Partial<Record<PresenceOperator, boolean>>);
 
 /**
  * Property the generator adds to a document type, listing the fields Strapi can
@@ -78,6 +84,27 @@ type PopulatedKeys<T, P> = P extends "*"
 				? Extract<keyof P, keyof T>
 				: never;
 
+/**
+ * One populated field as a populate map entry `O` shapes it. Options narrow the
+ * related document the way {@link SelectedDoc} narrows the top level, element by
+ * element for a to-many field; `count: true` answers `{ count }` instead. `true`,
+ * `"*"` and a dynamic zone leave the related document whole.
+ */
+type PopulatedField<V, O> = O extends { count: true }
+	? { count: number }
+	: [ComponentName<Related<V>>] extends [never]
+		? O extends true | "*"
+			? Exclude<V, undefined>
+			: NonNullable<V> extends readonly (infer E)[]
+				? SelectedDoc<E, O>[]
+				: SelectedDoc<NonNullable<V>, O> | Extract<V, null>
+		: Exclude<V, undefined>;
+
+/** The populated fields a literal `populate` value asks for, no longer optional. */
+type PopulatedPart<T, P> = P extends string | readonly unknown[]
+	? Required<Pick<T, PopulatedKeys<T, P>>>
+	: { [K in PopulatedKeys<T, P>]: PopulatedField<T[K], P[K & keyof P]> };
+
 /** True when a param is present but not a literal, so nothing can be narrowed from it. */
 type Loose<P> =
 	| ("fields" extends keyof P ? (undefined extends P["fields"] ? true : false) : false)
@@ -88,7 +115,9 @@ type Loose<P> =
  *
  * With a literal `fields`, only those attributes come back, plus `id` and
  * `documentId`, which Strapi always selects. Populatable fields appear only
- * when `populate` asks for them, and are no longer optional when it does.
+ * when `populate` asks for them, and are no longer optional when it does. A
+ * populate map entry with options narrows the related document by the same
+ * rule, at every depth; `count: true` answers `{ count }` for that field.
  *
  * Narrowing needs two things: a type carrying the generator's `__populatable`
  * marker, and params literal enough to read — pass them inline. Anything else
@@ -98,22 +127,68 @@ export type SelectedDoc<T, P> = PopulatableMarker extends keyof T
 	? true extends Loose<P>
 		? T
 		: ("fields" extends keyof P ? PickFields<T, P["fields"]> : ScalarPart<T>) &
-				("populate" extends keyof P ? Required<Pick<T, PopulatedKeys<T, P["populate"]>>> : unknown)
+				("populate" extends keyof P ? PopulatedPart<T, P["populate"]> : unknown)
 	: T;
 
-/** Typed `filters` object for a document of shape `T`. Nested objects filter on relations and components. */
+/**
+ * Filter on one field. A relation, media, component or other object field
+ * takes the related document's own filters, to-many fields element-wise; any
+ * field takes a literal or an operator map.
+ */
+type FilterEntry<V> = Related<V> extends object ? StrapiFilters<Related<V>> | FieldFilterValue<V> : FieldFilterValue<V>;
+
+/**
+ * Typed `filters` object for a document of shape `T`. Relations and components
+ * filter on the related document's fields, with the same operators and
+ * `$and`/`$or`/`$not` at every depth.
+ */
 export type StrapiFilters<T> = {
-	[K in Exclude<keyof T, PopulatableMarker>]?: T[K] extends object
-		? StrapiFilters<T[K]> | FieldFilterValue<T[K]>
-		: FieldFilterValue<T[K]>;
+	[K in Exclude<keyof T, PopulatableMarker | RelationMarker>]?: FilterEntry<T[K]>;
 } & {
 	$and?: StrapiFilters<T>[];
 	$or?: StrapiFilters<T>[];
 	$not?: StrapiFilters<T>;
 };
 
-/** Value for one key of a {@link Populate} map: `true`, `"*"`, or a nested populate. */
-export type PopulateValue<T> = true | "*" | { populate: Populate<T> };
+/**
+ * Options for one populated relation, component or media field, typed against
+ * the document behind it.
+ */
+export interface PopulateOptions<T> {
+	/** Attributes to return from the related document. */
+	fields?: ScalarKey<T>[];
+	/** Relations of the related document to populate in turn. */
+	populate?: Populate<T>;
+	/** Which related documents to return. */
+	filters?: StrapiFilters<T>;
+	/** Order of the related documents. */
+	sort?: SortField<T>[];
+	/** Answer `{ count }` instead of the related documents. */
+	count?: boolean;
+}
+
+/** Component name of a dynamic zone entry. */
+type ComponentName<T> = T extends { __component: infer C extends string } ? C : never;
+
+/**
+ * Options for a dynamic zone: `on` populates each component its own way, keyed
+ * by component name. Strapi accepts nothing but `"*"` as a zone's `populate`.
+ */
+export interface DynamicZonePopulate<T> {
+	on?: { [C in ComponentName<T>]?: true | PopulateOptions<Extract<T, { __component: C }>> };
+	populate?: "*";
+	count?: boolean;
+}
+
+/**
+ * Value for one key of a {@link Populate} map: `true`, `"*"`, or the options
+ * for the document behind it — {@link DynamicZonePopulate} for a dynamic zone,
+ * {@link PopulateOptions} otherwise.
+ */
+export type PopulateValue<T> =
+	| true
+	| "*"
+	| ([ComponentName<T>] extends [never] ? PopulateOptions<T> : DynamicZonePopulate<T>);
 
 /** One entry of a `populate` list: a populatable field, or a dotted path starting at one. */
 export type PopulatePath<T> = PopulatableKey<T> | `${PopulatableKey<T> & string}.${string}`;

@@ -78,6 +78,27 @@ export async function reads() {
 	return [list?.[0]?.title, page?.heading] as const;
 }
 
+export async function nested() {
+	const [, list] = await articles.findMany({
+		params: {
+			fields: ["title"],
+			populate: {
+				author: { fields: ["name"], populate: { articles: { fields: ["slug"], sort: ["slug:asc"] } } },
+				tags: { count: true },
+				blocks: { on: { "blocks.hero": { populate: { image: { fields: ["url"] } } }, "blocks.quote": true } },
+			},
+			filters: {
+				createdByUser: { id: { $eq: 1 } },
+				author: { documentId: { $in: ["a", "b"] }, articles: { slug: { $startsWith: "intro" } } },
+				$or: [{ tags: { label: { $eqi: "news" } } }, { seo: { metaTitle: { $null: true } } }],
+			},
+		},
+	});
+	const author: { name: string; articles: { slug: string }[] } | null | undefined = list?.[0]?.author;
+	const tags: { count: number } | undefined = list?.[0]?.tags;
+	return [author, tags] as const;
+}
+
 export async function rejected() {
 	// @ts-expect-error `cover` is populatable, so it is not a `fields` entry
 	await articles.findMany({ params: { fields: ["cover"] } });
