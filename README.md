@@ -1186,3 +1186,4 @@ version to JSR from source (`jsr.json`, OIDC provenance). The workflow keeps
 ## License
 
 Distributed under the MIT License. See `LICENCE.md` for more information.
+Contributions are accepted under `CLA.md`.
