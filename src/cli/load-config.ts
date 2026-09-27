@@ -1,4 +1,4 @@
-import { access } from "node:fs/promises";
+import { access, readFile } from "node:fs/promises";
 import { isAbsolute, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
@@ -18,6 +18,17 @@ export interface LoadConfigOptions {
 	cwd: string;
 	path?: string;
 	importModule?: (url: string) => Promise<unknown>;
+	/**
+	 * Imports a fresh copy rather than the one Node cached, for re-reading a
+	 * config that changed. Modules the config itself imports stay cached.
+	 */
+	version?: number;
+}
+
+/** A loaded config and the file it came from. */
+export interface LoadedConfig {
+	file: string;
+	config: GenerateConfig;
 }
 
 async function exists(file: string): Promise<boolean> {
@@ -65,21 +76,32 @@ function assertConfig(value: unknown, file: string): asserts value is GenerateCo
 	if (typeof graphql === "object" && graphql !== null && (graphql as Record<string, unknown>)["url"] === undefined) {
 		throw new Error(`${file}: graphql needs url`);
 	}
+	const watch = config["watch"];
+	if (watch !== undefined) {
+		if (typeof watch !== "object" || watch === null) {
+			throw new Error(`${file}: watch must be an object`);
+		}
+		const interval = (watch as Record<string, unknown>)["interval"];
+		if (interval !== undefined && (typeof interval !== "number" || !Number.isFinite(interval) || interval <= 0)) {
+			throw new Error(`${file}: watch.interval must be a positive number of milliseconds`);
+		}
+	}
 }
 
-/**
- * Loads a generate config.
- *
- * A `.ts` config is imported directly, which Node does from 22.6 onwards; an
- * older runtime says so rather than failing on an unknown file extension.
- */
-export async function loadConfig(options: LoadConfigOptions): Promise<GenerateConfig> {
-	const file = await findConfig(options);
+async function importConfig(file: string, options: LoadConfigOptions): Promise<unknown> {
+	if (file.endsWith(".json")) {
+		const text = await readFile(file, "utf8");
+		try {
+			// Typed boundary: parsed JSON of unknown shape, narrowed by assertConfig.
+			return { default: JSON.parse(text) as unknown };
+		} catch (error) {
+			throw new Error(`${file} is not valid JSON: ${(error as Error).message}`, { cause: error });
+		}
+	}
 	const importModule = options.importModule ?? ((url: string) => import(url) as Promise<unknown>);
-
-	let module: unknown;
+	const url = pathToFileURL(file).href + (options.version === undefined ? "" : `?v=${options.version}`);
 	try {
-		module = await importModule(pathToFileURL(file).href);
+		return await importModule(url);
 	} catch (error) {
 		if ((error as { code?: string }).code === "ERR_UNKNOWN_FILE_EXTENSION") {
 			throw new Error(
@@ -89,9 +111,25 @@ export async function loadConfig(options: LoadConfigOptions): Promise<GenerateCo
 		}
 		throw error;
 	}
+}
 
-	const exported = module as { default?: unknown; config?: unknown };
+/**
+ * Loads a generate config.
+ *
+ * A `.ts` config is imported directly, which Node does from 22.6 onwards; an
+ * older runtime says so rather than failing on an unknown file extension. A
+ * `.json` config is read and parsed, since Node imports JSON only with an
+ * import attribute.
+ */
+export async function loadConfig(options: LoadConfigOptions): Promise<GenerateConfig> {
+	return (await loadConfigFile(options)).config;
+}
+
+/** {@link loadConfig}, also returning which file it read. */
+export async function loadConfigFile(options: LoadConfigOptions): Promise<LoadedConfig> {
+	const file = await findConfig(options);
+	const exported = (await importConfig(file, options)) as { default?: unknown; config?: unknown };
 	const config = exported.default ?? exported.config;
 	assertConfig(config, file);
-	return config;
+	return { file, config };
 }

@@ -1,10 +1,11 @@
-import { cp, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { cp, mkdtemp, readFile, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it, vi } from "vitest";
 
 import { run, type Io } from "../../cli/main";
+import type { WatchFn } from "../../cli/watch";
 
 const project = fileURLToPath(new URL("../../cli/__fixtures__/project", import.meta.url));
 
@@ -18,6 +19,7 @@ function io(env: Record<string, string | undefined> = {}): Io & { out: string[];
 		stderr: (l) => err.push(l),
 		env,
 		cwd: process.cwd(),
+		signal: new AbortController().signal,
 	};
 }
 
@@ -520,5 +522,209 @@ describe("run", () => {
 		expect(await run(["generate", "--dir", project, "-o", output, "--include-plugins"], io())).toBe(0);
 		// the fixture project has no plugin schemas on disk, so the count is unchanged; the flag must still be accepted
 		expect(await readFile(output, "utf8")).toContain("export interface Tag extends StrapiDocument");
+	});
+});
+
+interface Trigger {
+	path: string;
+	recursive: boolean;
+	change: (filename: string | null) => void;
+}
+
+/** An Io for `--watch`: a stop button, and a watcher the test fires by hand. */
+function watchIo(cwd: string, env: Record<string, string | undefined> = {}) {
+	const base = io(env);
+	const controller = new AbortController();
+	const triggers: Trigger[] = [];
+	const watchFn: WatchFn = (path, options, change) => {
+		triggers.push({ path, recursive: options.recursive, change });
+		return { close: () => undefined };
+	};
+	return { ...base, cwd, signal: controller.signal, watch: watchFn, triggers, stop: () => controller.abort() };
+}
+
+const settle = { timeout: 5000, interval: 10 };
+
+function graphqlSchema(...names: string[]) {
+	return { queryType: { name: "Query" }, types: [{ kind: "ENUM", name: "Status", enumValues: names.map((name) => ({ name })) }] };
+}
+
+describe("run --watch", () => {
+	it("refuses --watch with --check", async () => {
+		for (const args of [["--config", "--watch", "--check"], ["--dir", project, "--watch", "--check"]]) {
+			const i = io();
+			expect(await run(["generate", ...args], i)).toBe(2);
+			expect(i.err[0]).toBe("Error: --watch cannot be combined with --check");
+		}
+	});
+
+	it("refuses --interval without --watch, or with a value that is not a positive whole number", async () => {
+		const cases: [string[], string][] = [
+			[["--interval", "500"], "Error: --interval needs --watch"],
+			[["--watch", "--interval", "fast"], "Error: --interval takes a positive number of milliseconds"],
+			[["--watch", "--interval", "0"], "Error: --interval takes a positive number of milliseconds"],
+		];
+		for (const [flags, message] of cases) {
+			const i = io();
+			expect(await run(["generate", "--dir", project, ...flags], i)).toBe(2);
+			expect(i.err[0]).toBe(message);
+		}
+	});
+
+	it("documents --watch and --interval", async () => {
+		const i = io();
+		await run(["generate", "--help"], i);
+		expect(i.out.join("\n")).toMatch(/--watch/);
+		expect(i.out.join("\n")).toMatch(/--interval <ms>/);
+	});
+
+	it("exits 1 when there is no config to watch", async () => {
+		const dir = await mkdtemp(join(tmpdir(), "strapi-cli-"));
+		const i = watchIo(dir);
+		expect(await run(["generate", "--config", "--watch"], i)).toBe(1);
+		expect(i.err.join("\n")).toMatch(/No config file found/);
+	});
+
+	it("still needs --url credentials up front", async () => {
+		const i = watchIo(process.cwd());
+		expect(await run(["generate", "--url", "http://localhost:1337", "--watch"], i)).toBe(2);
+		expect(i.err[0]).toMatch(/--url needs admin credentials/);
+	});
+
+	it("regenerates from --dir when a schema file changes, and leaves the file alone when nothing did", async () => {
+		const dir = await mkdtemp(join(tmpdir(), "strapi-cli-"));
+		const cms = join(dir, "cms");
+		await cp(project, cms, { recursive: true });
+		const controller = new AbortController();
+		const i = { ...io(), cwd: dir, signal: controller.signal };
+		const done = run(["generate", "--dir", "cms", "-o", "src/strapi-types.ts", "--watch"], i);
+		await vi.waitFor(() => expect(i.out.some((line) => /^types: wrote src\/strapi-types\.ts \(\d+ types\)$/.test(line))).toBe(true), settle);
+		expect(i.out[0]).toBe("types: watching cms/src");
+		await new Promise((resolve) => setTimeout(resolve, 300));
+
+		const schemaFile = join(cms, "src", "api", "article", "content-types", "article", "schema.json");
+		const schema = JSON.parse(await readFile(schemaFile, "utf8")) as { attributes: Record<string, unknown> };
+		schema.attributes["subtitle"] = { type: "string" };
+		await writeFile(schemaFile, JSON.stringify(schema), "utf8");
+		await vi.waitFor(() => expect(i.out.some((line) => line.startsWith("types: regenerated src/strapi-types.ts"))).toBe(true), settle);
+		const output = join(dir, "src", "strapi-types.ts");
+		expect(await readFile(output, "utf8")).toContain("subtitle?: string;");
+
+		const before = (await stat(output)).mtimeMs;
+		const unchanged = i.out.filter((line) => line === "types: unchanged").length;
+		await writeFile(schemaFile, JSON.stringify(schema), "utf8");
+		await vi.waitFor(() => expect(i.out.filter((line) => line === "types: unchanged").length).toBeGreaterThan(unchanged), settle);
+		expect((await stat(output)).mtimeMs).toBe(before);
+
+		controller.abort();
+		expect(await done).toBe(0);
+		expect(i.out.at(-1)).toBe("Stopped watching");
+	}, 20_000);
+
+	it("polls a config's GraphQL endpoint, waits out an outage, and reloads the config", async () => {
+		const dir = await mkdtemp(join(tmpdir(), "strapi-cli-"));
+		const configFile = join(dir, "strapi-codegen.config.json");
+		await writeFile(configFile, JSON.stringify({ graphql: { url: "http://localhost:1337/graphql", output: "src/graphql.ts" } }), "utf8");
+		let answer: Response | Error = new Response(JSON.stringify({ data: { __schema: graphqlSchema("DRAFT") } }));
+		const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
+			if (answer instanceof Error) throw answer;
+			return answer.clone();
+		});
+
+		const i = watchIo(dir);
+		const done = run(["generate", "--config", "--watch", "--interval", "20"], i);
+		await vi.waitFor(() => expect(i.out).toContain("graphql: wrote src/graphql.ts (1 types)"), settle);
+		expect(i.out).toContain("graphql: polling http://localhost:1337/graphql every 20ms");
+		expect(i.out).toContain("config: watching strapi-codegen.config.json");
+		expect(fetchMock.mock.calls[0]?.[1]?.signal).toBeInstanceOf(AbortSignal);
+
+		answer = new TypeError("fetch failed", { cause: Object.assign(new Error("connect ECONNREFUSED"), { code: "ECONNREFUSED" }) });
+		await vi.waitFor(() => expect(i.err).toEqual(["graphql: waiting for http://localhost:1337/graphql (connection refused)"]), settle);
+		await new Promise((resolve) => setTimeout(resolve, 100));
+		expect(i.err).toHaveLength(1);
+
+		answer = new Response(JSON.stringify({ data: { __schema: graphqlSchema("DRAFT", "PUBLISHED") } }));
+		await vi.waitFor(() => expect(i.out).toContain("graphql: regenerated src/graphql.ts (1 types)"), settle);
+		expect(await readFile(join(dir, "src", "graphql.ts"), "utf8")).toContain('"PUBLISHED"');
+
+		await writeFile(configFile, JSON.stringify({ graphql: { url: "http://localhost:1337/graphql", output: "src/schema.ts" }, watch: { interval: 30 } }), "utf8");
+		i.triggers.find((t) => t.path === dir)?.change("strapi-codegen.config.json");
+		await vi.waitFor(() => expect(i.out).toContain("graphql: wrote src/schema.ts (1 types)"), settle);
+		expect(i.out).toContain("config: reloaded strapi-codegen.config.json");
+		expect(i.out).toContain("graphql: polling http://localhost:1337/graphql every 20ms");
+
+		i.stop();
+		expect(await done).toBe(0);
+		fetchMock.mockRestore();
+	});
+
+	it("takes the poll interval from the config, watches a project's src and a local OpenAPI file", async () => {
+		const dir = await mkdtemp(join(tmpdir(), "strapi-cli-"));
+		const spec = { openapi: "3.1.0", info: { title: "t", version: "1" }, paths: { "/ping": { get: { responses: {} } } } };
+		await writeFile(join(dir, "spec.json"), JSON.stringify(spec), "utf8");
+		await writeFile(
+			join(dir, "strapi-codegen.config.json"),
+			JSON.stringify({
+				types: { dir: project, output: "types.ts" },
+				routes: { openapi: "spec.json", output: "routes.ts" },
+				graphql: { url: "http://localhost:1337/graphql", output: "graphql.ts" },
+				watch: { interval: 50 },
+			}),
+			"utf8"
+		);
+		const fetchMock = vi
+			.spyOn(globalThis, "fetch")
+			.mockImplementation(async () => new Response(JSON.stringify({ data: { __schema: graphqlSchema("DRAFT") } })));
+
+		const i = watchIo(dir);
+		const done = run(["generate", "--config", "--watch"], i);
+		await vi.waitFor(() => expect(i.out).toContain("graphql: wrote graphql.ts (1 types)"), settle);
+		expect(i.out).toContain("graphql: polling http://localhost:1337/graphql every 50ms");
+		expect(i.triggers.find((t) => t.path === join(project, "src"))?.recursive).toBe(true);
+		const specWatch = i.triggers.find((t) => t.path === dir && t.recursive === false);
+		expect(specWatch).toBeDefined();
+		expect(i.out).toContain("routes: watching spec.json");
+
+		spec.paths = { ...spec.paths, "/pong": { get: { responses: {} } } } as typeof spec.paths;
+		await writeFile(join(dir, "spec.json"), JSON.stringify(spec), "utf8");
+		for (const t of i.triggers.filter((t) => t.path === dir)) t.change("spec.json");
+		await vi.waitFor(() => expect(i.out).toContain("routes: regenerated routes.ts (2 routes)"), settle);
+
+		i.stop();
+		expect(await done).toBe(0);
+		fetchMock.mockRestore();
+	});
+
+	it("logs in to a --url source once across polls", async () => {
+		const dir = await mkdtemp(join(tmpdir(), "strapi-cli-"));
+		const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) =>
+			String(input).endsWith("/admin/login")
+				? new Response(JSON.stringify({ data: { token: "t" } }))
+				: new Response(JSON.stringify({ data: [] }))
+		);
+		const i = watchIo(dir, { STRAPI_ADMIN_EMAIL: "me@example.com", STRAPI_ADMIN_PASSWORD: "pw" });
+		const done = run(["generate", "--url", "http://localhost:1337", "--watch", "--interval", "10"], i);
+		await vi.waitFor(() => expect(fetchMock.mock.calls.length).toBeGreaterThan(8), settle);
+		i.stop();
+		expect(await done).toBe(0);
+		expect(i.out).toContain("types: polling http://localhost:1337 every 10ms");
+		expect(fetchMock.mock.calls.filter(([input]) => String(input).endsWith("/admin/login"))).toHaveLength(1);
+		fetchMock.mockRestore();
+	});
+
+	it("watches a config at an explicit path, polling every 2s by default", async () => {
+		const dir = await mkdtemp(join(tmpdir(), "strapi-cli-"));
+		await writeFile(join(dir, "codegen.mjs"), 'export default { graphql: { url: "http://localhost:1337/graphql", output: "graphql.ts" } };', "utf8");
+		const fetchMock = vi
+			.spyOn(globalThis, "fetch")
+			.mockImplementation(async () => new Response(JSON.stringify({ data: { __schema: graphqlSchema("DRAFT") } })));
+		const i = watchIo(dir);
+		const done = run(["generate", "--config", "codegen.mjs", "--watch"], i);
+		await vi.waitFor(() => expect(i.out).toContain("graphql: wrote graphql.ts (1 types)"), settle);
+		expect(i.out).toContain("graphql: polling http://localhost:1337/graphql every 2s");
+		expect(i.out).toContain("config: watching codegen.mjs");
+		i.stop();
+		expect(await done).toBe(0);
+		fetchMock.mockRestore();
 	});
 });

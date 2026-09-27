@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it, vi } from "vitest";
 
-import { loadFromUrl } from "../../cli/load-url";
+import { loadFromUrl, type AdminSession } from "../../cli/load-url";
 
 const fixture = (name: string) => fileURLToPath(new URL(`../../cli/__fixtures__/admin/${name}`, import.meta.url));
 
@@ -287,5 +287,42 @@ describe("loadFromUrl", () => {
 		await expect(loadFromUrl({ baseURL: "http://h", email: "a", password: "b", fetch: fetchMock })).rejects.toThrow(
 			/shared\.broken has no displayName/
 		);
+	});
+
+	it("reuses a session's token instead of logging in again", async () => {
+		const { fetchMock, calls } = await fixtureFetch();
+		const session: AdminSession = {};
+		await loadFromUrl({ baseURL: "http://h", email: "a", password: "b", fetch: fetchMock, session });
+		expect(session.token).toBe("jwt-1");
+		await loadFromUrl({ baseURL: "http://h", email: "a", password: "b", fetch: fetchMock, session });
+		expect(calls().filter((call) => call.url.endsWith("/admin/login"))).toHaveLength(1);
+	});
+
+	it("logs in again when a session's token has expired", async () => {
+		const { fetchMock, calls } = await fixtureFetch();
+		const expired = vi.fn<typeof fetch>(async (input, init) =>
+			new Headers(init?.headers).get("authorization") === "Bearer stale" ? new Response("", { status: 401 }) : fetchMock(input, init)
+		);
+		const session: AdminSession = { token: "stale" };
+		const set = await loadFromUrl({ baseURL: "http://h", email: "a", password: "b", fetch: expired, session });
+		expect(set.contentTypes.size).toBeGreaterThan(0);
+		expect(session.token).toBe("jwt-1");
+		expect(calls().filter((call) => call.url.endsWith("/admin/login"))).toHaveLength(1);
+	});
+
+	it("does not retry a fresh login's permission error", async () => {
+		const fetchMock = vi.fn<typeof fetch>(async (input) =>
+			String(input).endsWith("/admin/login") ? new Response(JSON.stringify({ data: { token: "t" } }), { status: 200 }) : new Response("", { status: 401 })
+		);
+		const session: AdminSession = {};
+		await expect(loadFromUrl({ baseURL: "http://h", email: "a", password: "b", fetch: fetchMock, session })).rejects.toThrow(/content-type-builder\.read/);
+		expect(fetchMock.mock.calls.filter(([input]) => String(input).endsWith("/admin/login"))).toHaveLength(1);
+		expect(session.token).toBeUndefined();
+	});
+
+	it("passes a cached token's other failures through", async () => {
+		const fetchMock = vi.fn<typeof fetch>(async () => new Response("boom", { status: 500 }));
+		await expect(loadFromUrl({ baseURL: "http://h", email: "a", password: "b", fetch: fetchMock, session: { token: "t" } })).rejects.toThrow(/failed \(500\)/);
+		expect(fetchMock.mock.calls.some(([input]) => String(input).endsWith("/admin/login"))).toBe(false);
 	});
 });

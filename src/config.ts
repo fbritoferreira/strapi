@@ -57,6 +57,18 @@ export interface GenerateConfig {
 	types?: TypesGeneration;
 	routes?: RoutesGeneration;
 	graphql?: GraphqlGeneration;
+	/** Settings for `generate --config --watch`. */
+	watch?: WatchGeneration;
+}
+
+/** How `generate --watch` checks sources it cannot watch on disk. */
+export interface WatchGeneration {
+	/**
+	 * Milliseconds between polls of a URL source (a running instance's
+	 * Content-Type Builder, OpenAPI URL or GraphQL endpoint). Default `2000`;
+	 * `--interval` overrides it.
+	 */
+	interval?: number;
 }
 
 /**

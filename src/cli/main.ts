@@ -1,20 +1,11 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { dirname, relative, resolve, sep } from "node:path";
+import { dirname, resolve } from "node:path";
 import { parseArgs } from "node:util";
 
-import { emit } from "./emit";
-import { emitGraphql } from "./emit-graphql";
-import { emitRoutes } from "./emit-routes";
-import { graphqlModel } from "./graphql";
-import { loadFromDir } from "./load-dir";
-import { CONFIG_FILENAMES, loadConfig } from "./load-config";
-import { loadGraphqlSchema } from "./load-graphql";
-import { loadOpenapi } from "./load-openapi";
-import { loadFromUrl } from "./load-url";
-import { normalize } from "./normalize";
-import { routesModel } from "./openapi";
-import type { SchemaSet } from "./schema";
-import type { GenerateConfig, GraphqlGeneration, RoutesGeneration, TypesGeneration } from "../config";
+import { CONFIG_FILENAMES, loadConfig, loadConfigFile } from "./load-config";
+import { resolveSpec, sectionsOf, timedFetch } from "./sections";
+import { watch, type WatchedSection, type WatchFn, type WatchPlan } from "./watch";
+import type { GenerateConfig } from "../config";
 
 export interface Io {
 	stdout: (line: string) => void;
@@ -22,7 +13,17 @@ export interface Io {
 	env: Record<string, string | undefined>;
 	/** Directory a relative `--config` path and the default config filenames resolve against. */
 	cwd: string;
+	/** Stops `--watch` when aborted; the CLI aborts it on SIGINT and SIGTERM. */
+	signal: AbortSignal;
+	/** File watcher for `--watch`. Default `fs.watch`. */
+	watch?: WatchFn;
 }
+
+/** Milliseconds between polls of a URL source under `--watch`. */
+const DEFAULT_INTERVAL_MS = 2000;
+
+/** How long one request of a poll may take before it counts as the instance being down. */
+const REQUEST_TIMEOUT_MS = 10_000;
 
 const USAGE = `Usage: strapi-client generate (--config [file] | --dir <path> | --url <baseURL> | --openapi <spec> | --graphql <url>) [options]
 
@@ -47,6 +48,10 @@ Options:
   -o, --output <file>   Output file (default: strapi-types.ts; strapi-routes.ts for --openapi, strapi-graphql.ts for --graphql)
   --include-plugins     Also emit plugin content types (api::* only by default)
   --check               Exit 1 if the output file is missing or out of date; write nothing
+  --watch               Generate, then keep regenerating as the source changes: schema files for
+                        --dir, the document for a local --openapi file, the config file itself for
+                        --config; URL sources are polled. Stop with Ctrl-C
+  --interval <ms>       Milliseconds between polls of a URL source under --watch (default ${DEFAULT_INTERVAL_MS})
   -h, --help            Show this help`;
 
 interface Parsed {
@@ -59,8 +64,10 @@ interface Parsed {
 	password?: string;
 	token?: string;
 	output?: string;
+	interval?: string;
 	includePlugins: boolean;
 	check: boolean;
+	watch: boolean;
 	help: boolean;
 }
 
@@ -69,14 +76,6 @@ type Source =
 	| { kind: "url"; url: string }
 	| { kind: "openapi"; spec: string }
 	| { kind: "graphql"; url: string };
-
-/** Default output file per source kind. */
-const DEFAULT_OUTPUT: Record<Source["kind"], string> = {
-	dir: "strapi-types.ts",
-	url: "strapi-types.ts",
-	openapi: "strapi-routes.ts",
-	graphql: "strapi-graphql.ts",
-};
 
 function parse(args: string[]): Parsed {
 	const { values } = parseArgs({
@@ -93,8 +92,10 @@ function parse(args: string[]): Parsed {
 			password: { type: "string" },
 			token: { type: "string" },
 			output: { type: "string", short: "o" },
+			interval: { type: "string" },
 			"include-plugins": { type: "boolean", default: false },
 			check: { type: "boolean", default: false },
+			watch: { type: "boolean", default: false },
 			help: { type: "boolean", short: "h", default: false },
 		},
 	});
@@ -108,31 +109,12 @@ function parse(args: string[]): Parsed {
 		...(values.password !== undefined && { password: values.password }),
 		...(values.token !== undefined && { token: values.token }),
 		...(values.output !== undefined && { output: values.output }),
+		...(values.interval !== undefined && { interval: values.interval }),
 		includePlugins: values["include-plugins"] === true,
 		check: values.check === true,
+		watch: values.watch === true,
 		help: values.help === true,
 	};
-}
-
-/**
- * A local path as the header records it: relative to the output file's
- * directory, with forward slashes, so the header is the same on every machine
- * and from any working directory.
- */
-function headerPath(path: string, target: string): string {
-	return relative(dirname(target), path).split(sep).join("/") || "./";
-}
-
-const HTTP_URL = /^https?:\/\//i;
-
-/** An OpenAPI source, resolved against `cwd` when it is a file rather than a URL. */
-function resolveSpec(spec: string, cwd: string): string {
-	return HTTP_URL.test(spec) ? spec : resolve(cwd, spec);
-}
-
-/** An OpenAPI source as the header records it. */
-function specLabel(spec: string, target: string): string {
-	return HTTP_URL.test(spec) ? spec : headerPath(spec, target);
 }
 
 function stripHeader(text: string): string {
@@ -166,89 +148,6 @@ async function write(output: string, target: string, check: boolean, io: Io): Pr
 	return null;
 }
 
-/** One generated file: its label for messages, and the work that writes it. */
-interface Task {
-	name: string;
-	/** @returns the summary line to print, or a `--check` exit code. */
-	run: () => Promise<{ line: string } | { status: number }>;
-}
-
-function typesTask(section: TypesGeneration, check: boolean, io: Io): Task {
-	return {
-		name: "types",
-		run: async () => {
-			const target = resolve(io.cwd, section.output ?? DEFAULT_OUTPUT.dir);
-			let set: SchemaSet;
-			let source: string;
-			if (section.dir !== undefined) {
-				const root = resolve(io.cwd, section.dir);
-				source = `dir ${headerPath(root, target)}`;
-				set = await loadFromDir(root);
-			} else {
-				const url = section.url;
-				const email = section.email ?? io.env["STRAPI_ADMIN_EMAIL"];
-				const password = section.password ?? io.env["STRAPI_ADMIN_PASSWORD"];
-				if (email === undefined || email === "" || password === undefined || password === "") {
-					throw new Error("types needs admin credentials: email/password, or STRAPI_ADMIN_EMAIL/STRAPI_ADMIN_PASSWORD");
-				}
-				source = `url ${url}`;
-				set = await loadFromUrl({ baseURL: url, email, password });
-			}
-			const model = normalize(set, { includePlugins: section.includePlugins === true });
-			const output = emit(model, { source });
-			const status = await write(output, target, check, io);
-			return status === null ? { line: `Wrote ${target} (${model.types.length} types)` } : { status };
-		},
-	};
-}
-
-function routesTask(section: RoutesGeneration, check: boolean, io: Io): Task {
-	return {
-		name: "routes",
-		run: async () => {
-			const target = resolve(io.cwd, section.output ?? DEFAULT_OUTPUT.openapi);
-			const token = section.token ?? io.env["STRAPI_TOKEN"];
-			const password = section.password ?? io.env["STRAPI_DOCS_PASSWORD"];
-			const spec = resolveSpec(section.openapi, io.cwd);
-			const document = await loadOpenapi({
-				source: spec,
-				...(token !== undefined && token !== "" && { token }),
-				...(password !== undefined && password !== "" && { password }),
-			});
-			const model = routesModel(document);
-			const output = emitRoutes(model, { source: `openapi ${specLabel(spec, target)}` });
-			const status = await write(output, target, check, io);
-			return status === null ? { line: `Wrote ${target} (${model.routes.length} routes)` } : { status };
-		},
-	};
-}
-
-function graphqlTask(section: GraphqlGeneration, check: boolean, io: Io): Task {
-	return {
-		name: "graphql",
-		run: async () => {
-			const target = resolve(io.cwd, section.output ?? DEFAULT_OUTPUT.graphql);
-			const token = section.token ?? io.env["STRAPI_TOKEN"];
-			const schema = await loadGraphqlSchema({
-				url: section.url,
-				...(token !== undefined && token !== "" && { token }),
-			});
-			const model = graphqlModel(schema);
-			const output = emitGraphql(model, { source: `graphql ${section.url}` });
-			const status = await write(output, target, check, io);
-			return status === null ? { line: `Wrote ${target} (${model.types.length} types)` } : { status };
-		},
-	};
-}
-
-function tasksOf(config: GenerateConfig, check: boolean, io: Io): Task[] {
-	return [
-		...(config.types !== undefined ? [typesTask(config.types, check, io)] : []),
-		...(config.routes !== undefined ? [routesTask(config.routes, check, io)] : []),
-		...(config.graphql !== undefined ? [graphqlTask(config.graphql, check, io)] : []),
-	];
-}
-
 /**
  * Runs every section of the config, carrying on after a failure so one broken
  * source does not hide the rest.
@@ -262,27 +161,62 @@ async function runConfig(parsed: Parsed, io: Io): Promise<number> {
 		return 1;
 	}
 
-	const tasks = tasksOf(config, parsed.check, io);
+	const sections = sectionsOf(config, io);
 	let done = 0;
 	let failures = 0;
-	for (const task of tasks) {
+	for (const section of sections) {
 		try {
-			const result = await task.run();
-			if ("line" in result) {
-				io.stdout(result.line);
-				done += 1;
-			} else if (result.status === 0) {
-				done += 1;
-			} else {
-				failures += 1;
-			}
+			const generated = await section.produce();
+			const status = await write(generated.output, generated.target, parsed.check, io);
+			if (status === null) io.stdout(`Wrote ${generated.target} (${generated.summary})`);
+			if (status === 1) failures += 1;
+			else done += 1;
 		} catch (error) {
-			io.stderr(`Error (${task.name}): ${(error as Error).message}`);
+			io.stderr(`Error (${section.name}): ${(error as Error).message}`);
 			failures += 1;
 		}
 	}
-	io.stdout(`${done} of ${tasks.length} generated`);
+	io.stdout(`${done} of ${sections.length} generated`);
 	return failures === 0 ? 0 : 1;
+}
+
+/** The one-section config a single-source invocation stands for. */
+function configOf(source: Source, parsed: Parsed): GenerateConfig {
+	const output = parsed.output === undefined ? {} : { output: parsed.output };
+	const token = parsed.token === undefined ? {} : { token: parsed.token };
+	const password = parsed.password === undefined ? {} : { password: parsed.password };
+	switch (source.kind) {
+		case "dir":
+			return { types: { dir: source.root, includePlugins: parsed.includePlugins, ...output } };
+		case "url":
+			return {
+				types: {
+					url: source.url,
+					includePlugins: parsed.includePlugins,
+					...(parsed.email !== undefined && { email: parsed.email }),
+					...password,
+					...output,
+				},
+			};
+		case "openapi":
+			return { routes: { openapi: source.spec, ...token, ...password, ...output } };
+		case "graphql":
+			return { graphql: { url: source.url, ...token, ...output } };
+	}
+}
+
+/**
+ * Checks the flags that only make sense with `--watch`.
+ *
+ * @returns the poll interval the flags ask for, or an error message.
+ */
+function watchFlags(parsed: Parsed): { interval?: number } | { error: string } {
+	if (parsed.watch && parsed.check) return { error: "--watch cannot be combined with --check" };
+	if (parsed.interval === undefined) return {};
+	if (!parsed.watch) return { error: "--interval needs --watch" };
+	const interval = /^\d+$/.test(parsed.interval) ? Number(parsed.interval) : 0;
+	if (interval <= 0) return { error: "--interval takes a positive number of milliseconds" };
+	return { interval };
 }
 
 /** Lets `--config` be passed with no value, which `parseArgs` alone cannot express. */
@@ -314,13 +248,37 @@ export async function run(argv: string[], io: Io): Promise<number> {
 		return 2;
 	}
 
+	const flags = watchFlags(parsed);
+	if ("error" in flags) {
+		io.stderr(`Error: ${flags.error}`);
+		io.stderr(USAGE);
+		return 2;
+	}
+	const requestOptions = { fetch: timedFetch(REQUEST_TIMEOUT_MS) };
+
 	if (parsed.config !== undefined) {
 		if (parsed.dir !== undefined || parsed.url !== undefined || parsed.openapi !== undefined || parsed.graphql !== undefined) {
 			io.stderr("Error: --config cannot be combined with --dir, --url, --openapi or --graphql");
 			io.stderr(USAGE);
 			return 2;
 		}
-		return runConfig(parsed, io);
+		if (!parsed.watch) return runConfig(parsed, io);
+		let version = 0;
+		return watch({
+			io,
+			plan: async (): Promise<WatchPlan> => {
+				const { file, config } = await loadConfigFile({
+					cwd: io.cwd,
+					...(parsed.config !== "" && { path: parsed.config }),
+					version: version++,
+				});
+				return {
+					sections: sectionsOf(config, io, requestOptions),
+					interval: flags.interval ?? config.watch?.interval ?? DEFAULT_INTERVAL_MS,
+					configFile: file,
+				};
+			},
+		});
 	}
 
 	const sources: Source[] = [
@@ -335,60 +293,30 @@ export async function run(argv: string[], io: Io): Promise<number> {
 		io.stderr(USAGE);
 		return 2;
 	}
-	const target = resolve(io.cwd, parsed.output ?? DEFAULT_OUTPUT[parsedSource.kind]);
+	if (parsedSource.kind === "url") {
+		const email = parsed.email ?? io.env["STRAPI_ADMIN_EMAIL"];
+		const password = parsed.password ?? io.env["STRAPI_ADMIN_PASSWORD"];
+		if (email === undefined || email === "" || password === undefined || password === "") {
+			io.stderr("Error: --url needs admin credentials: --email/--password or STRAPI_ADMIN_EMAIL/STRAPI_ADMIN_PASSWORD");
+			return 2;
+		}
+	}
+	const config = configOf(parsedSource, parsed);
 
-	const token = parsed.token ?? io.env["STRAPI_TOKEN"];
+	if (parsed.watch) {
+		return watch({
+			io,
+			plan: async () => ({ sections: sectionsOf(config, io, requestOptions), interval: flags.interval ?? DEFAULT_INTERVAL_MS }),
+		});
+	}
 
+	// Typed boundary: a single-source config has exactly one section.
+	const [section] = sectionsOf(config, io) as [WatchedSection];
 	try {
-		if (parsedSource.kind === "graphql") {
-			const schema = await loadGraphqlSchema({
-				url: parsedSource.url,
-				...(token !== undefined && token !== "" && { token }),
-			});
-			const model = graphqlModel(schema);
-			const output = emitGraphql(model, { source: `graphql ${parsedSource.url}` });
-			const status = await write(output, target, parsed.check, io);
-			if (status !== null) return status;
-			io.stdout(`Wrote ${target} (${model.types.length} types)`);
-			return 0;
-		}
-
-		if (parsedSource.kind === "openapi") {
-			const docsPassword = parsed.password ?? io.env["STRAPI_DOCS_PASSWORD"];
-			const document = await loadOpenapi({
-				source: parsedSource.spec,
-				...(token !== undefined && token !== "" && { token }),
-				...(docsPassword !== undefined && docsPassword !== "" && { password: docsPassword }),
-			});
-			const model = routesModel(document);
-			const output = emitRoutes(model, { source: `openapi ${specLabel(parsedSource.spec, target)}` });
-			const status = await write(output, target, parsed.check, io);
-			if (status !== null) return status;
-			io.stdout(`Wrote ${target} (${model.routes.length} routes)`);
-			return 0;
-		}
-
-		let set: SchemaSet;
-		let source: string;
-		if (parsedSource.kind === "dir") {
-			source = `dir ${headerPath(parsedSource.root, target)}`;
-			set = await loadFromDir(parsedSource.root);
-		} else {
-			const email = parsed.email ?? io.env["STRAPI_ADMIN_EMAIL"];
-			const password = parsed.password ?? io.env["STRAPI_ADMIN_PASSWORD"];
-			if (email === undefined || email === "" || password === undefined || password === "") {
-				io.stderr("Error: --url needs admin credentials: --email/--password or STRAPI_ADMIN_EMAIL/STRAPI_ADMIN_PASSWORD");
-				return 2;
-			}
-			source = `url ${parsedSource.url}`;
-			set = await loadFromUrl({ baseURL: parsedSource.url, email, password });
-		}
-
-		const model = normalize(set, { includePlugins: parsed.includePlugins });
-		const output = emit(model, { source });
-		const status = await write(output, target, parsed.check, io);
+		const generated = await section.produce();
+		const status = await write(generated.output, generated.target, parsed.check, io);
 		if (status !== null) return status;
-		io.stdout(`Wrote ${target} (${model.types.length} types)`);
+		io.stdout(`Wrote ${generated.target} (${generated.summary})`);
 		return 0;
 	} catch (error) {
 		io.stderr(`Error: ${(error as Error).message}`);
