@@ -5,6 +5,8 @@
 [![npm downloads](https://img.shields.io/npm/dm/@fbritoferreira/strapi.svg)](https://www.npmjs.com/package/@fbritoferreira/strapi)
 [![JSR](https://jsr.io/badges/@fbritoferreira/strapi)](https://jsr.io/@fbritoferreira/strapi)
 [![JSR Score](https://jsr.io/badges/@fbritoferreira/strapi/score)](https://jsr.io/@fbritoferreira/strapi/score)
+[![Socket Badge](https://badge.socket.dev/npm/package/@fbritoferreira/strapi)](https://socket.dev/npm/package/@fbritoferreira/strapi)
+[![Snyk](https://snyk.io/test/github/fbritoferreira/strapi/badge.svg)](https://snyk.io/test/github/fbritoferreira/strapi)
 [![Documentation](https://img.shields.io/badge/docs-GitHub%20Pages-blue)](https://fbritoferreira.github.io/strapi/)
 
 A TypeScript client for the Strapi 5 REST API. A root `Strapi` class wraps
@@ -1184,3 +1186,4 @@ version to JSR from source (`jsr.json`, OIDC provenance). The workflow keeps
 ## License
 
 Distributed under the MIT License. See `LICENCE.md` for more information.
+Contributions are accepted under `CLA.md`.
