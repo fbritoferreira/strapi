@@ -49,6 +49,10 @@ jobs:
       - name: Build
         run: pnpm build
 
+      - name: Check the published package
+        if: matrix.node == 24
+        run: pnpm package:check
+
       - name: Check jsr.json version matches package.json
         run: |
           pkg_version=$(jq -r .version package.json)
