@@ -1170,7 +1170,7 @@ await articles.update({ documentId, payload: { data: { title } }, locale: "fr" }
 1. Clone and install: `git clone <repo> && pnpm install` (Node.js 24, see `.nvmrc`)
 2. Run tests: `pnpm test` (Vitest), `pnpm test:coverage` for coverage. Thresholds are 100% on statements, branches, functions and lines. `pnpm smoke` exercises the built package the way CI does on the oldest supported Node, where Vitest itself cannot run
 3. Lint and typecheck: `pnpm lint && pnpm typecheck`
-4. Build: `pnpm build` (outputs ESM, CJS and bundled `.d.ts` to `dist/`; also builds the `generate` CLI to `dist/cli.mjs`, used by `bin/strapi-client.mjs`)
+4. Build: `pnpm build` (outputs ESM, CJS and bundled `.d.ts` to `dist/`; also builds the `generate` CLI to `dist/cli.mjs`, used by `bin/strapi-client.mjs`). `pnpm package:check` runs publint and arethetypeswrong on that build
 5. Add a changeset for user-facing changes: `pnpm changeset`
 6. After changing `src/cli/emit.ts`, refresh the fixture snapshot: `UPDATE_SNAPSHOT=1 pnpm vitest run src/test/cli/emit.spec.ts`
 7. README examples live in `src/cli/__fixtures__/readme-recipes.ts` and are type-checked by `pnpm typecheck`; update both together
@@ -1186,4 +1186,5 @@ version to JSR from source (`jsr.json`, OIDC provenance). The workflow keeps
 ## License
 
 Distributed under the MIT License. See `LICENCE.md` for more information.
+Report a vulnerability in private. See `SECURITY.md`.
 Contributions are accepted under `CLA.md`.
