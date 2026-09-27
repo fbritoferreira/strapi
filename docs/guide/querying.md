@@ -22,7 +22,7 @@ const [err, matching, meta] = await articles.findMany({
 
 ## Which params each method accepts
 
-The sets mirror the contracts Strapi declares for its core routes, so a param the endpoint ignores — or rejects under `api.rest.strictParams` — cannot be passed.
+The sets mirror the contracts Strapi declares for its core routes, so a param the endpoint ignores, or rejects under `api.rest.strictParams`, cannot be passed.
 
 | Method | Params |
 | --- | --- |
@@ -117,7 +117,7 @@ const [, plain] = await strapi.collection("articles").findMany();
 plain[0]?.author; // error: nothing populated it
 ```
 
-Strapi selects `[id, documentId, ...fields]` when `fields` is given, and returns a populatable field only when `populate` asks for it — where it then stops being optional. `populate: "*"` populates every first-level relation, component, media and dynamic zone.
+Strapi selects `[id, documentId, ...fields]` when `fields` is given, and returns a populatable field only when `populate` asks for it, where it then stops being optional. `populate: "*"` populates every first-level relation, component, media and dynamic zone.
 
 The same rules apply inside a populate map, at every depth. `populate: { author: { fields: ["name"] } }` gives `author: { id, documentId, name } | null`. A to-many relation is narrowed element by element. `true`, `"*"` and dynamic zones leave the related document whole.
 

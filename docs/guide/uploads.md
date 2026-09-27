@@ -4,13 +4,20 @@
 
 | Method | Route | Notes |
 | --- | --- | --- |
-| `find` | `GET /api/upload/files` | `fields`, `populate`, `sort`, `pagination`, `filters`. An empty or non-array body becomes `[]`. Current Strapi 5 ignores pagination on this path and returns every file. The paginated route is `GET /api/upload/files/page`, which this client does not wrap — call it with `strapi.http.request` or a generated `route()`. |
+| `find` | `GET /api/upload/files` | `fields`, `populate`, `sort`, `pagination`, `filters`. An empty or non-array body becomes `[]`. Current Strapi 5 ignores pagination on this path and returns every file. |
+| `findPage` | `GET /api/upload/files/page` | The same params. Returns one page and `meta.pagination`. |
 | `findOne` | `GET /api/upload/files/<id>` | `fields`, `populate`. |
 | `upload` | `POST /api/upload` | `multipart/form-data`. One `StrapiMedia` per file. |
 | `update` | `POST /api/upload?id=<id>` | Metadata only. Does not re-upload the file. |
 | `delete` | `DELETE /api/upload/files/<id>` | Returns the deleted media entry. |
 
 `status`, `locale` and `_q` are not part of these routes.
+
+```ts
+const [err, page, meta] = await strapi.files.findPage({
+	params: { pagination: { page: 1, pageSize: 20 }, filters: { mime: { $startsWith: "image" } } },
+});
+```
 
 ## Uploading
 

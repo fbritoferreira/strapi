@@ -9,7 +9,7 @@ export interface RetryOptions {
 	/** Statuses worth repeating. Default `[408, 429, 500, 502, 503, 504]`. */
 	statuses?: number[];
 	/**
-	 * Methods worth repeating. Default the idempotent ones — repeating a POST
+	 * Methods worth repeating. Default the idempotent ones. Repeating a POST
 	 * can create a second document, since the first may have been applied
 	 * before the response was lost.
 	 */

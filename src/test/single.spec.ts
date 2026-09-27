@@ -33,6 +33,17 @@ describe("SingleTypeClient", () => {
 		expect(lastCall(fetchMock).init.method).toBe("GET");
 	});
 
+	it("publish sends an empty data object and status=published", async () => {
+		fetchMock.mockResolvedValueOnce(jsonResponse({ data: { documentId: "h", heading: "Hi" } }));
+		const [err, data] = await home.publish({ locale: "fr", params: { fields: ["heading"] }, init: { cache: "no-store" } });
+		expect(err).toBeNull();
+		expect(data?.heading).toBe("Hi");
+		expect(decodeURIComponent(lastCall(fetchMock).url)).toBe("http://h/api/homepage?fields[0]=heading&status=published&locale=fr");
+		expect(lastCall(fetchMock).init.method).toBe("PUT");
+		expect(JSON.parse(String(lastCall(fetchMock).init.body))).toEqual({ data: {} });
+		expect(lastCall(fetchMock).init.cache).toBe("no-store");
+	});
+
 	it("find returns NotFoundError when data is null", async () => {
 		fetchMock.mockResolvedValueOnce(jsonResponse({ data: null }));
 		const [err] = await home.find();

@@ -1,7 +1,7 @@
 import { fail, ok, type Result } from "../errors";
 import type { HttpClient } from "../http";
 import { buildQuery } from "../query";
-import type { FetchInit, PluginFindQueryParams, PluginListQueryParams, StrapiMedia } from "../types";
+import type { FetchInit, PluginFindQueryParams, PluginListQueryParams, StrapiMedia, StrapiMeta, StrapiResponse } from "../types";
 import type { ClientContext } from "./collection";
 
 const NOT_FOUND = { status: 404, name: "NotFoundError", message: "Not Found" } as const;
@@ -47,12 +47,29 @@ export class FilesClient {
 		this.defaultLocale = context.defaultLocale;
 	}
 
-	/** `GET /api/upload/files`. Lists uploaded files. */
+	/** `GET /api/upload/files`. Lists every uploaded file. Current Strapi 5 ignores pagination on this path; use {@link findPage}. */
 	async find(options: { params?: PluginListQueryParams<StrapiMedia>; init?: FetchInit } = {}): Promise<Result<StrapiMedia[]>> {
 		const query = buildQuery(options.params, { defaultLocale: this.defaultLocale });
 		const [err, body] = await this.http.request<StrapiMedia[]>(`upload/files${query}`, { ...options.init, method: "GET" });
 		if (err) return fail(err);
 		return ok(Array.isArray(body) ? body : []);
+	}
+
+	/**
+	 * `GET /api/upload/files/page`. One page of the media library, with
+	 * `meta.pagination`. The flat {@link find} route ignores pagination.
+	 */
+	async findPage(
+		options: { params?: PluginListQueryParams<StrapiMedia>; init?: FetchInit } = {}
+	): Promise<Result<StrapiMedia[]>> {
+		const query = buildQuery(options.params, { defaultLocale: this.defaultLocale });
+		const [err, body] = await this.http.request<StrapiResponse<StrapiMedia>>(`upload/files/page${query}`, {
+			...options.init,
+			method: "GET",
+		});
+		if (err) return fail(err);
+		const meta: StrapiMeta = body?.meta === undefined ? null : body.meta;
+		return ok(Array.isArray(body?.data) ? body.data : [], meta);
 	}
 
 	/** `GET /api/upload/files/<id>`. */

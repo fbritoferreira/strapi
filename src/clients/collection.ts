@@ -118,7 +118,7 @@ export class CollectionClient<T extends object> {
 	 * consumer asks for it.
 	 *
 	 * Unlike `findMany({ all: true })`, which concatenates everything in memory,
-	 * this hands each page over as it arrives — so a large export stays bounded,
+	 * this hands each page over as it arrives, so a large export stays bounded,
 	 * and stopping early stops the requests.
 	 *
 	 * Each iteration yields the same `[error, data, meta]` tuple as the other
@@ -218,7 +218,7 @@ export class CollectionClient<T extends object> {
 
 		// Non-default locale: find or create the default-locale document, then add the localization.
 		// The base-document lookup uses only `filters` (plus a forced pageSize of 1), never the
-		// caller's `params` — sort/pagination/status shape the response shape, not which document
+		// caller's `params`. Sort, pagination and status shape the response, not which document
 		// is the localization base. With no `filters` there is nothing to match on, so the lookup
 		// is skipped entirely and a fresh default-locale document is created instead.
 		let documentId: string | undefined;
@@ -264,11 +264,31 @@ export class CollectionClient<T extends object> {
 	}
 
 	/**
+	 * Publishes the draft as it stands. Strapi answers 400 if `data` is omitted,
+	 * so this sends `{ data: {} }` and `status=published`.
+	 */
+	async publish<const P extends WriteQueryParams<T> = object>(options: {
+		documentId: string;
+		params?: P;
+		locale?: string;
+		init?: FetchInit;
+	}): Promise<Result<SelectedDoc<T, P>>> {
+		const { documentId, params, locale, init } = options;
+		return this.update({
+			documentId,
+			payload: { data: {} },
+			params: { ...params, status: "published" } as P,
+			...(locale !== undefined && { locale }),
+			...(init && { init }),
+		});
+	}
+
+	/**
 	 * `DELETE /api/<uid>/<documentId>`. With `locale`, deletes only that
 	 * localization.
 	 *
 	 * Strapi's delete route declares the deleted document as its response and
-	 * takes `fields`, `populate` and `filters` to shape it — but answers some
+	 * takes `fields`, `populate` and `filters` to shape it, but answers some
 	 * deletions with an empty body, so the document may be `null`.
 	 */
 	async delete<const P extends DeleteQueryParams<T> = object>(options: {

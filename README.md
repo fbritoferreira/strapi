@@ -14,8 +14,8 @@ single collection. Every method returns a `[error, data, meta]` tuple instead
 of throwing. The `strapi-client generate` CLI command writes TypeScript
 interfaces and the content-type registry from your Strapi schema.
 
-The searchable guide is at <https://fbritoferreira.github.io/strapi/>.
-This file stays complete on its own, because npm and JSR render it.
+The guide is at <https://fbritoferreira.github.io/strapi/>.
+Upgrading from 0.4: [MIGRATION.md](./MIGRATION.md).
 
 ## What you get
 
@@ -33,15 +33,19 @@ This file stays complete on its own, because npm and JSR render it.
 
 ## Contents
 
-[Installation](#installation) · [Quick start](#quick-start) ·
-[Clients](#clients) · [Single types](#single-types) · [Authentication](#authentication) ·
-[Users](#users) · [Uploads](#uploads) ·
-[Query parameters](#query-parameters) · [Writing](#writing) ·
-[Fetching every page](#fetching-every-page) · [Streaming pages](#streaming-pages) ·
-[i18n](#i18n) · [Errors](#errors) · [Retries](#retries) · [Next.js and custom fetch](#nextjs-and-custom-fetch) ·
-[Typed registry](#typed-registry) · [Generating types](#generating-types) ·
+Start: [Installation](#installation) · [Quick start](#quick-start) · [Clients](#clients)
+
+REST: [Single types](#single-types) · [Query parameters](#query-parameters) · [Writing](#writing) ·
+[Fetching every page](#fetching-every-page) · [Streaming pages](#streaming-pages) · [i18n](#i18n)
+
+Plugins: [Authentication](#authentication) · [Users](#users) · [Uploads](#uploads)
+
+Transport: [Errors](#errors) · [Retries](#retries) · [Next.js and custom fetch](#nextjs-and-custom-fetch)
+
+Codegen: [Typed registry](#typed-registry) · [Generating types](#generating-types) ·
 [One config for every source](#one-config-for-every-source) ·
-[Route types from OpenAPI](#route-types-from-openapi) · [GraphQL](#graphql) ·
+[Route types from OpenAPI](#route-types-from-openapi) · [GraphQL](#graphql)
+
 [Recipes](#recipes) · [Development](#development)
 
 ## Installation
@@ -129,7 +133,7 @@ const [, updated] = await articles.update({ documentId: created!.documentId, pay
 
 | Client | Access | Methods |
 | --- | --- | --- |
-| Collection types | `strapi.collection<T>("articles")` | `findMany`, `find`, `findFirst`, `count`, `create`, `update`, `delete`, `upsert` |
+| Collection types | `strapi.collection<T>("articles")` | `findMany`, `find`, `findFirst`, `count`, `create`, `update`, `publish`, `delete`, `upsert` |
 | Single types | `strapi.single<T>("homepage")` | `find`, `update`, `delete` |
 | Auth | `strapi.auth` | `login`, `register`, `forgotPassword`, `resetPassword`, `changePassword`, `sendEmailConfirmation`, `refresh`, `logout` |
 | Users-permissions | `strapi.users<T>()` | `findMany`, `find`, `me`, `count`, `create`, `update`, `delete` |
@@ -180,6 +184,8 @@ await homepage.delete({ locale: "fr" });
 
 `find` takes the same params as a collection `find` (no pagination, no `_q`).
 `update` and `delete` take `fields` and `populate`, which shape the response.
+`publish()` is `update` with `{ data: {} }` and `status=published`: Strapi
+answers 400 if `data` is omitted, and a `PUT` without `status` publishes.
 Selection narrowing works the same way as on collections.
 
 ## Authentication
@@ -213,7 +219,28 @@ rarely what you want.
 With an httpOnly refresh cookie, the token travels in the cookie and the
 response carries no `refreshToken`.
 
-`strapi.users()` covers `/api/users` — including `me()` — and takes the same
+A 401 is not retried unless you opt in. `refreshOnUnauthorized` rotates the
+refresh token, adopts the new JWT, and retries that request once. Concurrent
+401s share one rotation. It does nothing when no bearer token is set, unless
+`cookie: true` (httpOnly refresh cookie, sent with `credentials: "include"`).
+
+```ts
+let session = { jwt: "", refreshToken: "" };
+
+const strapi = new Strapi({
+	baseURL: "http://localhost:1337",
+	defaultLocale: "en",
+	token: session.jwt,
+	refreshOnUnauthorized: {
+		token: () => session.refreshToken,
+		onRefresh: (next) => {
+			session = { jwt: next.jwt, refreshToken: next.refreshToken ?? session.refreshToken };
+		},
+	},
+});
+```
+
+`strapi.users()` covers `/api/users`, including `me()`, and takes the same
 user type. A populated `role` is typed as `StrapiRole`; unpopulated it is the
 role id.
 
@@ -225,7 +252,7 @@ params are narrower: `findMany` and `files.find` take `fields`, `populate`,
 
 ## Users
 
-`strapi.users()` talks to `/api/users`. The body is the user or an array — no
+`strapi.users()` talks to `/api/users`. The body is the user or an array, no
 `data` wrapper, and `meta` is `null`. Users are addressed by numeric `id`, not
 `documentId`. `create` and `update` send `data` as the raw JSON body, not
 `{ data }`.
@@ -258,7 +285,8 @@ empty. `count` returns `0` when the body is not a number.
 
 | Method | Route | Notes |
 | --- | --- | --- |
-| `find` | `GET /api/upload/files` | List params as above. Current Strapi 5 ignores pagination here and returns every file. The paginated route is `GET /api/upload/files/page`, which this client does not wrap — use `strapi.http.request` or a generated `route()`. |
+| `find` | `GET /api/upload/files` | List params as above. Current Strapi 5 ignores pagination here and returns every file. |
+| `findPage` | `GET /api/upload/files/page` | The same params, one page, with `meta.pagination`. |
 | `findOne` | `GET /api/upload/files/<id>` | `fields`, `populate` |
 | `upload` | `POST /api/upload` | `multipart/form-data`. One `StrapiMedia` per file. |
 | `update` | `POST /api/upload?id=<id>` | Metadata only (`name`, `alternativeText`, `caption`). Does not re-upload. |
@@ -310,7 +338,7 @@ articles.findMany({ params: { fields: ["cover"] } });    // error: cover is popu
 articles.findMany({ params: { populate: ["title"] } });  // error: title is scalar
 ```
 
-The marker is type-level only — Strapi never returns it, and it is excluded
+The marker is type-level only. Strapi never returns it, and it is excluded
 from `filters`, `sort` and create/update payloads. Hand-written types without a
 marker keep accepting any key in both params.
 
@@ -371,7 +399,7 @@ plain[0]?.author; // error: nothing populated it, so Strapi does not return it
 
 Two rules behind that: Strapi selects `[id, documentId, ...fields]` when
 `fields` is given, and returns a populatable field only when `populate` asks
-for it — where it then stops being optional. `populate: "*"` populates every
+for it, where it then stops being optional. `populate: "*"` populates every
 first-level relation, component, media and dynamic zone.
 
 The same rules apply inside a populate map entry with options, at every depth:
@@ -406,10 +434,10 @@ Strapi declares for its core routes:
 
 | Method | Params |
 | --- | --- |
-| `findMany`, `findFirst`, `count` | `ListQueryParams<T>` — the full read surface, including `pagination`, `sort`, `filters` and `_q` |
-| `find` | `FindQueryParams<T>` — no `pagination`, no `_q` |
-| `create`, `update`, `upsert` | `WriteQueryParams<T>` — `fields` and `populate` only; they shape the response, not which documents are written |
-| `delete` | `DeleteQueryParams<T>` — `fields`, `populate`, `filters`; returns the deleted document, or `null` when Strapi sends an empty body |
+| `findMany`, `findFirst`, `count` | `ListQueryParams<T>`: the full read surface, including `pagination`, `sort`, `filters` and `_q` |
+| `find` | `FindQueryParams<T>`: no `pagination`, no `_q` |
+| `create`, `update`, `upsert` | `WriteQueryParams<T>`: `fields` and `populate` only; they shape the response, not which documents are written |
+| `delete` | `DeleteQueryParams<T>`: `fields`, `populate`, `filters`; returns the deleted document, or `null` when Strapi sends an empty body |
 | `SingleTypeClient.find` | `FindQueryParams<T>` |
 | `SingleTypeClient.update` | `WriteQueryParams<T>` |
 
@@ -422,18 +450,23 @@ page length when the response has no pagination meta.
 `filters` that first document is whatever the collection returns first, so pass
 a filter that identifies the row.
 
+`publish({ documentId })` sends `PUT` with `{ data: {} }` and
+`status=published`. Omitting `data` is a 400, and a write without `status`
+publishes, so this is the call that publishes a draft without changing it.
+Single types have the same method, without a `documentId`.
+
 All of them keep the conditional params Strapi adds for localized and
 Draft & Publish content types: `locale`, `status`, `publicationFilter` and the
 deprecated `hasPublishedVersion`. `publicationFilter` takes one of Strapi's
-publication cohorts — `never-published`, `has-published-version`, `modified`,
+publication cohorts: `never-published`, `has-published-version`, `modified`,
 `unmodified`, `never-published-document`, `has-published-version-document`,
-`published-without-draft`, `published-with-draft` — and Strapi answers a 400
+`published-without-draft`, `published-with-draft`. Strapi answers a 400
 for anything else.
 
 ## Writing
 
-Strapi takes relations and media **by reference** — a `documentId`, a numeric
-`id`, or the `connect`/`disconnect`/`set` longhand — while components and
+Strapi takes relations and media **by reference** (a `documentId`, a numeric
+`id`, or the `connect`/`disconnect`/`set` longhand) while components and
 dynamic zones are written inline. Generated types carry a `__relations` marker
 so the payload is checked the same way:
 
@@ -520,8 +553,8 @@ for await (const [err, batch] of articles.pages({ params: { pagination: { pageSi
 
 Each iteration yields the same `[error, data, meta]` tuple as everything else,
 and `params` narrows each page exactly as `findMany` does. Breaking out of the
-loop stops the requests. An error ends the walk — there is no cursor to
-continue from — as does an empty page, so a stale `total` cannot spin forever.
+loop stops the requests. An error ends the walk, because there is no cursor to
+continue from. An empty page ends it too, so a stale `total` cannot spin forever.
 
 Both pagination modes work: pass `page`/`pageSize` or `start`/`limit` and the
 walk continues in the mode you asked for, whichever the server answers in.
@@ -574,8 +607,8 @@ export interface ServiceError {
 ```
 
 A validation error carries the field-level problems in `details`. Strapi shapes
-that differently per error — a rejected query param reports `{ source, param }`,
-for instance — so `details` stays `unknown` and `validationIssues` reads the
+that differently per error. A rejected query param reports `{ source, param }`,
+for instance, so `details` stays `unknown` and `validationIssues` reads the
 validation case safely:
 
 ```ts
@@ -619,7 +652,7 @@ const strapi = new Strapi({
 
 What it repeats, and what it leaves alone:
 
-- **Statuses** `408`, `429`, `500`, `502`, `503`, `504` by default — the ones a
+- **Statuses** `408`, `429`, `500`, `502`, `503`, `504` by default, the ones a
   second attempt can fix. A `400` or `404` is returned as it is.
 - **Methods**: only the idempotent ones (`GET`, `HEAD`, `OPTIONS`). Repeating a
   `POST` can create a second document, because the first may have been applied
@@ -633,7 +666,7 @@ Otherwise the wait doubles each attempt from `delay`, capped the same way. Set
 `jitter: true` to spread the waits when many clients retry at once.
 
 The `timeout` applies per attempt rather than to the whole sequence, and an
-aborted signal stops the retrying — you asked for the request to stop, not to be
+aborted signal stops the retrying. You asked for the request to stop, not to be
 repeated. `onRetry` reports each wait:
 
 ```ts
@@ -692,8 +725,8 @@ Once the registry is augmented, a uid it does not declare is a compile error,
 which catches typos like `strapi.collection("aritcles")`. Both escape hatches
 stay open: an explicit type argument overrides the registry and accepts any
 uid (`strapi.collection<Article>("custom-route")`), and adding the uid to the
-augmentation makes it first class. While the registry is empty — no generated
-file imported — any uid is accepted and falls back to `CollectionClient<object>`
+augmentation makes it first class. While the registry is empty (no generated
+file imported), any uid is accepted and falls back to `CollectionClient<object>`
 / `SingleTypeClient<object>`.
 
 `StrapiClient`'s `uid` is constrained the same way; for a uid outside the
@@ -742,8 +775,8 @@ What is generated:
 - Relations, media, components and dynamic zones are optional fields (they appear only when populated). `media` is `StrapiMedia | null` or `StrapiMedia[]`; relations to `plugin::users-permissions.user` are `StrapiUser`.
 - Dynamic zones are `Array<(BlocksHero & { __component: "blocks.hero" }) | ...>`.
 - `enumeration` becomes a union of string literals; `json` is `unknown`; `biginteger` is `string`.
-- A `__relations` marker per type, listing the fields written by reference — relations and media, but not components or dynamic zones.
-- A `__populatable` marker per type, listing the fields `populate` accepts. It exists only in the type system — Strapi never returns it — and is what lets `fields`, `sort` and `populate` be told apart and results be narrowed.
+- A `__relations` marker per type, listing the fields written by reference: relations and media, but not components or dynamic zones.
+- A `__populatable` marker per type, listing the fields `populate` accepts. It exists only in the type system. Strapi never returns it, and it is what lets `fields`, `sort` and `populate` be told apart and results be narrowed.
 - `private` attributes are skipped. Plugin content types are skipped unless `--include-plugins` is passed.
 - `--include-plugins` registers plugin content types under their `pluralName` even when the plugin does not expose a matching `/api/<pluralName>` route.
 
@@ -780,7 +813,7 @@ npx @fbritoferreira/strapi generate --config          # all of it
 npx @fbritoferreira/strapi generate --config --check  # CI: fail on a stale file
 ```
 
-`generateConfig` is an identity function — it exists so the file is checked as
+`generateConfig` is an identity function. It exists so the file is checked as
 you write it. Naming both `dir` and `url` under `types`, or leaving a section
 without its source, is a compile error; being a `.ts` file, it can also read
 `process.env` directly rather than inventing an interpolation syntax.
@@ -879,7 +912,7 @@ The source can be a JSON document or a Swagger UI page: recent versions of
 reads it out of the page. `--token` (or `STRAPI_TOKEN`) authenticates either.
 
 When the plugin runs with `restrictedAccess`, the page is behind a password
-rather than a token — it redirects to `/documentation/login` and keeps a
+rather than a token. It redirects to `/documentation/login` and keeps a
 session cookie. Pass `--password` (or `STRAPI_DOCS_PASSWORD`) and the loader
 signs in first and reuses that cookie:
 
@@ -904,7 +937,7 @@ const [, file] = await strapi.route("GET /upload/files/{id}", { params: { id: 7 
 ```
 
 Path params are substituted into the path, `query` is serialized like collection
-params, and the body is returned exactly as Strapi sends it — these routes have
+params, and the body is returned exactly as Strapi sends it. These routes have
 no `data`/`meta` envelope, so `route()` does not unwrap one.
 
 **Use OpenAPI for routes, not for documents.** Strapi's generated spec is lossier
@@ -918,7 +951,7 @@ callbacks) are skipped: they cannot be called by name.
 
 ## GraphQL
 
-Strapi serves GraphQL at `/graphql` — at the origin, not under `/api` — when
+Strapi serves GraphQL at `/graphql`, at the origin rather than under `/api`, when
 `@strapi/plugin-graphql` is installed. `strapi.graphql()` runs one operation
 there, with the same bearer token and `[error, data]` tuple as the REST clients:
 
@@ -932,8 +965,8 @@ const [err, data] = await strapi.graphql<{ articles: Article[] }>(
 ```
 
 GraphQL errors come back as the error tuple, with the whole `errors` array in
-`details` and the single error's `extensions.code` as `name`. A 404 — the plugin
-is not installed — is reported as such. Pass `graphqlEndpoint` to `new Strapi()`
+`details` and the single error's `extensions.code` as `name`. A 404 (the plugin
+is not installed) is reported as such. Pass `graphqlEndpoint` to `new Strapi()`
 when the plugin's `endpoint` option is configured; `strapi.graphqlUrl` shows the
 resolved URL.
 
@@ -963,7 +996,7 @@ query Articles($locale: I18NLocaleCode, $pagination: PaginationArg) {
 ```
 
 Arguments travel as variables rather than inline literals, so the server parses
-them as JSON — a string that looks like an enum stays a string, and nothing has
+them as JSON. A string that looks like an enum stays a string, and nothing has
 to be escaped by hand. Their GraphQL types come from `strapiGraphqlArgs`, which
 is why the client needs it. `query` and `mutate` return a `TypeError` naming
 the field when it was not passed. Passing an argument the field does not declare is
@@ -979,7 +1012,7 @@ operations in one document. Those are what the typed documents below are for.
 
 ### Typed documents
 
-`graphql()` also takes a document that carries its own types — a
+`graphql()` also takes a document that carries its own types: a
 `TypedDocumentNode`, or the `TypedDocumentString` graphql-codegen emits with
 `documentMode: "string"`. Both type arguments are then inferred, `variables` is
 required exactly when the document declares a required one, and the selection
@@ -1011,7 +1044,7 @@ export default config;
 ```
 
 `documentMode: "string"` keeps the query as text, so nothing has to parse an AST
-at runtime. The default AST form works too — its source text is read from
+at runtime. The default AST form works too; its source text is read from
 `loc`. A document with neither (an AST built without location info) comes back
 as an error tuple naming the fix rather than sending an empty query.
 
@@ -1025,7 +1058,7 @@ npx @fbritoferreira/strapi generate --graphql http://localhost:1337/graphql -o s
 ```
 
 That introspects the endpoint and writes one exported type per object,
-interface, enum, input object and union — so query results and variables can be
+interface, enum, input object and union, so query results and variables can be
 annotated with the schema's own names:
 
 ```ts
@@ -1039,7 +1072,7 @@ const [err, data] = await strapi.graphql<{ articles: Article[] }, { filters: Art
 
 Those types describe the schema, not a selection: the generated `Article` has
 every field, not the ones a given query selected. Typed documents above cover
-that case. Introspection has to be reachable — Apollo
+that case. Introspection has to be reachable. Apollo
 disables it when `NODE_ENV=production`, so generate against a development
 instance.
 
@@ -1130,27 +1163,10 @@ const [err, data] = await articles.findMany({
 await articles.update({ documentId, payload: { data: { title } }, locale: "fr" });
 ```
 
-## Migrating from 0.4
-
-- `id: number` addressing is gone. `find`, `update` and `delete` now take
-  `documentId: string`; Strapi 5 routes accept `documentId` only.
-- `find` with no id (the old "find all" call) is removed. Use `findFirst`.
-- Every method now returns `[error, data, meta]` instead of `[error, data]`.
-  `meta.pagination` carries `total` and `pageCount`. Existing two-element
-  destructuring (`const [err, data] = ...`) still works; the third element is
-  ignored.
-- `T` no longer has to declare `id`.
-- `ServiceError` gained `name`, `details` and `cause`. Strapi's `error` body,
-  validation details included, is copied into it.
-- `defaultLocale` is now required. There is no `"en"` default.
-- `StrapiClient` stays as a shorthand for a single collection and now takes
-  `defaultLocale`, but it is collection-only: it has no `files`, `users()` or
-  `single()`. Use `new Strapi(...)` when you need those.
-
 ## Development
 
 1. Clone and install: `git clone <repo> && pnpm install` (Node.js 24, see `.nvmrc`)
-2. Run tests: `pnpm test` (Vitest), `pnpm test:coverage` for coverage — thresholds are 100% on statements, branches, functions and lines. `pnpm smoke` exercises the built package the way CI does on the oldest supported Node, where Vitest itself cannot run
+2. Run tests: `pnpm test` (Vitest), `pnpm test:coverage` for coverage. Thresholds are 100% on statements, branches, functions and lines. `pnpm smoke` exercises the built package the way CI does on the oldest supported Node, where Vitest itself cannot run
 3. Lint and typecheck: `pnpm lint && pnpm typecheck`
 4. Build: `pnpm build` (outputs ESM, CJS and bundled `.d.ts` to `dist/`; also builds the `generate` CLI to `dist/cli.mjs`, used by `bin/strapi-client.mjs`)
 5. Add a changeset for user-facing changes: `pnpm changeset`

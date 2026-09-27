@@ -63,10 +63,26 @@ export class SingleTypeClient<T extends object> {
 	}
 
 	/**
+	 * Publishes the draft as it stands. Strapi answers 400 if `data` is omitted,
+	 * so this sends `{ data: {} }` and `status=published`.
+	 */
+	async publish<const P extends WriteQueryParams<T> = object>(
+		options: { params?: P; locale?: string; init?: FetchInit } = {}
+	): Promise<Result<SelectedDoc<T, P>>> {
+		const { params, locale, init } = options;
+		return this.update({
+			payload: { data: {} },
+			params: { ...params, status: "published" } as P,
+			...(locale !== undefined && { locale }),
+			...(init && { init }),
+		});
+	}
+
+	/**
 	 * `DELETE /api/<uid>`. With `locale`, deletes only that localization.
 	 *
 	 * Takes the `fields` and `populate` its route declares, and answers with the
-	 * deleted document — or `null` when Strapi sends an empty body.
+	 * deleted document, or `null` when Strapi sends an empty body.
 	 */
 	async delete<const P extends WriteQueryParams<T> = object>(
 		options: { params?: P; locale?: string; init?: FetchInit } = {}

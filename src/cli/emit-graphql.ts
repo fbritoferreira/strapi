@@ -36,7 +36,7 @@ function renderArgTypes(operations: Operation[]): string {
 
 /**
  * Renders the GraphQL schema as TypeScript: one exported type per object,
- * interface, enum, input object and union. Selection sets are not modelled —
+ * interface, enum, input object and union. Selection sets are not modelled:
  * annotate a query's result with the types you selected, or reach for
  * graphql-codegen when you want the selection itself typed.
  */

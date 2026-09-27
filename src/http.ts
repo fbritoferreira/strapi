@@ -1,6 +1,6 @@
 import type { ServiceError } from "./errors";
 import { backoffFor, resolveRetry, retryAfterMs, shouldRetry, type ResolvedRetry, type RetryOptions } from "./retry";
-import type { FetchInit } from "./types";
+import type { FetchInit, RefreshedSession } from "./types";
 
 /** Connection settings shared by every request. */
 export interface HttpConfig {
@@ -21,6 +21,31 @@ export interface HttpConfig {
 	 * @see {@link RetryOptions}
 	 */
 	retry?: number | RetryOptions;
+	/**
+	 * On a 401, rotate a users-permissions refresh token and retry the request
+	 * once. Off by default. A 401 with no bearer token is left alone unless
+	 * `cookie` is set.
+	 */
+	refreshOnUnauthorized?: RefreshOnUnauthorized;
+}
+
+/**
+ * Opt-in refresh after a 401. The new JWT is adopted via {@link HttpClient.setToken}.
+ * Concurrent 401s share one refresh, so a rotation is not issued once per request.
+ */
+export interface RefreshOnUnauthorized {
+	/**
+	 * Refresh token, or a getter for the current one. Omit when it travels in an
+	 * httpOnly cookie (`cookie: true`).
+	 */
+	token?: string | (() => string | undefined);
+	/**
+	 * Send the refresh call with `credentials: "include"` and attempt it even
+	 * when no bearer token is set. For an httpOnly refresh cookie.
+	 */
+	cookie?: boolean;
+	/** Called once the rotation succeeds, so the new refresh token can be stored. */
+	onRefresh?: (session: RefreshedSession) => void;
 }
 
 /** Low-level result of {@link HttpClient.request}: `[error, null]` or `[null, parsedBody | null]`. */
@@ -41,6 +66,8 @@ export class HttpClient {
 	private readonly fetchImpl: typeof fetch;
 	private readonly timeout: number;
 	private readonly retry: ResolvedRetry | null;
+	private readonly refreshOnUnauthorized: RefreshOnUnauthorized | undefined;
+	private refreshing: Promise<ServiceError | null> | null = null;
 
 	constructor(config: HttpConfig) {
 		if (typeof config.baseURL !== "string" || config.baseURL.trim() === "") {
@@ -54,6 +81,7 @@ export class HttpClient {
 		this.fetchImpl = config.fetch ?? ((input, init) => globalThis.fetch(input, init));
 		this.timeout = config.timeout ?? DEFAULT_TIMEOUT_MS;
 		this.retry = resolveRetry(config.retry);
+		this.refreshOnUnauthorized = config.refreshOnUnauthorized;
 	}
 
 	/**
@@ -96,6 +124,10 @@ export class HttpClient {
 	 * @returns The parsed JSON body, `null` for an empty body, or a {@link ServiceError}.
 	 */
 	async request<R>(path: string, init: FetchInit = {}): Promise<HttpResult<R>> {
+		return this.dispatch(path, init, false);
+	}
+
+	private async dispatch<R>(path: string, init: FetchInit, refreshed: boolean): Promise<HttpResult<R>> {
 		const url = /^https?:\/\//i.test(path) ? path : `${this.baseURL}/${path.replace(/^\/+/, "")}`;
 
 		const headers = new Headers(this.headers);
@@ -131,6 +163,20 @@ export class HttpClient {
 			break;
 		}
 
+		const refresh = this.refreshOnUnauthorized;
+		if (
+			!response.ok &&
+			response.status === 401 &&
+			!refreshed &&
+			refresh !== undefined &&
+			init.signal?.aborted !== true &&
+			this.shouldRefresh(path, refresh)
+		) {
+			const refreshErr = await this.refreshUnauthorized(refresh, init.signal);
+			if (refreshErr) return [refreshErr, null];
+			return this.dispatch(path, init, true);
+		}
+
 		const text = await response.text();
 
 		if (!response.ok) {
@@ -152,6 +198,90 @@ export class HttpClient {
 			];
 		}
 	}
+
+	private shouldRefresh(path: string, options: RefreshOnUnauthorized): boolean {
+		if (isRefreshPath(path)) return false;
+		if (options.cookie === true) return true;
+		return typeof this.token === "string" && this.token !== "";
+	}
+
+	private refreshUnauthorized(
+		options: RefreshOnUnauthorized,
+		signal: AbortSignal | null | undefined
+	): Promise<ServiceError | null> {
+		this.refreshing ??= this.rotate(options, signal).finally(() => {
+			this.refreshing = null;
+		});
+		return this.refreshing;
+	}
+
+	private async rotate(
+		options: RefreshOnUnauthorized,
+		signal: AbortSignal | null | undefined
+	): Promise<ServiceError | null> {
+		const provided = typeof options.token === "function" ? options.token() : options.token;
+		const hasToken = typeof provided === "string" && provided !== "";
+		if (!hasToken && options.cookie !== true) {
+			return { name: "HTTPError", message: "Strapi: no refresh token to rotate" };
+		}
+
+		const headers = new Headers(this.headers);
+		headers.set("Content-Type", "application/json");
+		const timeoutSignal = AbortSignal.timeout(this.timeout);
+		const combined = signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal;
+
+		let response: Response;
+		try {
+			response = await this.fetchImpl(`${this.baseURL}/auth/refresh`, {
+				method: "POST",
+				headers,
+				body: JSON.stringify(hasToken ? { refreshToken: provided } : {}),
+				signal: combined,
+				...(options.cookie === true && { credentials: "include" as const }),
+			});
+		} catch (thrown) {
+			return toNetworkError(thrown, this.timeout);
+		}
+
+		const text = await response.text();
+		if (!response.ok) {
+			const error = toHttpError(response, text);
+			if (error.status === 404) {
+				return { ...error, message: REFRESH_MODE_HINT };
+			}
+			return error;
+		}
+
+		let body: RefreshedSession | null;
+		try {
+			body = text === "" ? null : (JSON.parse(text) as RefreshedSession);
+		} catch (thrown) {
+			return {
+				name: "HTTPError",
+				status: response.status,
+				message: "Strapi: refresh answered with invalid JSON",
+				cause: thrown,
+			};
+		}
+		if (!body?.jwt) return { name: "HTTPError", message: "Strapi: refresh answered with an empty body" };
+
+		this.setToken(body.jwt);
+		try {
+			options.onRefresh?.(body);
+		} catch (thrown) {
+			const message = thrown instanceof Error ? thrown.message : String(thrown);
+			return { name: "HTTPError", message, cause: thrown };
+		}
+		return null;
+	}
+}
+
+const REFRESH_MODE_HINT =
+	'Strapi: no refresh endpoint; set plugin::users-permissions.jwtManagement to "refresh" to enable refresh tokens';
+
+function isRefreshPath(path: string): boolean {
+	const pathname = /^https?:\/\//i.test(path) ? new URL(path).pathname : `/${path}`;
+	return pathname.replace(/\/+$/, "").endsWith("/auth/refresh");
 }
 
 function toNetworkError(thrown: unknown, timeout: number): ServiceError {

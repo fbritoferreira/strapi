@@ -41,4 +41,4 @@ The implementation is called with the absolute URL and the merged `RequestInit`,
 
 ## Unwrapped requests
 
-`strapi.http.request(path, init)` is the same transport the sub-clients use. `path` is relative to the API root (`articles?populate=*`) or an absolute URL. The result is `[error, body]` — no `meta`, and the body is not unwrapped. Non-2xx responses and network failures are `ServiceError` values, not throws. An empty body is `null`.
+`strapi.http.request(path, init)` is the same transport the sub-clients use. `path` is relative to the API root (`articles?populate=*`) or an absolute URL. The result is `[error, body]`: no `meta`, and the body is not unwrapped. Non-2xx responses and network failures are `ServiceError` values, not throws. An empty body is `null`.

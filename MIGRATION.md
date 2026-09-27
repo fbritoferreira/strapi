@@ -8,5 +8,3 @@
 - `ServiceError` gained `name`, `details` and `cause`. Strapi's `error` body, validation details included, is copied into it.
 - `defaultLocale` is required. There is no `"en"` default.
 - `StrapiClient` stays a shorthand for one collection and now takes `defaultLocale`. It has no `files`, `users()`, `single()`, `auth`, `route()` or `graphql()`. Use `new Strapi(...)` for those.
-
-The same notes are in [MIGRATION.md](https://github.com/fbritoferreira/strapi/blob/main/MIGRATION.md), which npm and JSR ship with the package.

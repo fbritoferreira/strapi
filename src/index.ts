@@ -69,7 +69,7 @@ export {
 } from "./config";
 export type { ServiceError, Result, StrapiValidationIssue, StrapiValidationDetails } from "./errors";
 export { isValidationDetails, validationIssues } from "./errors";
-export { HttpClient, type HttpConfig } from "./http";
+export { HttpClient, type HttpConfig, type RefreshOnUnauthorized } from "./http";
 export type { RetryOptions, ResolvedRetry } from "./retry";
 export { Strapi, type StrapiConfig, type RegistryKey, type Uid, type DocOf } from "./strapi";
 export { StrapiClient, type StrapiClientConfig } from "./client";

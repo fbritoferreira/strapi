@@ -8,8 +8,8 @@ These are exported from `@fbritoferreira/strapi`. Generated files augment the em
 | --- | --- |
 | `Strapi` | Root client. `collection`, `single`, `users`, `files`, `auth`, `route`, `graphql`, `query`, `mutate`, `setToken`. |
 | `StrapiClient` | One collection. Same methods as `CollectionClient`. |
-| `CollectionClient` | CRUD for `/api/<uid>`. |
-| `SingleTypeClient` | `find`, `update`, `delete` for a single type. |
+| `CollectionClient` | CRUD for `/api/<uid>`, plus `publish`. |
+| `SingleTypeClient` | `find`, `update`, `publish`, `delete` for a single type. |
 | `AuthClient` | `/api/auth/*`. |
 | `UsersClient` | `/api/users`. |
 | `FilesClient` | `/api/upload`. |
@@ -36,10 +36,10 @@ These are exported from `@fbritoferreira/strapi`. Generated files augment the em
 
 Augment these, usually by importing a generated file:
 
-- `StrapiContentTypes` — collection uid to document
-- `StrapiSingleTypes` — single-type uid to document
-- `StrapiRoutes` — `"METHOD /path"` to params, query, body and response
-- `StrapiGraphqlQueries` / `StrapiGraphqlMutations` — root field to args and result
+- `StrapiContentTypes`: collection uid to document
+- `StrapiSingleTypes`: single-type uid to document
+- `StrapiRoutes`: `"METHOD /path"` to params, query, body and response
+- `StrapiGraphqlQueries` / `StrapiGraphqlMutations`: root field to args and result
 
 While a registry is empty, any uid is accepted and falls back to `object`. Once it has keys, an unknown uid is a compile error unless you pass an explicit type argument.
 

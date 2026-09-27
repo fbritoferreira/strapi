@@ -27,6 +27,7 @@ const strapi = new Strapi({
 | `timeout` | `10000` | Milliseconds before a request is aborted. Applies per attempt, not to a retry sequence. |
 | `concurrency` | `5` | Max parallel requests when `findMany({ all: true })` fetches the remaining pages. |
 | `retry` | off | A number is the extra attempts. An object tunes backoff, statuses and methods. See [Retries](/guide/retries). |
+| `refreshOnUnauthorized` | off | On a 401, rotate a refresh token and retry once. See [Authentication](/guide/authentication). |
 | `graphqlEndpoint` | `"/graphql"` | Path resolved against the origin, not the `/api` root. Match the plugin's `endpoint` option. |
 | `graphqlArgs` | none | The generated `strapiGraphqlArgs`. Required by `query()` and `mutate()`. |
 

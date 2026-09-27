@@ -6,6 +6,7 @@
 | --- | --- | --- |
 | `find` | `GET /api/<uid>` | `NotFoundError` when the single type has no document yet. |
 | `update` | `PUT /api/<uid>` | Creates the document on the first call, updates it afterwards. |
+| `publish` | `PUT /api/<uid>` | `{ data: {} }` and `status=published`. Same reason as collections: omitting `data` is a 400. |
 | `delete` | `DELETE /api/<uid>` | The deleted document, or `null` when the body is empty. `locale` deletes only that localization. |
 
 `find` takes `FindQueryParams` (no pagination, no `_q`). `update` and `delete` take `fields` and `populate`, which shape the returned document. The same selection narrowing as collections applies. See [Querying](/guide/querying).

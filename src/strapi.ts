@@ -161,7 +161,7 @@ export class Strapi {
 	 *
 	 * Path params are substituted into the path, `query` is serialised the same
 	 * way as collection params, and `body` is sent as JSON. The body is returned
-	 * as Strapi sends it — these routes have no `data`/`meta` envelope.
+	 * as Strapi sends it. These routes have no `data`/`meta` envelope.
 	 *
 	 * @example
 	 * ```ts

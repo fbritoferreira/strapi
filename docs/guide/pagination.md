@@ -40,6 +40,6 @@ for await (const [err, batch, meta] of articles.pages({
 }
 ```
 
-An error ends the walk — there is no cursor to continue from — as does an empty page, so a stale `total` cannot spin forever. Both pagination modes work. If the server answers an offset request with page-shaped meta, the next request stays in the mode you asked for.
+An error ends the walk, because there is no cursor to continue from. An empty page ends it too, so a stale `total` cannot spin forever. Both pagination modes work. If the server answers an offset request with page-shaped meta, the next request stays in the mode you asked for.
 
 `pages()` does not take `all`. Selection narrowing applies to each page the same way it does on `findMany`.

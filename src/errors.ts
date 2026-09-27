@@ -46,8 +46,8 @@ function isIssue(value: unknown): value is StrapiValidationIssue {
 /**
  * Whether `details` carries field-level validation problems.
  *
- * Strapi puts several shapes in `details` — a rejected query param reports
- * `{ source, param }`, for instance — so this narrows rather than assumes.
+ * Strapi puts several shapes in `details`. A rejected query param reports
+ * `{ source, param }`, for instance, so this narrows rather than assumes.
  */
 export function isValidationDetails(details: unknown): details is StrapiValidationDetails {
 	if (typeof details !== "object" || details === null || Array.isArray(details)) return false;

@@ -334,6 +334,22 @@ describe("CollectionClient", () => {
 			expect(bodyOf(fetchMock)).toEqual({ data: { title: "Up" } });
 		});
 
+		it("publish sends an empty data object and status=published", async () => {
+			fetchMock.mockResolvedValueOnce(jsonResponse({ data: doc("abc", "Draft") }));
+			const [err, data] = await articles.publish({
+				documentId: "abc",
+				locale: "fr",
+				params: { fields: ["title"] },
+				init: { cache: "no-store" },
+			});
+			expect(err).toBeNull();
+			expect(data?.title).toBe("Draft");
+			expect(decoded(fetchMock)).toBe("http://h/api/articles/abc?fields[0]=title&status=published&locale=fr");
+			expect(lastCall(fetchMock).init.method).toBe("PUT");
+			expect(bodyOf(fetchMock)).toEqual({ data: {} });
+			expect(lastCall(fetchMock).init.cache).toBe("no-store");
+		});
+
 		it("omits query for default locale without params", async () => {
 			fetchMock.mockResolvedValueOnce(jsonResponse({ data: doc("abc") }));
 			await articles.update({ documentId: "abc", payload: { data: {} } });

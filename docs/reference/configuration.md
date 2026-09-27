@@ -13,6 +13,7 @@ Constructor options live on [Configuration](/guide/configuration). This page is 
 | `fetch` | no | `globalThis.fetch` |
 | `timeout` | no | `10000` ms, per attempt |
 | `retry` | no | Off. A number is `attempts`. |
+| `refreshOnUnauthorized` | no | Off. `{ token?, cookie?, onRefresh? }` |
 | `concurrency` | no | `5` |
 | `graphqlEndpoint` | no | `"/graphql"`, resolved against the origin |
 | `graphqlArgs` | no | Required by `query()` and `mutate()` |

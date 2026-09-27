@@ -33,7 +33,7 @@ There is no timestamp, so regenerating an unchanged schema leaves the file as it
 - Relations, media, components and dynamic zones are optional (they appear only when populated). `media` is `StrapiMedia | null` or `StrapiMedia[]`. Relations to `plugin::users-permissions.user` are `StrapiUser`.
 - Dynamic zones are `Array<(BlocksHero & { __component: "blocks.hero" }) | ...>`.
 - `enumeration` becomes a union of string literals. `json` is `unknown`. `biginteger` is `string`. `blocks` is `StrapiBlock[]`.
-- A `__relations` marker listing the fields written by reference — relations and media, not components or dynamic zones.
+- A `__relations` marker listing the fields written by reference: relations and media, not components or dynamic zones.
 - A `__populatable` marker listing the fields `populate` accepts. It exists only in the type system. It is what lets `fields`, `sort` and `populate` be told apart, and what lets results be narrowed.
 - `private` attributes are skipped. Plugin content types are skipped unless `--include-plugins` is passed.
 - `--include-plugins` registers plugin content types under their `pluralName` even when the plugin does not expose a matching `/api/<pluralName>` route.

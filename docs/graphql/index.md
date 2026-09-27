@@ -1,6 +1,6 @@
 # GraphQL
 
-Strapi serves GraphQL at `/graphql` — at the origin, not under `/api` — when `@strapi/plugin-graphql` is installed. `strapi.graphql()` runs one operation there, with the same bearer token and `[error, data]` tuple as the REST clients. There is no `meta`.
+Strapi serves GraphQL at `/graphql`, at the origin rather than under `/api`, when `@strapi/plugin-graphql` is installed. `strapi.graphql()` runs one operation there, with the same bearer token and `[error, data]` tuple as the REST clients. There is no `meta`.
 
 ```ts
 const [err, data] = await strapi.graphql<{ articles: Article[] }>(
@@ -11,7 +11,7 @@ const [err, data] = await strapi.graphql<{ articles: Article[] }>(
 );
 ```
 
-GraphQL errors come back as the error tuple, with the whole `errors` array in `details` and the single error's `extensions.code` as `name` (otherwise `"GraphQLError"`). A response with no `data` is also an error. A 404 — the plugin is not installed — says so and names `strapi.graphqlUrl`.
+GraphQL errors come back as the error tuple, with the whole `errors` array in `details` and the single error's `extensions.code` as `name` (otherwise `"GraphQLError"`). A response with no `data` is also an error. A 404 (the plugin is not installed) says so and names `strapi.graphqlUrl`.
 
 Pass `graphqlEndpoint` when the plugin's `endpoint` option is not `/graphql`. `operationName` selects one operation when the document contains several. `init` merges extra `fetch` options.
 
@@ -50,7 +50,7 @@ query Articles($locale: I18NLocaleCode, $pagination: PaginationArg) {
 }
 ```
 
-Arguments travel as variables rather than inline literals, so the server parses them as JSON — a string that looks like an enum stays a string, and nothing has to be escaped by hand. Their GraphQL types come from `strapiGraphqlArgs`, which is why the client needs it. Calling `query` or `mutate` without it returns a `TypeError` naming the field. Passing an argument the field does not declare is refused before anything is sent.
+Arguments travel as variables rather than inline literals, so the server parses them as JSON. A string that looks like an enum stays a string, and nothing has to be escaped by hand. Their GraphQL types come from `strapiGraphqlArgs`, which is why the client needs it. Calling `query` or `mutate` without it returns a `TypeError` naming the field. Passing an argument the field does not declare is refused before anything is sent.
 
 `select` is checked against the schema and narrows the result, the same way `fields` and `populate` narrow a REST read. Mutations use `strapi.mutate()` with the same options.
 
@@ -58,7 +58,7 @@ This does not cover fragments, aliases, directives, unions, or several operation
 
 ## Typed documents
 
-`graphql()` also takes a document that carries its own types — a `TypedDocumentNode`, or the `TypedDocumentString` graphql-codegen emits with `documentMode: "string"`. Both type arguments are then inferred, `variables` is required exactly when the document declares a required one, and the selection set itself is typed:
+`graphql()` also takes a document that carries its own types: a `TypedDocumentNode`, or the `TypedDocumentString` graphql-codegen emits with `documentMode: "string"`. Both type arguments are then inferred, `variables` is required exactly when the document declares a required one, and the selection set itself is typed:
 
 ```ts
 import { ArticlesDocument } from "./gql/graphql";
@@ -82,7 +82,7 @@ const config: CodegenConfig = {
 export default config;
 ```
 
-`documentMode: "string"` keeps the query as text. The default AST form works too — its source is read from `loc`. A document with neither comes back as an error tuple naming the fix, rather than sending an empty query.
+`documentMode: "string"` keeps the query as text. The default AST form works too; its source is read from `loc`. A document with neither comes back as an error tuple naming the fix, rather than sending an empty query.
 
 No dependency is added for this. `TypedDocument<TData, TVariables>` matches the `__apiType` marker both forms carry.
 

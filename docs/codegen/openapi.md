@@ -45,7 +45,7 @@ const [err, session] = await strapi.route("POST /auth/local", {
 const [, file] = await strapi.route("GET /upload/files/{id}", { params: { id: 7 } });
 ```
 
-Path params are substituted into the path. `query` is serialized like collection params. The body is returned exactly as Strapi sends it — these routes have no `data`/`meta` envelope, so `route()` does not unwrap one. `init` merges extra `fetch` options.
+Path params are substituted into the path. `query` is serialized like collection params. The body is returned exactly as Strapi sends it. These routes have no `data`/`meta` envelope, so `route()` does not unwrap one. `init` merges extra `fetch` options.
 
 Use OpenAPI for routes, not for documents. Strapi's generated spec is lossier than its schemas: a dynamic zone arrives as `{"type":"array","items":{}}` with the component union gone, responses carry no `meta`, and `documentId` is described as a UUID. Keep generating document types from `--dir` or `--url`. The two outputs are separate files and work side by side.
 
