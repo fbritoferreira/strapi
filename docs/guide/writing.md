@@ -1,6 +1,6 @@
 # Writing
 
-Strapi takes relations and media **by reference** — a `documentId`, a numeric `id`, or the `connect` / `disconnect` / `set` longhand — while components and dynamic zones are written inline. Generated types carry a `__relations` marker so the payload is checked the same way:
+Strapi takes relations and media **by reference** (a `documentId`, a numeric `id`, or the `connect` / `disconnect` / `set` longhand) while components and dynamic zones are written inline. Generated types carry a `__relations` marker so the payload is checked the same way:
 
 ```ts
 await articles.create({

@@ -51,7 +51,7 @@ async function login(source: string, password: string, fetchImpl: typeof fetch):
 	if (response.status >= 400) {
 		// The plugin stores "logged in" on a koa session. Without the session
 		// middleware there is nothing to write to, and only the branch a correct
-		// password takes reaches that line — so it answers 500 while a wrong
+		// password takes reaches that line, so it answers 500 while a wrong
 		// password still redirects cleanly.
 		const hint =
 			response.status >= 500

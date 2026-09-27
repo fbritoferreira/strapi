@@ -41,7 +41,7 @@ export type FieldFilterValue<V> =
 export type PopulatableMarker = "__populatable";
 
 /**
- * Fields `populate` accepts — relations, components, media and dynamic zones.
+ * Fields `populate` accepts: relations, components, media and dynamic zones.
  * Falls back to every key for a hand-written type with no marker.
  */
 export type PopulatableKey<T> = PopulatableMarker extends keyof T
@@ -49,7 +49,7 @@ export type PopulatableKey<T> = PopulatableMarker extends keyof T
 	: keyof T & string;
 
 /**
- * Fields `fields` and `sort` accept — everything the generator did not mark as
+ * Fields `fields` and `sort` accept: everything the generator did not mark as
  * populatable. Falls back to every key for a hand-written type with no marker.
  */
 export type ScalarKey<T> = PopulatableMarker extends keyof T
@@ -120,7 +120,7 @@ type Loose<P> =
  * rule, at every depth; `count: true` answers `{ count }` for that field.
  *
  * Narrowing needs two things: a type carrying the generator's `__populatable`
- * marker, and params literal enough to read — pass them inline. Anything else
+ * marker, and params literal enough to read. Pass them inline. Anything else
  * (a hand-written type, params held in a variable) yields `T` unchanged.
  */
 export type SelectedDoc<T, P> = PopulatableMarker extends keyof T
@@ -182,7 +182,7 @@ export interface DynamicZonePopulate<T> {
 
 /**
  * Value for one key of a {@link Populate} map: `true`, `"*"`, or the options
- * for the document behind it — {@link DynamicZonePopulate} for a dynamic zone,
+ * for the document behind it: {@link DynamicZonePopulate} for a dynamic zone,
  * {@link PopulateOptions} otherwise.
  */
 export type PopulateValue<T> =
@@ -214,7 +214,7 @@ export type SortField<T> =
 	| `${PopulatableKey<T> & string}.${string}`;
 
 /**
- * Property the generator adds listing the fields Strapi writes by reference —
+ * Property the generator adds listing the fields Strapi writes by reference:
  * relations and media. A subset of {@link PopulatableMarker}: components and
  * dynamic zones are embedded, so they are written inline.
  */
@@ -358,8 +358,8 @@ type ConditionalParam = "locale" | "status" | "publicationFilter" | "hasPublishe
  * Params a list route accepts (`GET /api/<uid>`): the full read surface.
  *
  * The per-route sets below mirror the zod contracts Strapi declares for its
- * core routes, so a param the endpoint ignores — or rejects outright under
- * `api.rest.strictParams` — cannot be passed in the first place.
+ * core routes, so a param the endpoint ignores, or rejects outright under
+ * `api.rest.strictParams`, cannot be passed in the first place.
  */
 export type ListQueryParams<T> = Pick<
 	QueryParams<T>,

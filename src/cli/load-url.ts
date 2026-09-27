@@ -34,7 +34,7 @@ interface BuilderContentTypeSchema {
 
 interface BuilderContentType {
 	uid: string;
-	// plugin?: string — present on plugin-owned content types (e.g. "users-permissions"), unused here.
+	// plugin?: string, present on plugin-owned content types (e.g. "users-permissions"), unused here.
 	apiID: string;
 	schema: BuilderContentTypeSchema;
 }

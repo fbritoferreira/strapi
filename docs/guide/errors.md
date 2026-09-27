@@ -18,7 +18,7 @@ A missing document is `{ status: 404, name: "NotFoundError", message: "Not Found
 
 ## Validation errors
 
-A validation error carries field-level problems in `details`. Strapi shapes that differently per error — a rejected query param reports `{ source, param }`, for instance — so `details` stays `unknown` and `validationIssues` reads the validation case:
+A validation error carries field-level problems in `details`. Strapi shapes that differently per error. A rejected query param reports `{ source, param }`, for instance, so `details` stays `unknown` and `validationIssues` reads the validation case:
 
 ```ts
 import { validationIssues } from "@fbritoferreira/strapi";

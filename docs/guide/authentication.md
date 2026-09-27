@@ -32,4 +32,28 @@ await strapi.auth.logout({ scope: "session" });
 strapi.setToken(undefined);
 ```
 
-Every method accepts `init` for extra `fetch` options. The user type defaults to `StrapiUser`; the client itself is not generic at `strapi.auth` — the session's `user` is `StrapiUser` unless you call the methods through a typed path you constructed yourself. For the signed-in user after login, use [Users](/guide/users) `me()`.
+## Refresh after a 401
+
+Off by default. `refreshOnUnauthorized` rotates the refresh token when a request answers 401, adopts the new JWT with `setToken`, and retries that request once. Concurrent 401s share one rotation.
+
+It runs only when a bearer token was sent. `cookie: true` also runs with no bearer token and sends the refresh call with `credentials: "include"`. The refresh route itself is not refreshed again. A failed rotation is the error you get back; the original request is not retried.
+
+```ts
+let session = { jwt, refreshToken };
+
+const strapi = new Strapi({
+	baseURL: "http://localhost:1337",
+	defaultLocale: "en",
+	token: session.jwt,
+	refreshOnUnauthorized: {
+		token: () => session.refreshToken,
+		onRefresh: (next) => {
+			session = { jwt: next.jwt, refreshToken: next.refreshToken ?? session.refreshToken };
+		},
+	},
+});
+```
+
+`onRefresh` should not throw. If it does, the new JWT is already adopted and the original request fails with that error.
+
+Every method accepts `init` for extra `fetch` options. The user type defaults to `StrapiUser`. For the signed-in user after login, use [Users](/guide/users) `me()`.

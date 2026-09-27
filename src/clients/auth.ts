@@ -18,7 +18,7 @@ const REFRESH_MODE_HINT =
 /**
  * Client for the users-permissions auth routes at `/api/auth/*`.
  *
- * Every method returns the body Strapi sends, unwrapped — these routes have no
+ * Every method returns the body Strapi sends, unwrapped. These routes have no
  * `data`/`meta` envelope. The returned `jwt` is not applied to later requests
  * on its own; pass it to {@link Strapi.setToken} when you want that.
  *

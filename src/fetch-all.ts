@@ -6,7 +6,7 @@ import type { FetchInit, QueryParams, StrapiPagination, StrapiResponse } from ".
 
 /**
  * Options for {@link fetchAll}. `TRow` is the shape of a returned document,
- * `TDoc` the shape the params are typed against — they differ when a `fields`
+ * `TDoc` the shape the params are typed against. They differ when a `fields`
  * selection narrows the rows.
  */
 export interface FetchAllOptions<TRow, TDoc = TRow> {

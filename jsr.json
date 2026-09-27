@@ -8,6 +8,7 @@
 		"include": [
 			"src/**/*.ts",
 			"README.md",
+			"MIGRATION.md",
 			"LICENCE.md",
 			"CHANGELOG.md",
 			"package.json",

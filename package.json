@@ -25,6 +25,7 @@
 		"dist",
 		"bin",
 		"README.md",
+		"MIGRATION.md",
 		"LICENCE.md",
 		"CHANGELOG.md"
 	],

@@ -18,6 +18,7 @@ Every method returns `[error, data, meta]`. `data` and `meta` are `null` when `e
 | `count` | `GET /api/<uid>` | `meta.pagination.total`, via a one-row request. |
 | `create` | `POST /api/<uid>` | Non-default locales are added onto a default-locale document. See [i18n](/guide/i18n). |
 | `update` | `PUT /api/<uid>/<documentId>` | |
+| `publish` | `PUT /api/<uid>/<documentId>` | `{ data: {} }` and `status=published`. Publishes the draft without changing it. Omitting `data` is a 400. |
 | `delete` | `DELETE /api/<uid>/<documentId>` | The deleted document, or `null` when Strapi sends an empty body. `locale` deletes only that localization. |
 | `upsert` | find, then `PUT` or `POST` | Updates the first document matching `filters`, or creates one. |
 

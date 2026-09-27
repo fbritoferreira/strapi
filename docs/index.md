@@ -21,5 +21,5 @@ features:
   - title: Params checked against the route
     details: Each method accepts only the query params its Strapi route declares. fields and populate are told apart, and the result type follows the selection.
   - title: The rest of the API
-    details: Auth, users, uploads, custom and plugin routes from an OpenAPI document, and GraphQL — including operations that do not require writing a query.
+    details: Auth, users, uploads, custom and plugin routes from an OpenAPI document, and GraphQL, including operations that do not require writing a query.
 ---

@@ -25,6 +25,29 @@ describe("FilesClient", () => {
 		expect(decodeURIComponent(lastCall(fetchMock).url)).toBe("http://h/api/upload/files?filters[mime][$contains]=image");
 	});
 
+	it("findPage reads the paginated envelope", async () => {
+		const meta = { pagination: { page: 2, pageSize: 10, pageCount: 4, total: 40 } };
+		fetchMock.mockResolvedValueOnce(jsonResponse({ data: [media(1)], meta }));
+		const [err, data, pageMeta] = await files.findPage({
+			params: { pagination: { page: 2, pageSize: 10 } },
+			init: { cache: "no-store" },
+		});
+		expect(err).toBeNull();
+		expect(data).toEqual([media(1)]);
+		expect(pageMeta).toEqual(meta);
+		expect(decodeURIComponent(lastCall(fetchMock).url)).toBe("http://h/api/upload/files/page?pagination[page]=2&pagination[pageSize]=10");
+		expect(lastCall(fetchMock).init.cache).toBe("no-store");
+	});
+
+	it("findPage returns [] when the body has no data array, and errors on failure", async () => {
+		fetchMock.mockResolvedValueOnce(jsonResponse({ data: null }));
+		expect((await files.findPage())[1]).toEqual([]);
+		fetchMock.mockResolvedValueOnce(new Response("", { status: 200 }));
+		expect((await files.findPage())[1]).toEqual([]);
+		fetchMock.mockResolvedValueOnce(errorResponse(403, "ForbiddenError", "Forbidden"));
+		expect((await files.findPage())[0]?.status).toBe(403);
+	});
+
 	it("find returns [] on empty body and errors on failure", async () => {
 		fetchMock.mockResolvedValueOnce(new Response("", { status: 200 }));
 		expect((await files.find())[1]).toEqual([]);
