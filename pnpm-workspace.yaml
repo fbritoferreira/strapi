@@ -5,3 +5,10 @@ minimumReleaseAgeExclude:
   - vite-plugin-dts@5.1.1
 onlyBuiltDependencies:
   - esbuild
+overrides:
+  "picomatch@<4.0.4": "4.0.7"
+  "rollup@<4.59.0": "4.63.5"
+  "diff@<8.0.3": "8.0.3"
+  "yaml@<2.8.3": "2.9.1"
+  "@humanfs/node@<0.16.8": "0.16.8"
+  "esbuild@<=0.24.2": "0.25.12"
