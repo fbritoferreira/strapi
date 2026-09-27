@@ -19,11 +19,12 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
           deadline=$((SECONDS + 1800))
           while [ "$SECONDS" -lt "$deadline" ]; do
-            json=$(gh pr checks "$PR" --json name,state,bucket)
+            json=$(gh pr checks "$PR" --repo "$REPO" --json name,state,bucket)
             failed=$(echo "$json" | jq '[.[] | select(.name != "Dependabot auto-merge" and (.bucket == "fail" or .bucket == "cancel"))] | length')
             pending=$(echo "$json" | jq '[.[] | select(.name != "Dependabot auto-merge" and (.bucket == "pending" or .state == "PENDING" or .state == "QUEUED" or .state == "IN_PROGRESS"))] | length')
             total=$(echo "$json" | jq '[.[] | select(.name != "Dependabot auto-merge")] | length')
@@ -32,7 +33,7 @@ jobs:
               exit 1
             fi
             if [ "$total" -gt 0 ] && [ "$pending" -eq 0 ]; then
-              gh pr merge "$PR" --squash --delete-branch
+              gh pr merge "$PR" --repo "$REPO" --squash --delete-branch
               exit 0
             fi
             sleep 15
