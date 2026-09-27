@@ -32,4 +32,15 @@ describe("generateConfig", () => {
 		// @ts-expect-error there is no such section
 		generateConfig({ nope: {} });
 	});
+
+	it("takes a watch interval in milliseconds", () => {
+		const config = generateConfig({
+			types: { dir: "../my-strapi", output: "src/strapi-types.ts" },
+			graphql: { url: "http://localhost:1337/graphql", output: "src/strapi-graphql.ts" },
+			watch: { interval: 5000 },
+		});
+		expect(config.watch?.interval).toBe(5000);
+		// @ts-expect-error the interval is a number of milliseconds
+		generateConfig({ types: { dir: "../cms" }, watch: { interval: "5s" } });
+	});
 });

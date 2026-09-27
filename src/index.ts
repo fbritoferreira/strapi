@@ -65,6 +65,7 @@ export {
 	type TypesGeneration,
 	type RoutesGeneration,
 	type GraphqlGeneration,
+	type WatchGeneration,
 } from "./config";
 export type { ServiceError, Result, StrapiValidationIssue, StrapiValidationDetails } from "./errors";
 export { isValidationDetails, validationIssues } from "./errors";

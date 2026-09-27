@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 
-import { CONFIG_FILENAMES, loadConfig } from "../../cli/load-config";
+import { CONFIG_FILENAMES, loadConfig, loadConfigFile } from "../../cli/load-config";
 
 const config = { types: { url: "https://cms.example.com" } };
 
@@ -97,5 +97,55 @@ describe("loadConfig", () => {
 		await expect(
 			loadConfig({ cwd: dir, importModule: vi.fn().mockResolvedValue({ default: { types: {} } }) })
 		).rejects.toThrow(/types needs dir or url/);
+	});
+
+	it("reads a JSON config itself, since Node will not import JSON without an attribute", async () => {
+		const dir = await dirWith("strapi-codegen.config.json", JSON.stringify(config));
+		const importModule = vi.fn();
+		expect(await loadConfig({ cwd: dir, importModule })).toEqual(config);
+		expect(importModule).not.toHaveBeenCalled();
+	});
+
+	it("reports a JSON config that does not parse", async () => {
+		const dir = await dirWith("strapi-codegen.config.json", "{ nope");
+		await expect(loadConfig({ cwd: dir })).rejects.toThrow(/strapi-codegen\.config\.json is not valid JSON/);
+	});
+
+	it("returns the file it read, and imports a fresh copy when asked", async () => {
+		const dir = await dirWith("strapi-codegen.config.mjs");
+		const importModule = vi.fn().mockResolvedValue({ default: config });
+		const loaded = await loadConfigFile({ cwd: dir, importModule, version: 3 });
+		expect(loaded.file).toBe(join(dir, "strapi-codegen.config.mjs"));
+		expect(loaded.config).toEqual(config);
+		expect(String(importModule.mock.calls[0]?.[0])).toMatch(/strapi-codegen\.config\.mjs\?v=3$/);
+	});
+
+	it("accepts a watch interval", async () => {
+		const dir = await dirWith("strapi-codegen.config.ts");
+		const withWatch = { ...config, watch: { interval: 5000 } };
+		expect(await loadConfig({ cwd: dir, importModule: vi.fn().mockResolvedValue({ default: withWatch }) })).toEqual(withWatch);
+		const noInterval = { ...config, watch: {} };
+		expect(await loadConfig({ cwd: dir, importModule: vi.fn().mockResolvedValue({ default: noInterval }) })).toEqual(noInterval);
+	});
+
+	it.each([{ interval: 0 }, { interval: -1 }, { interval: "2s" }, { interval: Number.POSITIVE_INFINITY }])("rejects watch %o", async (watch) => {
+		const dir = await dirWith("strapi-codegen.config.ts");
+		await expect(
+			loadConfig({ cwd: dir, importModule: vi.fn().mockResolvedValue({ default: { ...config, watch } }) })
+		).rejects.toThrow(/watch\.interval must be a positive number of milliseconds/);
+	});
+
+	it("rejects a watch option that is not an object", async () => {
+		const dir = await dirWith("strapi-codegen.config.ts");
+		await expect(
+			loadConfig({ cwd: dir, importModule: vi.fn().mockResolvedValue({ default: { ...config, watch: 5000 } }) })
+		).rejects.toThrow(/watch must be an object/);
+	});
+
+	it("imports a changed module config afresh for each version", async () => {
+		const dir = await dirWith("strapi-codegen.config.mjs", 'export default { graphql: { url: "http://localhost:1337/graphql" } };');
+		expect((await loadConfig({ cwd: dir, version: 0 })).graphql?.url).toBe("http://localhost:1337/graphql");
+		await writeFile(join(dir, "strapi-codegen.config.mjs"), 'export default { graphql: { url: "http://localhost:1338/graphql" } };', "utf8");
+		expect((await loadConfig({ cwd: dir, version: 1 })).graphql?.url).toBe("http://localhost:1338/graphql");
 	});
 });

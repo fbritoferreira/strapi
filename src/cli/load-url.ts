@@ -1,10 +1,21 @@
 import { isPlainObject, type ComponentEntry, type ContentTypeEntry, type RawAttribute, type RawComponentSchema, type RawContentTypeSchema, type SchemaSet } from "./schema";
 
+/**
+ * An admin token kept between loads. Strapi rate-limits the admin login route
+ * (five attempts per five minutes by default), so a caller that loads
+ * repeatedly passes the same session and logs in only when the token is
+ * missing or refused.
+ */
+export interface AdminSession {
+	token?: string;
+}
+
 export interface UrlSource {
 	baseURL: string;
 	email: string;
 	password: string;
 	fetch?: typeof fetch;
+	session?: AdminSession;
 }
 
 const PERMISSION = "plugin::content-type-builder.read";
@@ -70,7 +81,9 @@ async function getJson(fetchImpl: typeof fetch, url: string, token: string): Pro
 	const response = await fetchImpl(url, { method: "GET", headers: { Authorization: `Bearer ${token}` } });
 	const body = await readBody(response);
 	if (response.status === 401 || response.status === 403) {
-		throw new Error(`GET ${url} returned ${response.status}; the admin user needs the permission ${PERMISSION}`);
+		throw Object.assign(new Error(`GET ${url} returned ${response.status}; the admin user needs the permission ${PERMISSION}`), {
+			status: response.status,
+		});
 	}
 	if (!response.ok) {
 		throw new Error(`GET ${url} failed (${response.status}): ${errorMessage(body, response)}`);
@@ -133,10 +146,7 @@ function validateComponent(raw: unknown, compUrl: string): BuilderComponent {
 	return raw as unknown as BuilderComponent;
 }
 
-export async function loadFromUrl(source: UrlSource): Promise<SchemaSet> {
-	const fetchImpl = source.fetch ?? ((input: RequestInfo | URL, init?: RequestInit) => globalThis.fetch(input, init));
-	const base = normalizeBase(source.baseURL);
-
+async function login(fetchImpl: typeof fetch, base: string, source: UrlSource): Promise<string> {
 	const loginUrl = `${base}/admin/login`;
 	const loginResponse = await fetchImpl(loginUrl, {
 		method: "POST",
@@ -151,10 +161,29 @@ export async function loadFromUrl(source: UrlSource): Promise<SchemaSet> {
 	if (typeof token !== "string" || token === "") {
 		throw new Error(`Admin login succeeded but the response has no data.token (${loginUrl})`);
 	}
+	return token;
+}
+
+export async function loadFromUrl(source: UrlSource): Promise<SchemaSet> {
+	const fetchImpl = source.fetch ?? ((input: RequestInfo | URL, init?: RequestInit) => globalThis.fetch(input, init));
+	const base = normalizeBase(source.baseURL);
 
 	const ctUrl = `${base}/content-type-builder/content-types`;
 	const compUrl = `${base}/content-type-builder/components`;
-	const [ctBody, compBody] = await Promise.all([getJson(fetchImpl, ctUrl, token), getJson(fetchImpl, compUrl, token)]);
+	const read = (token: string) => Promise.all([getJson(fetchImpl, ctUrl, token), getJson(fetchImpl, compUrl, token)]);
+
+	const cached = source.session?.token;
+	let token = cached ?? (await login(fetchImpl, base, source));
+	let bodies: unknown[];
+	try {
+		bodies = await read(token);
+	} catch (error) {
+		if (cached === undefined || (error as { status?: number }).status !== 401) throw error;
+		token = await login(fetchImpl, base, source);
+		bodies = await read(token);
+	}
+	if (source.session !== undefined) source.session.token = token;
+	const [ctBody, compBody] = bodies;
 
 	const contentTypes = new Map<string, ContentTypeEntry>();
 	for (const raw of dataArray(ctBody, ctUrl)) {
