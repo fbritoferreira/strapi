@@ -5,6 +5,7 @@
 [![npm downloads](https://img.shields.io/npm/dm/@fbritoferreira/strapi.svg)](https://www.npmjs.com/package/@fbritoferreira/strapi)
 [![JSR](https://jsr.io/badges/@fbritoferreira/strapi)](https://jsr.io/@fbritoferreira/strapi)
 [![JSR Score](https://jsr.io/badges/@fbritoferreira/strapi/score)](https://jsr.io/@fbritoferreira/strapi/score)
+[![Documentation](https://img.shields.io/badge/docs-GitHub%20Pages-blue)](https://fbritoferreira.github.io/strapi/)
 
 A TypeScript client for the Strapi 5 REST API. A root `Strapi` class wraps
 collection types, single types, the users-permissions plugin (`/api/users`)
@@ -12,6 +13,9 @@ and the upload plugin (`/api/upload`); a `StrapiClient` shorthand covers a
 single collection. Every method returns a `[error, data, meta]` tuple instead
 of throwing. The `strapi-client generate` CLI command writes TypeScript
 interfaces and the content-type registry from your Strapi schema.
+
+The searchable guide is at <https://fbritoferreira.github.io/strapi/>.
+This file stays complete on its own, because npm and JSR render it.
 
 ## What you get
 
@@ -30,7 +34,8 @@ interfaces and the content-type registry from your Strapi schema.
 ## Contents
 
 [Installation](#installation) · [Quick start](#quick-start) ·
-[Clients](#clients) · [Authentication](#authentication) ·
+[Clients](#clients) · [Single types](#single-types) · [Authentication](#authentication) ·
+[Users](#users) · [Uploads](#uploads) ·
 [Query parameters](#query-parameters) · [Writing](#writing) ·
 [Fetching every page](#fetching-every-page) · [Streaming pages](#streaming-pages) ·
 [i18n](#i18n) · [Errors](#errors) · [Retries](#retries) · [Next.js and custom fetch](#nextjs-and-custom-fetch) ·
@@ -154,6 +159,29 @@ const articles = new StrapiClient<Article>({
 });
 ```
 
+## Single types
+
+`strapi.single("homepage")` is one document per locale, so there is no list and
+no `documentId`. `find` returns `NotFoundError` when the single type has no
+document yet. `update` creates it on the first call and updates it afterwards.
+`delete` returns the deleted document, or `null` when the body is empty;
+`locale` deletes only that localization.
+
+```ts
+interface Homepage {
+	title: string;
+}
+
+const homepage = strapi.single<Homepage>("homepage");
+const [err, page] = await homepage.find({ params: { populate: "*" } });
+const [, saved] = await homepage.update({ payload: { data: { title: "Welcome" } }, locale: "fr" });
+await homepage.delete({ locale: "fr" });
+```
+
+`find` takes the same params as a collection `find` (no pagination, no `_q`).
+`update` and `delete` take `fields` and `populate`, which shape the response.
+Selection narrowing works the same way as on collections.
+
 ## Authentication
 
 `strapi.auth` covers the users-permissions routes at `/api/auth/*`:
@@ -194,6 +222,66 @@ params are narrower: `findMany` and `files.find` take `fields`, `populate`,
 `sort`, `pagination` and `filters`; `find`, `me` and `files.findOne` take
 `fields` and `populate`; `count` takes `filters` alone. `status`, `locale` and
 `_q` are not part of those routes and are rejected.
+
+## Users
+
+`strapi.users()` talks to `/api/users`. The body is the user or an array — no
+`data` wrapper, and `meta` is `null`. Users are addressed by numeric `id`, not
+`documentId`. `create` and `update` send `data` as the raw JSON body, not
+`{ data }`.
+
+| Method | Route | Params |
+| --- | --- | --- |
+| `findMany` | `GET /api/users` | `fields`, `populate`, `sort`, `pagination`, `filters` |
+| `find` | `GET /api/users/<id>` | `fields`, `populate` |
+| `me` | `GET /api/users/me` | `fields`, `populate`. The user the configured token belongs to. |
+| `count` | `GET /api/users/count` | `filters`. The body is a number, not pagination meta. |
+| `create` | `POST /api/users` | raw `data` object |
+| `update` | `PUT /api/users/<id>` | `id`, raw `data` |
+| `delete` | `DELETE /api/users/<id>` | returns the deleted user |
+
+```ts
+const users = strapi.users();
+const [err, me] = await users.me({ params: { populate: ["role"] } });
+const [, total] = await users.count({ params: { filters: { confirmed: { $eq: true } } } });
+```
+
+A populated `role` is `StrapiRole`; unpopulated it is the role id. Pass a type
+argument when the user is not `StrapiUser`: `strapi.users<Member>()`. `find`,
+`me`, `create`, `update` and `delete` return `NotFoundError` when the body is
+empty. `count` returns `0` when the body is not a number.
+
+## Uploads
+
+`strapi.files` is `/api/upload`. Same shape as users: plain objects, numeric
+`id`, no `data` wrapper.
+
+| Method | Route | Notes |
+| --- | --- | --- |
+| `find` | `GET /api/upload/files` | List params as above. Current Strapi 5 ignores pagination here and returns every file. The paginated route is `GET /api/upload/files/page`, which this client does not wrap — use `strapi.http.request` or a generated `route()`. |
+| `findOne` | `GET /api/upload/files/<id>` | `fields`, `populate` |
+| `upload` | `POST /api/upload` | `multipart/form-data`. One `StrapiMedia` per file. |
+| `update` | `POST /api/upload?id=<id>` | Metadata only (`name`, `alternativeText`, `caption`). Does not re-upload. |
+| `delete` | `DELETE /api/upload/files/<id>` | Returns the deleted media entry. |
+
+```ts
+const [err, uploaded] = await strapi.files.upload({
+	files: file,
+	fileName: "cover.png", // only needed when `files` is a Blob, not a File
+	fileInfo: { alternativeText: "Cover" },
+	ref: "api::article.article",
+	refId: documentId, // forwarded as-is; string or number
+	field: "cover",
+});
+
+await strapi.files.update({ id: 7, fileInfo: { caption: "Hero" } });
+await strapi.files.delete({ id: 7 });
+```
+
+A `File` keeps its name. A plain `Blob` is named `file-0` unless `fileName` is
+set. `fileInfo` may be one object or an array in the same order as `files`.
+`StrapiMedia` is the upload plugin's file: `url`, `mime`, `size`, `formats`
+(generated sizes, or `null`), plus the `StrapiDocument` fields.
 
 ## Query parameters
 
@@ -306,6 +394,13 @@ const [, all] = await articles.findMany({ params }); // Article[], unchanged
 present. `status` is Strapi 5's Draft & Publish filter (`"draft"` or
 `"published"`). `_q` runs Strapi's full-text search.
 
+A bare filter value is `$eq`. The other operators are `$eqi`, `$ne`, `$nei`,
+`$lt`, `$lte`, `$gt`, `$gte`, `$in`, `$notIn`, `$contains`, `$notContains`,
+`$containsi`, `$notContainsi`, `$startsWith`, `$startsWithi`, `$endsWith`,
+`$endsWithi`, `$between`, `$null`, `$notNull`, `$and`, `$or` and `$not`.
+`$null` and `$notNull` take a boolean. `$in`, `$notIn` and `$between` take an
+array. Query strings are serialized with `qs` in bracket/index array format.
+
 Each method takes only the params its route accepts, mirroring the contracts
 Strapi declares for its core routes:
 
@@ -317,6 +412,15 @@ Strapi declares for its core routes:
 | `delete` | `DeleteQueryParams<T>` — `fields`, `populate`, `filters`; returns the deleted document, or `null` when Strapi sends an empty body |
 | `SingleTypeClient.find` | `FindQueryParams<T>` |
 | `SingleTypeClient.update` | `WriteQueryParams<T>` |
+
+`findFirst` returns the first match, or `null`. It forces a page size of 1
+(`limit: 1` when you passed offset pagination, otherwise `pageSize: 1`).
+`count` does that same one-row read and returns `meta.pagination.total`, or the
+page length when the response has no pagination meta.
+
+`upsert` updates the first document matching `filters`, or creates one. Without
+`filters` that first document is whatever the collection returns first, so pass
+a filter that identifies the row.
 
 All of them keep the conditional params Strapi adds for localized and
 Draft & Publish content types: `locale`, `status`, `publicationFilter` and the
@@ -549,7 +653,11 @@ const [err, cached] = await articles.findMany({
 ```
 
 The constructor also accepts `headers`, a custom `fetch` implementation, and
-`timeout` (milliseconds, default 10_000):
+`timeout` (milliseconds, default 10_000, per attempt). `baseURL` may be the
+origin or already end in `/api`; a missing `/api` is appended, and a trailing
+slash is stripped. `strapi.http.request(path, init)` is the same transport for
+an endpoint this client does not wrap. `init.signal` is combined with the
+timeout via `AbortSignal.any`; an abort you requested is not retried.
 
 ```ts
 const strapi = new Strapi({
@@ -857,7 +965,8 @@ query Articles($locale: I18NLocaleCode, $pagination: PaginationArg) {
 Arguments travel as variables rather than inline literals, so the server parses
 them as JSON — a string that looks like an enum stays a string, and nothing has
 to be escaped by hand. Their GraphQL types come from `strapiGraphqlArgs`, which
-is why the client needs it; passing an argument the field does not declare is
+is why the client needs it. `query` and `mutate` return a `TypeError` naming
+the field when it was not passed. Passing an argument the field does not declare is
 refused before anything is sent.
 
 `select` is checked against the schema and narrows the result, the same way
@@ -1048,6 +1157,7 @@ await articles.update({ documentId, payload: { data: { title } }, locale: "fr" }
 6. After changing `src/cli/emit.ts`, refresh the fixture snapshot: `UPDATE_SNAPSHOT=1 pnpm vitest run src/test/cli/emit.spec.ts`
 7. README examples live in `src/cli/__fixtures__/readme-recipes.ts` and are type-checked by `pnpm typecheck`; update both together
 8. Check the JSR publish (slow types, included files): `pnpm jsr:check`
+9. Docs site: `pnpm docs:dev` (VitePress). `pnpm docs:build` is what CI runs before GitHub Pages publishes `https://fbritoferreira.github.io/strapi/`
 
 Uses Vite for building and Vitest for testing. Releases are cut by the
 `Release` GitHub workflow from `main` via Changesets: it publishes to npm

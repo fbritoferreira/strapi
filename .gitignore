@@ -12,6 +12,8 @@ build/
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
+docs/.vitepress/dist/
+docs/.vitepress/cache/
 
 # TypeScript outputs (if not using dist/)
 *.tsbuildinfo

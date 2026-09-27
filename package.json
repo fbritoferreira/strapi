@@ -43,7 +43,10 @@
 		"jsr:check": "jsr publish --dry-run --allow-dirty",
 		"prepare": "husky",
 		"lint-staged": "lint-staged",
-		"smoke": "node scripts/smoke.mjs"
+		"smoke": "node scripts/smoke.mjs",
+		"docs:dev": "vitepress dev docs",
+		"docs:build": "vitepress build docs",
+		"docs:preview": "vitepress preview docs"
 	},
 	"keywords": [
 		"strapi",
@@ -55,7 +58,7 @@
 	],
 	"author": "Filipe Brito Ferreira <me@fbritoferreira.com>",
 	"license": "MIT",
-	"homepage": "https://github.com/fbritoferreira/strapi#readme",
+	"homepage": "https://fbritoferreira.github.io/strapi/",
 	"repository": {
 		"type": "git",
 		"url": "git+https://github.com/fbritoferreira/strapi.git"
@@ -86,6 +89,7 @@
 		"typescript-eslint": "^8.70.0",
 		"vite": "^8.3.0",
 		"vite-plugin-dts": "^5.1.1",
+		"vitepress": "^1.6.4",
 		"vitest": "^5.0.1"
 	},
 	"dependencies": {
