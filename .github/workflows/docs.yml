@@ -1,20 +1,24 @@
 name: Docs
 
 on:
-  pull_request:
-    branches: [main]
   push:
+    branches: [main]
+  pull_request:
     branches: [main]
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
+  pull-requests: write
 
 concurrency:
   group: pages
   cancel-in-progress: false
+
+env:
+  BUILD_OUTPUT_DIR: ./docs/.vitepress/dist
 
 jobs:
   build:
@@ -43,21 +47,42 @@ jobs:
       - name: Build with VitePress
         run: pnpm docs:build
 
+      # Production deployment - deploy to GitHub Pages root
       - name: Upload Pages artifact
-        if: github.event_name != 'pull_request'
+        if: github.event_name == 'push'
         uses: actions/upload-pages-artifact@v5
         with:
-          path: docs/.vitepress/dist
+          path: ${{ env.BUILD_OUTPUT_DIR }}
 
-  deploy:
-    name: Deploy to GitHub Pages
-    if: github.event_name != 'pull_request'
+  deploy-production:
+    name: Deploy production docs
+    if: github.event_name == 'push'
     needs: build
     runs-on: ubuntu-latest
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - name: Deploy
+      - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v5
+
+  deploy-pr-preview:
+    name: Deploy PR preview
+    if: github.event_name == 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy PR preview
+        uses: rossjrw/pr-preview-action@v1
+        with:
+          source-dir: ${{ env.BUILD_OUTPUT_DIR }}
+          preview-branch: gh-pages
+          umbrella-dir: pr-${{ github.event.pull_request.number }}
+          action: auto
+          comment: |
+            Docs preview deployed for PR #${{ github.event.pull_request.number }}
+
+            📖 Preview URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/pr-${{ github.event.pull_request.number }}/
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
