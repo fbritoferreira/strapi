@@ -1,5 +1,11 @@
 # @fbritoferreira/strapi-admin-api
 
+## 1.2.3
+
+### Patch Changes
+
+- 752da7d: Fix double-hashed passwords on admin user create/update/reset-password: password writes now go through Strapi's own user service (hash once via db.query) instead of entityService, which re-hashed them in the document-service transform so new credentials could never log in. Also persist firstName/lastName (the schema fields are firstname/lastname), stop masking 4xx validation errors as 500s, and guard against writing token fields through the user update body.
+
 ## 1.2.2
 
 ### Patch Changes
