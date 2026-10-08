@@ -1,6 +1,6 @@
 {
   "name": "@fbritoferreira/strapi-admin-api",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Plugin to manage Strapi admin users and tokens via REST API",
   "type": "module",
   "main": "./dist/index.js",
