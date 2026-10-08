@@ -35,8 +35,8 @@ const adminController: AdminController = {
         id: user.id,
         email: user.email,
         username: user.username,
-        firstName: user.firstName,
-        lastName: user.lastName,
+        firstName: user.firstname,
+        lastName: user.lastname,
         isActive: user.isActive,
         blocked: user.blocked,
         role: user.roles?.[0]
@@ -76,8 +76,8 @@ const adminController: AdminController = {
         id: user.id,
         email: user.email,
         username: user.username,
-        firstName: user.firstName,
-        lastName: user.lastName,
+        firstName: user.firstname,
+        lastName: user.lastname,
         isActive: user.isActive,
         blocked: user.blocked,
         role: user.roles?.[0]
@@ -108,11 +108,6 @@ const adminController: AdminController = {
         ctx.throw(400, 'email, username, and password are required');
       }
 
-      // Hash the password
-      const hashedPassword = await strapi.admin.services.auth.hashPassword(
-        body.password
-      );
-
       // Get the super-admin role (Strapi 5 codes are prefixed with `strapi-`)
       const roles = await strapi.db.query('admin::role').findMany({
         where: { code: 'strapi-super-admin' },
@@ -124,18 +119,19 @@ const adminController: AdminController = {
 
       const role = roles[0];
 
-      // Create the admin user
-      const user = await strapi.entityService.create('admin::user', {
-        data: {
-          email: body.email,
-          username: body.username,
-          password: hashedPassword,
-          firstName: body.firstName || '',
-          lastName: body.lastName || '',
-          isActive: body.isActive !== undefined ? body.isActive : true,
-          blocked: false,
-          roles: [role.id],
-        },
+      // Create through Strapi's own user service: it hashes the password and
+      // writes via db.query. Going through entityService instead would hash a
+      // second time (document-service transform re-hashes password attributes),
+      // producing credentials that can never log in.
+      const user = await strapi.admin.services.user.create({
+        email: body.email,
+        username: body.username,
+        password: body.password,
+        firstname: body.firstName || '',
+        lastname: body.lastName || '',
+        isActive: body.isActive !== undefined ? body.isActive : true,
+        blocked: false,
+        roles: [role.id],
       });
 
       // Return sanitized user (no password)
@@ -143,8 +139,8 @@ const adminController: AdminController = {
         id: user.id,
         email: user.email,
         username: user.username,
-        firstName: user.firstName,
-        lastName: user.lastName,
+        firstName: user.firstname,
+        lastName: user.lastname,
         isActive: user.isActive,
         blocked: user.blocked,
         role: {
@@ -156,6 +152,7 @@ const adminController: AdminController = {
         updatedAt: user.updatedAt,
       };
     } catch (error: any) {
+      if (error.status) throw error;
       ctx.throw(500, `Failed to create admin user: ${error.message}`);
     }
   },
@@ -174,33 +171,32 @@ const adminController: AdminController = {
         ctx.throw(404, 'Admin user not found');
       }
 
-      // Prepare update data
-      const updateData: any = { ...body };
-      if (updateData.role && !updateData.roles) {
-        updateData.roles = [updateData.role];
-      }
-      delete updateData.role;
+      // Pick known fields only; the schema uses firstname/lastname while the
+      // API documents firstName/lastName. entityService tolerated unknown keys,
+      // db.query does not — and passing the raw body through would also allow
+      // writing resetPasswordToken/registrationToken.
+      const updateData: any = {};
+      if (body.email !== undefined) updateData.email = body.email;
+      if (body.username !== undefined) updateData.username = body.username;
+      if (body.password) updateData.password = body.password;
+      if (body.firstName !== undefined) updateData.firstname = body.firstName;
+      if (body.lastName !== undefined) updateData.lastname = body.lastName;
+      if (body.isActive !== undefined) updateData.isActive = body.isActive;
+      if (body.blocked !== undefined) updateData.blocked = body.blocked;
+      if (body.roles !== undefined) updateData.roles = body.roles;
+      else if (body.role !== undefined) updateData.roles = [body.role];
 
-      // Hash password if provided
-      if (body.password) {
-        updateData.password = await strapi.admin.services.auth.hashPassword(
-          body.password
-        );
-      }
-
-      // Update the user
-      const user = await strapi.entityService.update('admin::user', id, {
-        data: updateData,
-        populate: ['roles'],
-      });
+      // Strapi's own service hashes a new password once and writes via db.query
+      // (entityService would double-hash), plus guards the last super admin.
+      const user = await strapi.admin.services.user.updateById(id, updateData);
 
       // Return sanitized user (no password)
       return {
         id: user.id,
         email: user.email,
         username: user.username,
-        firstName: user.firstName,
-        lastName: user.lastName,
+        firstName: user.firstname,
+        lastName: user.lastname,
         isActive: user.isActive,
         blocked: user.blocked,
         role: user.roles?.[0]
@@ -214,7 +210,7 @@ const adminController: AdminController = {
         updatedAt: user.updatedAt,
       };
     } catch (error: any) {
-      if (error.status === 404) throw error;
+      if (error.status || error.name === 'ValidationError') throw error;
       ctx.throw(500, `Failed to update admin user: ${error.message}`);
     }
   },
@@ -270,23 +266,17 @@ const adminController: AdminController = {
         ctx.throw(404, 'Admin user not found');
       }
 
-      // Hash and update password
-      const hashedPassword = await strapi.admin.services.auth.hashPassword(
-        password
-      );
-
-      await strapi.entityService.update('admin::user', id, {
-        data: {
-          password: hashedPassword,
-        },
-      });
+      // Hash and update password via Strapi's own service: it writes through
+      // db.query, which does not re-hash password attributes like entityService
+      // does (double-hash -> the new password could never log in).
+      await strapi.admin.services.user.updateById(id, { password });
 
       return {
         success: true,
         message: 'Password reset successfully',
       };
     } catch (error: any) {
-      if (error.status === 404) throw error;
+      if (error.status || error.name === 'ValidationError') throw error;
       ctx.throw(500, `Failed to reset password: ${error.message}`);
     }
   },
