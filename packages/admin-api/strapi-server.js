@@ -1,37 +1,30 @@
+import adminController from './dist/controllers/admin.js';
+import tokenController from './dist/controllers/tokens.js';
+
 export default () => {
   return {
-    register({ strapi }) {
-      console.log('🚀 Admin API Plugin registering...');
-
-      const usersRoutes = [
-        { method: 'GET', path: '/users', handler: 'admin-api::adminController::find', config: { auth: { scope: ['admin'] } } },
-        { method: 'GET', path: '/users/:id', handler: 'admin-api::adminController::findOne', config: { auth: { scope: ['admin'] } } },
-        { method: 'POST', path: '/users', handler: 'admin-api::adminController::create', config: { auth: { scope: ['admin'] } } },
-        { method: 'PUT', path: '/users/:id', handler: 'admin-api::adminController::update', config: { auth: { scope: ['admin'] } } },
-        { method: 'DELETE', path: '/users/:id', handler: 'admin-api::adminController::delete', config: { auth: { scope: ['admin'] } } },
-        { method: 'POST', path: '/users/:id/reset-password', handler: 'admin-api::adminController::resetPassword', config: { auth: { scope: ['admin'] } } },
-      ];
-
-      strapi.server.routes(
-        usersRoutes.map((route) => ({ ...route, path: `/admin-api${route.path}` }))
-      );
-
-      const tokensRoutes = [
-        { method: 'GET', path: '/tokens', handler: 'admin-api::adminController::find', config: { auth: { scope: ['admin'] } } },
-        { method: 'GET', path: '/tokens/:id', handler: 'admin-api::adminController::findOne', config: { auth: { scope: ['admin'] } } },
-        { method: 'POST', path: '/tokens', handler: 'admin-api::adminController::create', config: { auth: { scope: ['admin'] } } },
-        { method: 'PUT', path: '/tokens/:id', handler: 'admin-api::adminController::update', config: { auth: { scope: ['admin'] } } },
-        { method: 'DELETE', path: '/tokens/:id', handler: 'admin-api::adminController::delete', config: { auth: { scope: ['admin'] } } },
-        { method: 'POST', path: '/tokens/:id/revoke', handler: 'admin-api::adminController::revoke', config: { auth: { scope: ['admin'] } } },
-        { method: 'POST', path: '/tokens/:id/refresh', handler: 'admin-api::adminController::refresh', config: { auth: { scope: ['admin'] } } },
-      ];
-
-      strapi.server.routes(
-        tokensRoutes.map((route) => ({ ...route, path: `/admin-api${route.path}` }))
-      );
-
-      console.log('✅ Admin API routes registered: /admin-api/users and /admin-api/tokens');
+    controllers: {
+      adminController,
+      tokenController,
     },
+    routes: [
+      // Admin users routes
+      { method: 'GET', path: '/users', handler: 'adminController.find', config: { auth: { scope: ['admin'] } } },
+      { method: 'GET', path: '/users/:id', handler: 'adminController.findOne', config: { auth: { scope: ['admin'] } } },
+      { method: 'POST', path: '/users', handler: 'adminController.create', config: { auth: { scope: ['admin'] } } },
+      { method: 'PUT', path: '/users/:id', handler: 'adminController.update', config: { auth: { scope: ['admin'] } } },
+      { method: 'DELETE', path: '/users/:id', handler: 'adminController.delete', config: { auth: { scope: ['admin'] } } },
+      { method: 'POST', path: '/users/:id/reset-password', handler: 'adminController.resetPassword', config: { auth: { scope: ['admin'] } } },
+      // Admin tokens routes
+      { method: 'GET', path: '/tokens', handler: 'tokenController.find', config: { auth: { scope: ['admin'] } } },
+      { method: 'GET', path: '/tokens/:id', handler: 'tokenController.findOne', config: { auth: { scope: ['admin'] } } },
+      { method: 'POST', path: '/tokens', handler: 'tokenController.create', config: { auth: { scope: ['admin'] } } },
+      { method: 'PUT', path: '/tokens/:id', handler: 'tokenController.update', config: { auth: { scope: ['admin'] } } },
+      { method: 'DELETE', path: '/tokens/:id', handler: 'tokenController.delete', config: { auth: { scope: ['admin'] } } },
+      { method: 'POST', path: '/tokens/:id/revoke', handler: 'tokenController.revoke', config: { auth: { scope: ['admin'] } } },
+      { method: 'POST', path: '/tokens/:id/refresh', handler: 'tokenController.refresh', config: { auth: { scope: ['admin'] } } },
+    ],
+    register() {},
     config() {
       return { admin: { enabled: true } };
     },
