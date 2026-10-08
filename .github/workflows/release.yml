@@ -64,7 +64,7 @@ jobs:
         # Changesets only bumps package.json; mirror the new version into jsr.json.
         run: |
           pnpm changeset version
-          NEW_VERSION=$(jq -r .version package.json)
+          NEW_VERSION=$(jq -r .version packages/client/package.json)
           jq --tab --arg v "$NEW_VERSION" '.version = $v' jsr.json > jsr.json.tmp
           mv jsr.json.tmp jsr.json
 
@@ -74,7 +74,7 @@ jobs:
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
 
-          NEW_VERSION=$(jq -r .version package.json)
+          NEW_VERSION=$(jq -r .version packages/client/package.json)
 
           git add -A
           git commit -m "Version Packages (v${NEW_VERSION}) [skip ci]"
@@ -86,13 +86,13 @@ jobs:
 
       - name: Publish to npm (OIDC / Trusted Publishing)
         if: steps.changesets.outputs.pending == 'true'
-        run: pnpm publish --access public --no-git-checks
+        run: pnpm publish --access public --no-git-checks --filter @fbritoferreira/client
 
       - name: Extract version for release
         if: steps.changesets.outputs.pending == 'true'
         id: extract-version
         run: |
-          NEW_VERSION=$(jq -r .version package.json)
+          NEW_VERSION=$(jq -r .version packages/client/package.json)
           echo "tag=v${NEW_VERSION}" >> "$GITHUB_OUTPUT"
 
           # Changelog section for this version: from its heading to the next "## " heading.

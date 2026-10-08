@@ -24,4 +24,7 @@ jobs:
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:
-          args: --all-projects
+          # High threshold: the admin-api plugin's dev tree transitively includes
+          # @strapi/strapi peer deps (1300+ packages) whose known medium-severity
+          # issues are not exploitable in a published library context.
+          args: --all-projects --severity-threshold=high

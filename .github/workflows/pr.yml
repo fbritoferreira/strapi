@@ -53,12 +53,12 @@ jobs:
         if: matrix.node == 24
         run: pnpm package:check
 
-      - name: Check jsr.json version matches package.json
+      - name: Check jsr.json version matches package.json (client package)
         run: |
-          pkg_version=$(jq -r .version package.json)
+          pkg_version=$(jq -r .version packages/client/package.json)
           jsr_version=$(jq -r .version jsr.json)
           if [[ "$pkg_version" != "$jsr_version" ]]; then
-            echo "jsr.json version ($jsr_version) does not match package.json version ($pkg_version)"
+            echo "jsr.json version ($jsr_version) does not match packages/client/package.json version ($pkg_version)"
             exit 1
           fi
 
@@ -70,7 +70,7 @@ jobs:
         uses: davelosert/vitest-coverage-report-action@v2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          file: coverage/coverage-final.json
+          file: packages/client/coverage/coverage-final.json
           skip-if-no-coverage: false
           title: "Test Coverage Report"
           hide-badge: false
@@ -110,4 +110,4 @@ jobs:
           node-version: 20
 
       - name: Smoke test the built package
-        run: node scripts/smoke.mjs
+        run: node packages/client/scripts/smoke.mjs

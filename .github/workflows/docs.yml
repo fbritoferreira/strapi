@@ -18,7 +18,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  BUILD_OUTPUT_DIR: ./docs/.vitepress/dist
+  BUILD_OUTPUT_DIR: docs/.vitepress/dist
 
 jobs:
   build:
@@ -47,11 +47,19 @@ jobs:
       - name: Build with VitePress
         run: pnpm docs:build
 
-      # Production deployment - deploy to GitHub Pages root
+      # Production deployment: upload for GitHub Pages deploy
       - name: Upload Pages artifact
         if: github.event_name == 'push'
         uses: actions/upload-pages-artifact@v5
         with:
+          path: ${{ env.BUILD_OUTPUT_DIR }}
+
+      # PR preview: upload as a regular artifact so the preview job can deploy it
+      - name: Upload preview artifact
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v6
+        with:
+          name: docs-preview
           path: ${{ env.BUILD_OUTPUT_DIR }}
 
   deploy-production:
@@ -73,6 +81,15 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
+      # Download the built docs from the build job
+      - name: Download preview artifact
+        uses: actions/download-artifact@v6
+        with:
+          name: docs-preview
+          path: ${{ env.BUILD_OUTPUT_DIR }}
+
+      # Deploy to gh-pages under pr-{number}/ and comment on the PR.
+      # Preview URL: https://fbritoferreira.github.io/strapi/pr-{number}/
       - name: Deploy PR preview
         uses: rossjrw/pr-preview-action@v1
         with:
@@ -80,9 +97,3 @@ jobs:
           preview-branch: gh-pages
           umbrella-dir: pr-${{ github.event.pull_request.number }}
           action: auto
-          comment: |
-            Docs preview deployed for PR #${{ github.event.pull_request.number }}
-
-            📖 Preview URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/pr-${{ github.event.pull_request.number }}/
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
