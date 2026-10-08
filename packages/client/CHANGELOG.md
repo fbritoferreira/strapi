@@ -1,5 +1,11 @@
 # @fbritoferreira/strapi
 
+## 0.25.0
+
+### Minor Changes
+
+- ebaf281: bump version for normal updates
+
 ## 0.24.1
 
 ### Patch Changes

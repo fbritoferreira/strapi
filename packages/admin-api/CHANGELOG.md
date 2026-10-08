@@ -1,5 +1,11 @@
 # @fbritoferreira/strapi-admin-api
 
+## 1.1.0
+
+### Minor Changes
+
+- ebaf281: bump version for normal updates
+
 ## 1.0.3
 
 ### Patch Changes
