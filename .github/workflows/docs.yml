@@ -81,6 +81,10 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
+      # The preview action pushes to gh-pages via git, so the repo must exist.
+      - name: Checkout
+        uses: actions/checkout@v7
+
       # Download the built docs from the build job
       - name: Download preview artifact
         uses: actions/download-artifact@v6
