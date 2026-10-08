@@ -168,10 +168,10 @@ curl -X DELETE http://localhost:1337/admin-api/users/2 \
 /admin-api/tokens
 ```
 
-#### List Your Tokens
+#### List Tokens
 **GET** `/admin-api/tokens`
 
-Lists all authentication tokens for the authenticated user.
+Lists all API tokens (Strapi admin API tokens are global, not per-user).
 
 **Example:**
 ```bash
@@ -185,16 +185,19 @@ curl -X GET http://localhost:1337/admin-api/tokens \
 **Request Body:**
 ```json
 {
-  "label": "My API Token",
-  "type": "api",
-  "expiresAt": "2025-12-31T23:59:59.000Z"
+  "name": "My API Token",
+  "description": "Optional description",
+  "type": "read-only",
+  "lifespan": 2592000000
 }
 ```
 
 **Parameters:**
-- `label` (string, required) - Descriptive label
-- `type` (string, optional) - Token type (default: `api`)
-- `expiresAt` (string, optional) - ISO 8601 date (default: 30 days)
+- `name` (string, required) - Unique token name (`label` accepted as alias)
+- `description` (string, optional)
+- `type` (string, optional) - `read-only` | `full-access` | `custom` (default: `read-only`)
+- `lifespan` (number, optional) - Lifetime in ms; one of `null` (unlimited), 7d, 30d, 90d (default: `null`)
+- `permissions` (string[], optional) - Required when `type` is `custom`
 
 **Example:**
 ```bash
@@ -202,7 +205,7 @@ curl -X POST http://localhost:1337/admin-api/tokens \
   -H "Authorization: Bearer YOUR_JWT_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
-    "label": "My API Token"
+    "name": "My API Token"
   }'
 ```
 
@@ -210,16 +213,20 @@ curl -X POST http://localhost:1337/admin-api/tokens \
 ```json
 {
   "id": 1,
-  "label": "My API Token",
-  "type": "api",
-  "expiresAt": "2025-01-31T00:00:00.000Z",
-  "active": true,
-  "message": "Token created successfully",
-  "value": "c2VjdXJlLXRva2VuLXZhbHVlLW9mLW1l..."
+  "name": "My API Token",
+  "description": "",
+  "type": "read-only",
+  "lifespan": null,
+  "expiresAt": null,
+  "lastUsedAt": null,
+  "createdAt": "2026-01-31T00:00:00.000Z",
+  "updatedAt": "2026-01-31T00:00:00.000Z",
+  "accessKey": "9f8e7d...",
+  "message": "Token created successfully"
 }
 ```
 
-**⚠️ Important:** Copy the `value` field immediately! It won't be shown again.
+**⚠️ Important:** Copy the `accessKey` field immediately! It won't be shown again.
 
 #### Update Token
 **PUT** `/admin-api/tokens/:id`
@@ -227,12 +234,13 @@ curl -X POST http://localhost:1337/admin-api/tokens \
 **Request Body:**
 ```json
 {
-  "label": "Updated Label",
-  "type": "webhook"
+  "name": "Updated Name",
+  "description": "Updated description",
+  "lifespan": 604800000
 }
 ```
 
-**Note:** The token value cannot be changed. Regenerate the token instead.
+**Note:** The access key cannot be changed. Delete and create a new token instead.
 
 #### Delete Token
 **DELETE** `/admin-api/tokens/:id`
@@ -246,7 +254,7 @@ curl -X DELETE http://localhost:1337/admin-api/tokens/1 \
 #### Revoke Token
 **POST** `/admin-api/tokens/:id/revoke`
 
-Revokes a token immediately without deleting it.
+Deletes the token (matches Strapi's own revoke semantics).
 
 **Example:**
 ```bash
@@ -265,14 +273,17 @@ curl -X POST http://localhost:1337/admin-api/tokens/1/revoke \
 #### Refresh Token Expiration
 **POST** `/admin-api/tokens/:id/refresh`
 
-Extends the token's expiration date (default: +30 days).
+Resets the token's expiration.
 
 **Request Body (optional):**
 ```json
 {
-  "expiresAt": "2026-12-31T23:59:59.000Z"
+  "lifespan": 2592000000
 }
 ```
+
+- `lifespan` (number, optional) - One of `null` (unlimited), 7d, 30d, 90d (default: `null` = no expiration)
+- `expiresAt` (string, optional) - Explicit ISO 8601 expiry overrides `lifespan`
 
 **Example:**
 ```bash
