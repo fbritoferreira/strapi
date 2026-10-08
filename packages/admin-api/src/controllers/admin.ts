@@ -27,7 +27,7 @@ const adminController: AdminController = {
       // Query admin users
       const users = await strapi.entityService.findMany('admin::user', {
         ...query,
-        populate: ['role'],
+        populate: ['roles'],
       });
 
       // Hide password from response
@@ -39,11 +39,11 @@ const adminController: AdminController = {
         lastName: user.lastName,
         isActive: user.isActive,
         blocked: user.blocked,
-        role: user.role?.id
+        role: user.roles?.[0]
           ? {
-              id: user.role.id,
-              name: user.role.name,
-              code: user.role.code,
+              id: user.roles[0].id,
+              name: user.roles[0].name,
+              code: user.roles[0].code,
             }
           : null,
         createdAt: user.createdAt,
@@ -64,7 +64,7 @@ const adminController: AdminController = {
       const { id } = ctx.params;
 
       const user = await strapi.entityService.findOne('admin::user', id, {
-        populate: ['role'],
+        populate: ['roles'],
       });
 
       if (!user) {
@@ -80,11 +80,11 @@ const adminController: AdminController = {
         lastName: user.lastName,
         isActive: user.isActive,
         blocked: user.blocked,
-        role: user.role?.id
+        role: user.roles?.[0]
           ? {
-              id: user.role.id,
-              name: user.role.name,
-              code: user.role.code,
+              id: user.roles[0].id,
+              name: user.roles[0].name,
+              code: user.roles[0].code,
             }
           : null,
         createdAt: user.createdAt,
@@ -113,9 +113,9 @@ const adminController: AdminController = {
         body.password
       );
 
-      // Get the super-admin role
+      // Get the super-admin role (Strapi 5 codes are prefixed with `strapi-`)
       const roles = await strapi.db.query('admin::role').findMany({
-        where: { code: 'super-admin' },
+        where: { code: 'strapi-super-admin' },
       });
 
       if (roles.length === 0) {
@@ -134,7 +134,7 @@ const adminController: AdminController = {
           lastName: body.lastName || '',
           isActive: body.isActive !== undefined ? body.isActive : true,
           blocked: false,
-          role: role.id,
+          roles: [role.id],
         },
       });
 
@@ -176,6 +176,10 @@ const adminController: AdminController = {
 
       // Prepare update data
       const updateData: any = { ...body };
+      if (updateData.role && !updateData.roles) {
+        updateData.roles = [updateData.role];
+      }
+      delete updateData.role;
 
       // Hash password if provided
       if (body.password) {
@@ -187,7 +191,7 @@ const adminController: AdminController = {
       // Update the user
       const user = await strapi.entityService.update('admin::user', id, {
         data: updateData,
-        populate: ['role'],
+        populate: ['roles'],
       });
 
       // Return sanitized user (no password)
@@ -199,11 +203,11 @@ const adminController: AdminController = {
         lastName: user.lastName,
         isActive: user.isActive,
         blocked: user.blocked,
-        role: user.role?.id
+        role: user.roles?.[0]
           ? {
-              id: user.role.id,
-              name: user.role.name,
-              code: user.role.code,
+              id: user.roles[0].id,
+              name: user.roles[0].name,
+              code: user.roles[0].code,
             }
           : null,
         createdAt: user.createdAt,
@@ -223,13 +227,15 @@ const adminController: AdminController = {
       const { id } = ctx.params;
 
       // Check if user exists
-      const existingUser = await strapi.entityService.findOne('admin::user', id);
+      const existingUser = await strapi.entityService.findOne('admin::user', id, {
+        populate: ['roles'],
+      });
       if (!existingUser) {
         ctx.throw(404, 'Admin user not found');
       }
 
       // Prevent deleting super-admin
-      if (existingUser.role?.code === 'super-admin') {
+      if (existingUser.roles?.some((r: any) => r.code === 'strapi-super-admin')) {
         ctx.throw(400, 'Cannot delete super-admin user');
       }
 
