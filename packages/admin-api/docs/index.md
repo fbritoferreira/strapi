@@ -11,12 +11,29 @@ Plugin to manage Strapi admin users and authentication tokens through REST API e
 
 ## Installation
 
+### NPM
 ```bash
 npm install @fbritoferreira/strapi-admin-api
-# or
-pnpm add @fbritoferreira/strapi-admin-api
-# or
+```
+
+### Yarn
+```bash
 yarn add @fbritoferreira/strapi-admin-api
+```
+
+### PNPM
+```bash
+pnpm add @fbritoferreira/strapi-admin-api
+```
+
+### Bun
+```bash
+bun add @fbritoferreira/strapi-admin-api
+```
+
+### JSR
+```bash
+deno add @fbritoferreira/strapi-admin-api
 ```
 
 ## Quick Start

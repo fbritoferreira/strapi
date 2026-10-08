@@ -1,11 +1,11 @@
-# @fbritoferreira/strapi-client
+# Strapi Client
 
 A fully-typed TypeScript client for Strapi 5's REST and GraphQL APIs.
 
 ## Quick Start
 
 ```typescript
-import { strapi } from '@fbritoferreira/strapi-client';
+import { strapi } from '@fbritoferreira/client';
 
 const api = strapi({
   url: 'http://localhost:1337',
@@ -18,12 +18,29 @@ console.log(articles.data);
 
 ## Installation
 
+### NPM
 ```bash
-npm install @fbritoferreira/strapi-client
-# or
-pnpm add @fbritoferreira/strapi-client
-# or
-yarn add @fbritoferreira/strapi-client
+npm install @fbritoferreira/client
+```
+
+### Yarn
+```bash
+yarn add @fbritoferreira/client
+```
+
+### PNPM
+```bash
+pnpm add @fbritoferreira/client
+```
+
+### Bun
+```bash
+bun add @fbritoferreira/client
+```
+
+### JSR
+```bash
+deno add @fbritoferreira/client
 ```
 
 ## Configuration

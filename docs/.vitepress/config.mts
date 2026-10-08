@@ -67,6 +67,10 @@ export default defineConfig({
           text: titleize(pkg.name),
           link: `/packages/${pkg.name}/`
         }))
+      },
+      {
+        text: 'Docs',
+        link: '/docs/'
       }
     ],
     sidebar,
@@ -84,6 +88,15 @@ export default defineConfig({
     footer: {
       message: 'Released under the MIT License.',
       copyright: 'Copyright © 2024-present Filipe Brito Ferreira'
-    }
+    },
+    // JSR Toggle (Sidebar)
+    docFooter: {
+      previous: 'Previous',
+      next: 'Next',
+    },
+    docFooter: {
+      prev: 'Prev',
+      next: 'Next'
+    },
   }
 })
