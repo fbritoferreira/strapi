@@ -122,7 +122,7 @@ jobs:
 
       - name: Download preview artifact
         if: github.event.action != 'closed'
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           name: docs-preview
           path: ${{ env.BUILD_OUTPUT_DIR }}
