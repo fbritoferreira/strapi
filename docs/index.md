@@ -12,6 +12,9 @@ hero:
     - theme: alt
       text: Admin API Plugin
       link: /packages/admin-api/
+    - theme: alt
+      text: Cloudflare Email Provider
+      link: /packages/provider-email-cloudflare/
 
 features:
   - title: '@fbritoferreira/strapi'
@@ -20,4 +23,7 @@ features:
   - title: '@fbritoferreira/strapi-admin-api'
     details: Strapi plugin adding CRUD REST endpoints for admin users and admin tokens — something Strapi does not expose out of the box.
     link: /packages/admin-api/
+  - title: '@fbritoferreira/strapi-provider-email-cloudflare'
+    details: Strapi email provider sending transactional email through Cloudflare Email Service — no SMTP relay, no third-party email SaaS.
+    link: /packages/provider-email-cloudflare/
 ---
