@@ -1,0 +1,378 @@
+import { fail, ok, type Result } from "../errors";
+import { fetchAll } from "../fetch-all";
+import type { HttpClient } from "../http";
+import { buildQuery } from "../query";
+import type {
+	CreatePayload,
+	DeleteQueryParams,
+	FetchInit,
+	FindQueryParams,
+	ListQueryParams,
+	QueryParams,
+	StrapiFilters,
+	StrapiMeta,
+	SelectedDoc,
+	StrapiResponse,
+	StrapiSingleResponse,
+	UpdatePayload,
+	WriteQueryParams,
+} from "../types";
+
+/** Shared state a {@link Strapi} instance passes to each sub-client. */
+export interface ClientContext {
+	/** Shared HTTP layer. */
+	http: HttpClient;
+	/** Locale omitted from query strings. */
+	defaultLocale: string;
+	/** Max parallel page requests when fetching with `all: true`. */
+	concurrency: number;
+}
+
+/** Options common to read methods. `P` is the param set the route accepts. */
+interface ReadOptions<T, P = ListQueryParams<T>> {
+	/** Query parameters (filters, populate, sort, pagination, status…). */
+	params?: P;
+	/** Locale override for this call. */
+	locale?: string;
+	/** Extra `fetch` options merged into the request. */
+	init?: FetchInit;
+}
+
+const NOT_FOUND = { status: 404, name: "NotFoundError", message: "Not Found" } as const;
+
+/** The `pagination` half of a query, in either of Strapi's two modes. */
+type Pagination = NonNullable<QueryParams<unknown>["pagination"]>;
+
+/**
+ * CRUD client for one collection type at `/api/<uid>`. Every method returns a
+ * {@link Result} tuple; nothing throws for HTTP or network errors.
+ */
+export class CollectionClient<T extends object> {
+	protected readonly http: HttpClient;
+	protected readonly defaultLocale: string;
+	protected readonly concurrency: number;
+	/** Plural API id, e.g. `articles`. */
+	readonly uid: string;
+
+	/** Usually obtained via {@link Strapi.collection} rather than constructed directly. */
+	constructor(context: ClientContext, uid: string) {
+		this.http = context.http;
+		this.defaultLocale = context.defaultLocale;
+		this.concurrency = context.concurrency;
+		this.uid = uid;
+	}
+
+	/** Serialises `params` (and `locale`) into a query string, or `""` when empty. */
+	protected query(params: QueryParams<T> | undefined, locale: string | undefined): string {
+		return buildQuery(params, { defaultLocale: this.defaultLocale, ...(locale !== undefined && { locale }) });
+	}
+
+	/**
+	 * Requests a list of documents. `R` is the row shape the caller's params
+	 * select; the params themselves stay typed against the full document.
+	 */
+	private async list<R>(
+		params: ListQueryParams<T> | undefined,
+		locale: string | undefined,
+		init: FetchInit | undefined,
+		all: boolean
+	): Promise<Result<R[]>> {
+		if (all) {
+			return fetchAll<R, T>({
+				http: this.http,
+				path: this.uid,
+				defaultLocale: this.defaultLocale,
+				concurrency: this.concurrency,
+				...(params && { params }),
+				...(locale !== undefined && { locale }),
+				...(init && { init }),
+			});
+		}
+		const [err, body] = await this.http.request<StrapiResponse<R>>(`${this.uid}${this.query(params, locale)}`, {
+			...init,
+			method: "GET",
+		});
+		if (err) return fail(err);
+		return ok(body?.data ?? [], toMeta(body));
+	}
+
+	/**
+	 * `GET /api/<uid>`. Lists documents.
+	 *
+	 * With `all: true`, follows pagination and fetches every page (up to
+	 * `concurrency` in parallel), returning the concatenated data.
+	 *
+	 * The result is narrowed by `params`: with a literal `fields` only those
+	 * attributes come back, and populatable fields appear only when `populate`
+	 * asks for them. See {@link SelectedDoc}.
+	 */
+	async findMany<const P extends ListQueryParams<T> = object>(
+		options: ReadOptions<T, P> & { all?: boolean } = {}
+	): Promise<Result<SelectedDoc<T, P>[]>> {
+		const { params, locale, all = false, init } = options;
+		return this.list<SelectedDoc<T, P>>(params, locale, init, all);
+	}
+
+	/**
+	 * Walks the collection one page at a time, fetching the next only when the
+	 * consumer asks for it.
+	 *
+	 * Unlike `findMany({ all: true })`, which concatenates everything in memory,
+	 * this hands each page over as it arrives, so a large export stays bounded,
+	 * and stopping early stops the requests.
+	 *
+	 * Each iteration yields the same `[error, data, meta]` tuple as the other
+	 * methods; an error ends the walk, since there is no page to continue from.
+	 *
+	 * @example
+	 * ```ts
+	 * for await (const [err, batch] of articles.pages({ params: { pagination: { pageSize: 100 } } })) {
+	 *   if (err) throw new Error(err.message);
+	 *   await writeRows(batch);
+	 * }
+	 * ```
+	 */
+	async *pages<const P extends ListQueryParams<T> = object>(
+		options: ReadOptions<T, P> = {}
+	): AsyncGenerator<Result<SelectedDoc<T, P>[]>, void, undefined> {
+		const { params, locale, init } = options;
+		const requested: Pagination = params?.pagination ?? {};
+		const offsetMode = requested.start !== undefined || requested.limit !== undefined;
+		let pagination: Pagination = requested;
+
+		for (;;) {
+			const result: Result<SelectedDoc<T, P>[]> = await this.list<SelectedDoc<T, P>>(
+				{ ...params, pagination },
+				locale,
+				init,
+				false
+			);
+			yield result;
+
+			const next = nextPagination(requested, offsetMode, result);
+			if (next === null) return;
+			pagination = next;
+		}
+	}
+
+	/** `GET /api/<uid>/<documentId>`. Fails with `NotFoundError` when the document is missing. */
+	async find<const P extends FindQueryParams<T> = object>(
+		options: ReadOptions<T, P> & { documentId: string }
+	): Promise<Result<SelectedDoc<T, P>>> {
+		const { documentId, params, locale, init } = options;
+		const [err, body] = await this.http.request<StrapiSingleResponse<SelectedDoc<T, P>>>(
+			`${this.uid}/${encodeURIComponent(documentId)}${this.query(params, locale)}`,
+			{ ...init, method: "GET" }
+		);
+		if (err) return fail(err);
+		if (!body?.data) return fail(NOT_FOUND);
+		return ok(body.data, toMeta(body));
+	}
+
+	/** First document matching `params`, or `null`. Forces a page size of 1. */
+	async findFirst<const P extends ListQueryParams<T> = object>(
+		options: ReadOptions<T, P> = {}
+	): Promise<Result<SelectedDoc<T, P> | null>> {
+		const { params, locale, init } = options;
+		const pagination = params?.pagination;
+		const isOffsetShaped = pagination?.start !== undefined || pagination?.limit !== undefined;
+		const [err, data, meta] = await this.list<SelectedDoc<T, P>>(
+			{ ...params, pagination: isOffsetShaped ? { ...pagination, limit: 1 } : { ...pagination, pageSize: 1 } },
+			locale,
+			init,
+			false
+		);
+		if (err) return fail(err);
+		return ok(data[0] ?? null, meta);
+	}
+
+	/** Total number of documents matching `params`, read from `meta.pagination.total`. */
+	async count(options: ReadOptions<T> = {}): Promise<Result<number>> {
+		const { params, locale, init } = options;
+		const [err, data, meta] = await this.list<T>({ ...params, pagination: { pageSize: 1 } }, locale, init, false);
+		if (err) return fail(err);
+		return ok(meta?.pagination?.total ?? data.length, meta);
+	}
+
+	/**
+	 * `POST /api/<uid>`. Creates a document.
+	 *
+	 * For a non-default `locale`, Strapi requires the localization to be added
+	 * to an existing default-locale document. This method looks that document up
+	 * via `filters` (creating it when nothing matches) and then `PUT`s the
+	 * localized payload against its `documentId`.
+	 */
+	async create<const P extends WriteQueryParams<T> = object>(options: {
+		payload: CreatePayload<T>;
+		params?: P;
+		locale?: string;
+		filters?: StrapiFilters<T>;
+		init?: FetchInit;
+	}): Promise<Result<SelectedDoc<T, P>>> {
+		const { payload, params, filters, init } = options;
+		const locale = options.locale ?? this.defaultLocale;
+
+		if (locale === this.defaultLocale) {
+			return this.post<SelectedDoc<T, P>>(`${this.uid}${this.query(params, undefined)}`, payload, init);
+		}
+
+		// Non-default locale: find or create the default-locale document, then add the localization.
+		// The base-document lookup uses only `filters` (plus a forced pageSize of 1), never the
+		// caller's `params`. Sort, pagination and status shape the response, not which document
+		// is the localization base. With no `filters` there is nothing to match on, so the lookup
+		// is skipped entirely and a fresh default-locale document is created instead.
+		let documentId: string | undefined;
+		if (filters) {
+			const searchQuery = this.query({ filters, pagination: { pageSize: 1 } }, this.defaultLocale);
+			const [searchErr, found] = await this.http.request<StrapiResponse<T>>(`${this.uid}${searchQuery}`, {
+				...init,
+				method: "GET",
+			});
+			if (searchErr) return fail(searchErr);
+
+			const firstFound = found?.data?.[0];
+			documentId = firstFound ? documentIdOf(firstFound) : undefined;
+		}
+
+		if (!documentId) {
+			const basePayload = { ...payload, data: { ...payload.data, locale: this.defaultLocale } };
+			const [createErr, created] = await this.post(`${this.uid}${this.query(params, undefined)}`, basePayload, init);
+			if (createErr) return fail(createErr);
+			documentId = documentIdOf(created);
+			if (!documentId) return fail({ message: "Strapi API error: created document has no documentId", name: "HTTPError" });
+		}
+
+		return this.update({ documentId, payload, ...(params && { params }), locale, ...(init && { init }) });
+	}
+
+	/** `PUT /api/<uid>/<documentId>`. Updates (or adds a localization to) a document. */
+	async update<const P extends WriteQueryParams<T> = object>(options: {
+		documentId: string;
+		payload: UpdatePayload<T>;
+		params?: P;
+		locale?: string;
+		init?: FetchInit;
+	}): Promise<Result<SelectedDoc<T, P>>> {
+		const { documentId, payload, params, locale, init } = options;
+		const [err, body] = await this.http.request<StrapiSingleResponse<SelectedDoc<T, P>>>(
+			`${this.uid}/${encodeURIComponent(documentId)}${this.query(params, locale)}`,
+			{ ...init, method: "PUT", body: JSON.stringify(payload) }
+		);
+		if (err) return fail(err);
+		if (!body?.data) return fail(NOT_FOUND);
+		return ok(body.data, toMeta(body));
+	}
+
+	/**
+	 * Publishes the draft as it stands. Strapi answers 400 if `data` is omitted,
+	 * so this sends `{ data: {} }` and `status=published`.
+	 */
+	async publish<const P extends WriteQueryParams<T> = object>(options: {
+		documentId: string;
+		params?: P;
+		locale?: string;
+		init?: FetchInit;
+	}): Promise<Result<SelectedDoc<T, P>>> {
+		const { documentId, params, locale, init } = options;
+		return this.update({
+			documentId,
+			payload: { data: {} },
+			params: { ...params, status: "published" } as P,
+			...(locale !== undefined && { locale }),
+			...(init && { init }),
+		});
+	}
+
+	/**
+	 * `DELETE /api/<uid>/<documentId>`. With `locale`, deletes only that
+	 * localization.
+	 *
+	 * Strapi's delete route declares the deleted document as its response and
+	 * takes `fields`, `populate` and `filters` to shape it, but answers some
+	 * deletions with an empty body, so the document may be `null`.
+	 */
+	async delete<const P extends DeleteQueryParams<T> = object>(options: {
+		documentId: string;
+		params?: P;
+		locale?: string;
+		init?: FetchInit;
+	}): Promise<Result<SelectedDoc<T, P> | null>> {
+		const { documentId, params, locale, init } = options;
+		const [err, body] = await this.http.request<StrapiSingleResponse<SelectedDoc<T, P>>>(
+			`${this.uid}/${encodeURIComponent(documentId)}${this.query(params, locale)}`,
+			{ ...init, method: "DELETE" }
+		);
+		if (err) return fail(err);
+		return ok(body?.data ?? null, toMeta(body));
+	}
+
+	/** Updates the first document matching `filters`, or creates one when none matches. */
+	async upsert<const P extends WriteQueryParams<T> = object>(options: {
+		payload: CreatePayload<T>;
+		filters?: StrapiFilters<T>;
+		params?: P;
+		locale?: string;
+		init?: FetchInit;
+	}): Promise<Result<SelectedDoc<T, P>>> {
+		const { payload, filters, params, locale, init } = options;
+		const [searchErr, existing] = await this.findFirst({
+			params: { ...params, ...(filters && { filters }) },
+			...(locale !== undefined && { locale }),
+			...(init && { init }),
+		});
+		if (searchErr) return fail(searchErr);
+
+		const documentId = existing ? documentIdOf(existing) : undefined;
+		if (documentId) {
+			return this.update({ documentId, payload, ...(params && { params }), ...(locale !== undefined && { locale }), ...(init && { init }) });
+		}
+		return this.create({ payload, ...(params && { params }), ...(filters && { filters }), ...(locale !== undefined && { locale }), ...(init && { init }) });
+	}
+
+	/** `POST` helper that unwraps `data` and maps an empty body to `NotFoundError`. */
+	protected async post<R extends object = T>(path: string, payload: CreatePayload<T> | { data: unknown }, init?: FetchInit): Promise<Result<R>> {
+		const [err, body] = await this.http.request<StrapiSingleResponse<R>>(path, {
+			...init,
+			method: "POST",
+			body: JSON.stringify(payload),
+		});
+		if (err) return fail(err);
+		if (!body?.data) return fail(NOT_FOUND);
+		return ok(body.data, toMeta(body));
+	}
+}
+
+/**
+ * Where the next page starts, or `null` when there is none.
+ *
+ * An error leaves no cursor to continue from, and an empty page would
+ * otherwise loop forever against a stale count. The server decides the shape:
+ * it may answer an offset request with page-shaped meta, so the caller's
+ * original mode is what picks the params to send next.
+ */
+function nextPagination(requested: Pagination, offsetMode: boolean, result: Result<unknown[]>): Pagination | null {
+	const [err, data, meta] = result;
+	if (err || data.length === 0) return null;
+
+	const reported = meta?.pagination;
+	if (reported === undefined) return null;
+
+	if ("start" in reported) {
+		const next = reported.start + reported.limit;
+		return next >= reported.total ? null : { ...requested, start: next, limit: reported.limit };
+	}
+	if (reported.page >= reported.pageCount) return null;
+	return offsetMode
+		? { ...requested, start: reported.page * reported.pageSize, limit: reported.pageSize }
+		: { ...requested, page: reported.page + 1, pageSize: reported.pageSize };
+}
+
+function toMeta(body: { meta?: StrapiResponse<unknown>["meta"] } | null | undefined): StrapiMeta {
+	if (!body || body.meta === undefined) return null;
+	return body.meta;
+}
+
+/** Narrows a Strapi document's `documentId` without casting the whole object. */
+function documentIdOf(doc: object): string | undefined {
+	return "documentId" in doc && typeof doc.documentId === "string" ? doc.documentId : undefined;
+}

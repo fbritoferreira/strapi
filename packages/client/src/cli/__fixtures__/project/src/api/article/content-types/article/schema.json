@@ -1,0 +1,27 @@
+{
+	"kind": "collectionType",
+	"collectionName": "articles",
+	"info": { "singularName": "article", "pluralName": "articles", "displayName": "Article" },
+	"options": { "draftAndPublish": true },
+	"pluginOptions": { "i18n": { "localized": true } },
+	"attributes": {
+		"title": { "type": "string", "required": true, "pluginOptions": { "i18n": { "localized": true } } },
+		"slug": { "type": "uid", "targetField": "title", "required": true },
+		"body": { "type": "blocks" },
+		"summary": { "type": "text" },
+		"readingTime": { "type": "integer" },
+		"price": { "type": "decimal" },
+		"views": { "type": "biginteger" },
+		"featured": { "type": "boolean", "required": true },
+		"publishedOn": { "type": "date" },
+		"metadata": { "type": "json" },
+		"status": { "type": "enumeration", "enum": ["draft", "review", "live"], "required": true },
+		"cover": { "type": "media", "multiple": false, "allowedTypes": ["images"] },
+		"gallery": { "type": "media", "multiple": true },
+		"author": { "type": "relation", "relation": "manyToOne", "target": "api::author.author", "inversedBy": "articles" },
+		"tags": { "type": "relation", "relation": "manyToMany", "target": "api::tag.tag" },
+		"createdByUser": { "type": "relation", "relation": "oneToOne", "target": "plugin::users-permissions.user" },
+		"seo": { "type": "component", "repeatable": false, "component": "shared.seo" },
+		"blocks": { "type": "dynamiczone", "components": ["blocks.hero", "blocks.quote"] }
+	}
+}
