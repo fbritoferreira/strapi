@@ -57,7 +57,7 @@ const api = strapi({
 });
 ```
 
-For complete documentation, see [Documentation](../../docs/packages/strapi-client/).
+For complete documentation, see [Documentation](https://strapi.fbritoferreira.com/packages/client/).
 
 ## License
 

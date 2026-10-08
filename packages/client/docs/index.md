@@ -8,10 +8,10 @@ hero:
   actions:
     - theme: brand
       text: Get started
-      link: /guide/installation
+      link: /packages/client/guide/installation
     - theme: alt
       text: Generate types
-      link: /codegen/content-types
+      link: /packages/client/codegen/content-types
 
 features:
   - title: Tuples, not throws
