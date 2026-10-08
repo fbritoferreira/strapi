@@ -3,7 +3,17 @@ interface PluginDefinition {
   config(): { admin: { enabled: boolean } };
 }
 
+/**
+ * Admin API Plugin definition
+ * Provides a plugin for Strapi that registers custom routes for admin users and tokens
+ * This enables the Strapi admin API to manage users and their authentication tokens
+ */
 const plugin: PluginDefinition = {
+  /**
+   * Registers the admin-api plugin routes with Strapi
+   * Sets up /admin-api/users and /admin-api/tokens endpoints
+   * @param ctx The Strapi plugin context containing the strapi instance
+   */
   register({ strapi }: { strapi: any }) {
     console.log('🚀 Admin API Plugin registering...');
 
@@ -164,6 +174,11 @@ const plugin: PluginDefinition = {
     console.log('✅ Admin API routes registered: /admin-api/users and /admin-api/tokens');
   },
 
+  /**
+   * Returns the plugin configuration
+   * Indicates whether the admin API is enabled
+   * @returns Object with admin configuration
+   */
   config() {
     return {
       admin: {
