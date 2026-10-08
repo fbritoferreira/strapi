@@ -2,97 +2,102 @@ import { defineConfig } from 'vitepress'
 import fg from 'fast-glob'
 import path from 'node:path'
 
-const docsRoot = path.resolve(__dirname, '..')
+// docsRoot = repo root (this config lives at docs/.vitepress/config.mts,
+// and vitepress is invoked with `docs` as the root).
+const repoRoot = path.resolve(__dirname, '../..')
 
-// Find all packages
+// Discover packages that have their own docs/index.md
 const packages = fg
-  .sync('packages/*/index.md', {
-    cwd: docsRoot,
-    onlyFiles: true
-  })
-  .map((file) => {
-    const pkgName = file.split('/')[1]
-    return {
-      name: pkgName,
-      path: path.join(docsRoot, 'packages', pkgName, 'index.md')
-    }
-  })
+  .sync('packages/*/docs/index.md', { cwd: repoRoot, onlyFiles: true })
+  .map((file) => file.split('/')[1])
 
-const titleize = (value: string) =>
+const titleize = (value) =>
   value.replace(/[-_]/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase())
 
 const sidebar = {}
 
-// Build sidebar for each package
 packages.forEach((pkg) => {
   const pages = fg
-    .sync(`packages/${pkg.name}/**/*.md`, {
-      cwd: docsRoot,
+    .sync(`packages/${pkg}/docs/**/*.md`, {
+      cwd: repoRoot,
       onlyFiles: true,
-      ignore: [`packages/${pkg.name}/index.md`, `packages/${pkg.name}/docs/index.md`]
+      ignore: [`packages/${pkg}/docs/index.md`],
     })
     .sort()
     .map((file) => {
       const relative = file
-        .replace(`packages/${pkg.name}/`, '')
+        .replace(`packages/${pkg}/docs/`, '')
         .replace(/\.md$/, '')
         .replace(/\/index$/, '')
 
       return {
         text: titleize(path.basename(relative)),
-        link: `/packages/${pkg.name}/${relative}`
+        link: `/packages/${pkg}/${relative}`,
       }
     })
 
-  sidebar[`/packages/${pkg.name}/`] = [
+  sidebar[`/packages/${pkg}/`] = [
     {
-      text: titleize(pkg.name),
-      items: [
-        { text: 'Overview', link: `/packages/${pkg.name}/` },
-        ...pages
-      ]
-    }
+      text: titleize(pkg),
+      items: [{ text: 'Overview', link: `/packages/${pkg}/` }, ...pages],
+    },
   ]
 })
 
+// Map on-disk locations to clean URLs:
+//   packages/<pkg>/docs/foo.md  -> /packages/<pkg>/foo
+//   docs/foo.md                 -> /foo
+const rewrites = {
+  'packages/:pkg/docs/:rest(.*)': 'packages/:pkg/:rest',
+  'docs/:rest(.*)': ':rest',
+}
+
 export default defineConfig({
-  // Build to root docs
-  outDir: path.join(docsRoot, 'docs', '.vitepress', 'dist'),
+  // Serve files from the repo root so packages/*/docs/** is reachable.
+  srcDir: '..',
+  srcExclude: [
+    '**/node_modules/**',
+    '**/dist/**',
+    '**/.git/**',
+    '**/coverage/**',
+    '.changeset/**',
+    '.github/**',
+    'research_notes/**',
+    'reports/**',
+    // Repo readmes are for GitHub, not the docs site — their relative links
+    // point at repo paths, not docs routes.
+    '**/README.md',
+    '**/LICENCE.md',
+    '**/CHANGELOG.md',
+    '**/MIGRATION.md',
+    'CLA.md',
+    'SECURITY.md',
+  ],
+  rewrites,
 
   themeConfig: {
     nav: [
       {
         text: 'Packages',
         items: packages.map((pkg) => ({
-          text: titleize(pkg.name),
-          link: `/packages/${pkg.name}/`
-        }))
+          text: titleize(pkg),
+          link: `/packages/${pkg}/`,
+        })),
       },
-      {
-        text: 'Docs',
-        link: '/docs/'
-      }
     ],
     sidebar,
-    // Edit link
     editLink: false,
-    // Social icons
-    socialLinks: [
-      { icon: 'github', link: 'https://github.com/fbritoferreira/strapi' }
-    ],
-    // Search
+    socialLinks: [{ icon: 'github', link: 'https://github.com/fbritoferreira/strapi' }],
     search: {
-      provider: 'local'
+      provider: 'local',
     },
-    // Footer
     footer: {
       message: 'Released under the MIT License.',
-      copyright: 'Copyright © 2024-present Filipe Brito Ferreira'
+      copyright: 'Copyright © 2024-present Filipe Brito Ferreira',
     },
-    // JSR Toggle (Sidebar)
     docFooter: {
       prev: 'Prev',
-      next: 'Next'
+      next: 'Next',
     },
-  }
+  },
 })

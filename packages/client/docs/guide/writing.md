@@ -42,4 +42,4 @@ Components and dynamic zones are nested objects, recursively partial. A dynamic-
 
 Types written by hand, with no `__relations` marker, keep a `DeepPartial<T>` payload.
 
-Users and uploads do not use this payload shape. See [Users](/guide/users) and [Uploads](/guide/uploads).
+Users and uploads do not use this payload shape. See [Users](./users) and [Uploads](./uploads).

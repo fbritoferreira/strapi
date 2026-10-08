@@ -26,8 +26,8 @@ const strapi = new Strapi({
 | `fetch` | `globalThis.fetch` | Custom implementation. |
 | `timeout` | `10000` | Milliseconds before a request is aborted. Applies per attempt, not to a retry sequence. |
 | `concurrency` | `5` | Max parallel requests when `findMany({ all: true })` fetches the remaining pages. |
-| `retry` | off | A number is the extra attempts. An object tunes backoff, statuses and methods. See [Retries](/guide/retries). |
-| `refreshOnUnauthorized` | off | On a 401, rotate a refresh token and retry once. See [Authentication](/guide/authentication). |
+| `retry` | off | A number is the extra attempts. An object tunes backoff, statuses and methods. See [Retries](./retries). |
+| `refreshOnUnauthorized` | off | On a 401, rotate a refresh token and retry once. See [Authentication](./authentication). |
 | `graphqlEndpoint` | `"/graphql"` | Path resolved against the origin, not the `/api` root. Match the plugin's `endpoint` option. |
 | `graphqlArgs` | none | The generated `strapiGraphqlArgs`. Required by `query()` and `mutate()`. |
 
@@ -35,4 +35,4 @@ const strapi = new Strapi({
 
 `setToken(token)` replaces the bearer token for every later request. `setToken(undefined)` clears it. A JWT from `auth.login` is not adopted automatically: one client is often shared, and silently rebinding its identity is rarely what you want.
 
-A content-type call also accepts `locale` (overrides `defaultLocale` for that call) and `init` (merged `RequestInit`, including an `AbortSignal` and Next.js `fetch` extensions). See [Fetch, Next.js and abort](/guide/fetch).
+A content-type call also accepts `locale` (overrides `defaultLocale` for that call) and `init` (merged `RequestInit`, including an `AbortSignal` and Next.js `fetch` extensions). See [Fetch, Next.js and abort](./fetch).

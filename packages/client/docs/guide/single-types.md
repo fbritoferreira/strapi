@@ -9,7 +9,7 @@
 | `publish` | `PUT /api/<uid>` | `{ data: {} }` and `status=published`. Same reason as collections: omitting `data` is a 400. |
 | `delete` | `DELETE /api/<uid>` | The deleted document, or `null` when the body is empty. `locale` deletes only that localization. |
 
-`find` takes `FindQueryParams` (no pagination, no `_q`). `update` and `delete` take `fields` and `populate`, which shape the returned document. The same selection narrowing as collections applies. See [Querying](/guide/querying).
+`find` takes `FindQueryParams` (no pagination, no `_q`). `update` and `delete` take `fields` and `populate`, which shape the returned document. The same selection narrowing as collections applies. See [Querying](./querying).
 
 ```ts
 interface Homepage {

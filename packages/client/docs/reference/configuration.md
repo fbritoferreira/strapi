@@ -1,6 +1,6 @@
 # Configuration
 
-Constructor options live on [Configuration](/guide/configuration). This page is the option list in one place, including codegen.
+Constructor options live on [Configuration](../guide/configuration). This page is the option list in one place, including codegen.
 
 ## `Strapi`
 
@@ -48,4 +48,4 @@ export default generateConfig({
 });
 ```
 
-Every section is optional. See [One config file](/codegen/config) and the [CLI](/reference/cli).
+Every section is optional. See [One config file](../codegen/config) and the [CLI](./cli).

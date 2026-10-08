@@ -56,4 +56,4 @@ const strapi = new Strapi({
 
 `onRefresh` should not throw. If it does, the new JWT is already adopted and the original request fails with that error.
 
-Every method accepts `init` for extra `fetch` options. The user type defaults to `StrapiUser`. For the signed-in user after login, use [Users](/guide/users) `me()`.
+Every method accepts `init` for extra `fetch` options. The user type defaults to `StrapiUser`. For the signed-in user after login, use [Users](./users) `me()`.

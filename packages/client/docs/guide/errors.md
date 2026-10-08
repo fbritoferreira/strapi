@@ -39,4 +39,4 @@ if (err) {
 }
 ```
 
-GraphQL errors are the same tuple: the whole `errors` array is `details`, and a single error's `extensions.code` is `name` (otherwise `"GraphQLError"`). See [GraphQL](/graphql/).
+GraphQL errors are the same tuple: the whole `errors` array is `details`, and a single error's `extensions.code` is `name` (otherwise `"GraphQLError"`). See [GraphQL](../graphql/).

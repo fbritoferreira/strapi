@@ -62,4 +62,4 @@ await strapi.files.delete({ id: 7 });
 
 `StrapiMedia` extends `StrapiDocument` (`id`, `documentId`, `createdAt`, `updatedAt`, `publishedAt`, optional `locale`) with `name`, `alternativeText`, `caption`, `width`, `height`, `formats`, `hash`, `ext`, `mime`, `size`, `url`, `previewUrl`, `provider` and `provider_metadata`. `formats` is a map of generated sizes (`thumbnail`, `small`, `medium`, `large`), or `null`. `focalPoint` and `related` are present only when the instance sends them.
 
-Media on a content type is still written by reference (`documentId` or `id`), not by uploading inline. See [Writing](/guide/writing).
+Media on a content type is still written by reference (`documentId` or `id`), not by uploading inline. See [Writing](./writing).

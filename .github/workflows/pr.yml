@@ -85,7 +85,6 @@ jobs:
         if: always() && matrix.node == 24
         uses: davelosert/vitest-coverage-report-action@v2
         with:
-          working-directory: packages/client
           name: "Test Coverage Report"
           json-summary-path: packages/client/coverage/coverage-summary.json
           json-final-path: packages/client/coverage/coverage-final.json
