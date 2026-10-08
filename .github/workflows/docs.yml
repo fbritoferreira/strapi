@@ -44,8 +44,18 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build with VitePress
+      # Production serves at /strapi/; PR previews serve at
+      # /strapi/pr-preview/pr-N/ — VitePress bakes the base in at build time,
+      # so PRs must build with the preview base.
+      - name: Build with VitePress (production base)
+        if: github.event_name != 'pull_request'
         run: pnpm docs:build
+
+      - name: Build with VitePress (PR preview base)
+        if: github.event_name == 'pull_request'
+        run: pnpm docs:build
+        env:
+          DOCS_BASE: /strapi/pr-preview/pr-${{ github.event.pull_request.number }}/
 
       # Production deployment: upload for GitHub Pages deploy
       - name: Upload Pages artifact
@@ -92,12 +102,13 @@ jobs:
           name: docs-preview
           path: ${{ env.BUILD_OUTPUT_DIR }}
 
-      # Deploy to gh-pages under pr-{number}/ and comment on the PR.
-      # Preview URL: https://fbritoferreira.github.io/strapi/pr-{number}/
+      # The action nests each preview as {umbrella-dir}/pr-{number}, so with
+      # umbrella-dir=pr-preview the site lands at /strapi/pr-preview/pr-N/ —
+      # matching the DOCS_BASE the preview was built with.
       - name: Deploy PR preview
         uses: rossjrw/pr-preview-action@v1
         with:
           source-dir: ${{ env.BUILD_OUTPUT_DIR }}
           preview-branch: gh-pages
-          umbrella-dir: pr-${{ github.event.pull_request.number }}
+          umbrella-dir: pr-preview
           action: auto

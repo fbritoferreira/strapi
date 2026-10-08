@@ -53,6 +53,11 @@ const rewrites = {
 }
 
 export default defineConfig({
+  // GitHub Pages serves the repo site at /<repo>/, and PR previews land one
+  // level deeper at /<repo>/pr-preview/pr-N/. DOCS_BASE lets CI override the
+  // base per build so asset and nav URLs resolve in both.
+  base: process.env.DOCS_BASE || '/strapi/',
+
   // Serve files from the repo root so packages/*/docs/** is reachable.
   srcDir: '..',
   srcExclude: [
