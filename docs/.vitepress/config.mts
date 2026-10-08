@@ -28,7 +28,7 @@ packages.forEach((pkg) => {
       const relative = file
         .replace(`packages/${pkg}/docs/`, '')
         .replace(/\.md$/, '')
-        .replace(/\/index$/, '')
+        .replace(/\/index$/, '/')
 
       return {
         text: titleize(path.basename(relative)),

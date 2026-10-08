@@ -1,6 +1,4 @@
 ---
-theme: strapi
-layout: docs
 title: API Reference
 description: Complete API reference for Strapi Admin API Plugin
 ---

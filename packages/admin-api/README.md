@@ -1,10 +1,3 @@
----
-theme: strapi
-layout: docs
-title: Strapi Admin API
-description: Plugin to manage Strapi admin users and tokens via REST API
----
-
 # Strapi Admin API
 
 Plugin to manage Strapi admin users and authentication tokens through REST API endpoints.
@@ -21,7 +14,7 @@ curl -X POST http://localhost:1337/admin/auth/admin/login \
   -d '{"email": "admin@example.com", "password": "password"}' | jq -r '.jwt'
 ```
 
-For full API documentation, see [admin-api documentation](./admin-api.md) which includes:
+For full API documentation, see [admin-api documentation](https://strapi.fbritoferreira.com/packages/admin-api/) which includes:
 - Complete API reference
 - Authentication guide
 - CRUD operations for users

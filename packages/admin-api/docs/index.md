@@ -1,6 +1,4 @@
 ---
-theme: strapi
-layout: docs
 title: Strapi Admin API
 description: Plugin to manage Strapi admin users and tokens via REST API
 ---
