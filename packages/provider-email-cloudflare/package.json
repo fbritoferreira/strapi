@@ -58,7 +58,7 @@
 	},
 	"strapi": {
 		"kind": "provider",
-		"name": "cloudflare",
+		"name": "email-cloudflare",
 		"isProvider": true
 	},
 	"peerDependencies": {
