@@ -11,4 +11,6 @@ export { default as tokenController } from './controllers/tokens.js';
 /**
  * Admin API Plugin - registers custom routes with Strapi for user and token management
  */
+import plugin from './server.js';
 export { default as server } from './server.js';
+export default plugin;
