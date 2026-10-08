@@ -4,7 +4,7 @@ export default defineConfig({
 	title: "@fbritoferreira/strapi",
 	description:
 		"TypeScript client for the Strapi 5 REST and GraphQL APIs. Typed collections, auth, uploads and custom routes, with types generated from your schema.",
-	base: "/strapi/",
+	base: "/strapi/packages/client/",
 	lang: "en-US",
 	lastUpdated: true,
 	cleanUrls: false,

@@ -22,6 +22,7 @@
     "@types/node": "^26.6.2",
     "fast-glob": "^3.3.3",
     "jsr": "^0.14.3",
+    "lint-staged": "^17.6.0",
     "typescript": "^6.0.3",
     "vitepress": "^1.6.4"
   },
