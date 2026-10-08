@@ -8,6 +8,10 @@ Monorepo containing Strapi client and admin API plugin.
 
 TypeScript client for the Strapi 5 REST and GraphQL APIs with typed collections, auth, uploads, and custom routes.
 
+### [@fbritoferreira/strapi-provider-email-cloudflare](./packages/provider-email-cloudflare)
+
+Email provider that sends Strapi's transactional email through Cloudflare Email Service's REST API, replacing the default sendmail provider.
+
 ## Development
 
 ```bash

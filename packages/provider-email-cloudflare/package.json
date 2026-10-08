@@ -1,0 +1,76 @@
+{
+	"name": "@fbritoferreira/strapi-provider-email-cloudflare",
+	"version": "0.1.0",
+	"description": "Cloudflare Email Sending provider for the Strapi Email feature: send transactional email through Cloudflare's REST API, no SMTP relay needed.",
+	"main": "./strapi-provider.js",
+	"types": "./dist/index.d.ts",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"require": "./strapi-provider.js",
+			"default": "./strapi-provider.js"
+		},
+		"./package.json": "./package.json"
+	},
+	"files": [
+		"dist",
+		"strapi-provider.js",
+		"README.md",
+		"LICENCE.md",
+		"CHANGELOG.md"
+	],
+	"engines": {
+		"node": ">=20.3"
+	},
+	"scripts": {
+		"build": "tsc",
+		"watch": "tsc --watch",
+		"test": "vitest run",
+		"test:watch": "vitest",
+		"typecheck": "tsc -p tsconfig.test.json",
+		"lint": "eslint .",
+		"lint:fix": "eslint . --fix",
+		"jsr:check": "jsr publish --dry-run"
+	},
+	"keywords": [
+		"strapi",
+		"provider",
+		"email",
+		"cloudflare",
+		"email-sending",
+		"transactional-email"
+	],
+	"author": "Filipe Brito Ferreira <me@fbritoferreira.com>",
+	"license": "MIT",
+	"homepage": "https://fbritoferreira.github.io/strapi/",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/fbritoferreira/strapi.git",
+		"directory": "packages/provider-email-cloudflare"
+	},
+	"bugs": {
+		"url": "https://github.com/fbritoferreira/strapi/issues"
+	},
+	"publishConfig": {
+		"registry": "https://registry.npmjs.org/",
+		"access": "public"
+	},
+	"strapi": {
+		"kind": "provider",
+		"name": "cloudflare",
+		"isProvider": true
+	},
+	"peerDependencies": {
+		"@strapi/strapi": "^5.0.0"
+	},
+	"devDependencies": {
+		"@eslint/js": "^10.0.1",
+		"@types/node": "^20.0.0",
+		"eslint": "^10.11.0",
+		"globals": "^17.13.0",
+		"jsr": "^0.14.3",
+		"typescript": "^5.0.0",
+		"typescript-eslint": "^8.71.0",
+		"vitest": "^5.0.2"
+	}
+}
