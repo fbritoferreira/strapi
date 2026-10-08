@@ -3,10 +3,14 @@
 	"name": "@fbritoferreira/strapi",
 	"version": "0.24.0",
 	"license": "MIT",
-	"exports": "./src/index.ts",
+	"exports": {
+		".": "./dist/strapi.mjs",
+		"./package.json": "./package.json"
+	},
 	"publish": {
 		"include": [
-			"src/**/*.ts",
+			"dist/**/*.ts",
+			"dist/**/*.js",
 			"README.md",
 			"MIGRATION.md",
 			"LICENCE.md",
@@ -15,9 +19,22 @@
 			"jsr.json"
 		],
 		"exclude": [
-			"src/test",
-			"src/cli",
-			"**/*.test.ts"
+			"dist/**/*.test.ts",
+			"dist/**/*.test.js",
+			"dist/**/*.spec.ts",
+			"dist/**/*.spec.js",
+			"dist/**/*.fixture.ts",
+			"dist/**/*.fixture.js",
+			"bin/**/*",
+			"docs/**/*"
 		]
-	}
+	},
+	"files": [
+		"dist",
+		"bin",
+		"README.md",
+		"MIGRATION.md",
+		"LICENCE.md",
+		"CHANGELOG.md"
+	]
 }

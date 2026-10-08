@@ -1,18 +1,11 @@
----
-theme: strapi
-layout: docs
-title: Strapi Client
-description: TypeScript client for the Strapi 5 REST and GraphQL APIs
----
-
-# Strapi Client
+# @fbritoferreira/strapi-client
 
 A fully-typed TypeScript client for Strapi 5's REST and GraphQL APIs.
 
 ## Quick Start
 
 ```typescript
-import { strapi } from '@strapi/sdk-js';
+import { strapi } from '@fbritoferreira/strapi-client';
 
 const api = strapi({
   url: 'http://localhost:1337',
@@ -20,13 +13,35 @@ const api = strapi({
 });
 
 const articles = await api.find('articles');
+console.log(articles.data);
 ```
 
-For full documentation, see the [shared documentation](./admin-api.md) which includes:
-- Installation
-- Configuration
-- Authentication
-- CRUD operations
-- File uploads
-- GraphQL integration
-- Error handling
+## Installation
+
+```bash
+npm install @fbritoferreira/strapi-client
+# or
+pnpm add @fbritoferreira/strapi-client
+# or
+yarn add @fbritoferreira/strapi-client
+```
+
+## Configuration
+
+```typescript
+const api = strapi({
+  url: 'https://your-cms.com',
+  apiToken: 'your-token',
+  headers: {
+    'X-Custom-Header': 'value',
+  },
+  timeout: 10000,
+  retry: 3,
+});
+```
+
+For complete documentation, see [Documentation](../../docs/packages/strapi-client/).
+
+## License
+
+MIT
