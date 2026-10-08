@@ -5,6 +5,14 @@
 	"type": "module",
 	"main": "./dist/index.js",
 	"types": "./dist/index.d.ts",
+	"files": [
+		"dist",
+		"strapi-server.js",
+		"strapi-admin.js",
+		"README.md",
+		"LICENCE.md",
+		"CHANGELOG.md"
+	],
 	"exports": {
 		".": {
 			"types": "./dist/index.d.ts",
