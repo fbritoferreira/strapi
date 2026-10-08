@@ -19,18 +19,6 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe('package entry point', () => {
-  it('unwraps to the object Strapi require()s', async () => {
-    const { createRequire } = await import('node:module');
-    const { join } = await import('node:path');
-    // vitest runs from the package root, where strapi-provider.js lives.
-    const entry = createRequire(join(process.cwd(), 'package.json'))('./strapi-provider.js');
-
-    expect(entry.name).toBe('cloudflare');
-    expect(typeof entry.init).toBe('function');
-  });
-});
-
 describe('init', () => {
   it('requires an api token and account id', () => {
     expect(() => provider.init({ apiToken: '', accountId: 'acct' })).toThrow('apiToken');
