@@ -1,11 +1,22 @@
-import type { Context } from '@strapi/strapi';
+import type { Context } from 'koa';
+
+declare const strapi: any;
+
+interface AdminController {
+  find(ctx: Context): Promise<any>;
+  findOne(ctx: Context): Promise<any>;
+  create(ctx: Context): Promise<any>;
+  update(ctx: Context): Promise<any>;
+  delete(ctx: Context): Promise<any>;
+  resetPassword(ctx: Context): Promise<any>;
+}
 
 /**
  * Admin API Controller
  * Provides CRUD operations for Strapi admin users
  */
 
-export default {
+const adminController: AdminController = {
   /**
    * List admin users with pagination and filtering
    */
@@ -90,7 +101,7 @@ export default {
    */
   async create(ctx: Context) {
     try {
-      const { body } = ctx;
+      const body = (ctx.request as any).body as any;
 
       // Validate required fields
       if (!body.email || !body.username || !body.password) {
@@ -103,7 +114,7 @@ export default {
       );
 
       // Get the super-admin role
-      const roles = await strapi.query('admin::role').find({
+      const roles = await strapi.db.query('admin::role').findMany({
         where: { code: 'super-admin' },
       });
 
@@ -155,7 +166,7 @@ export default {
   async update(ctx: Context) {
     try {
       const { id } = ctx.params;
-      const { body } = ctx;
+      const body = (ctx.request as any).body as any;
 
       // Check if user exists
       const existingUser = await strapi.entityService.findOne('admin::user', id);
@@ -238,10 +249,10 @@ export default {
   /**
    * Reset password for an admin user
    */
-  async resetPassword(ctx: Context) {
+  async resetPassword(ctx: Context): Promise<any> {
     try {
       const { id } = ctx.params;
-      const { password } = ctx.request.body;
+      const { password } = (ctx.request as any).body as any;
 
       if (!password) {
         ctx.throw(400, 'Password is required');
@@ -274,3 +285,5 @@ export default {
     }
   },
 };
+
+export default adminController;

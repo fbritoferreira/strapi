@@ -40,7 +40,9 @@
     "lint:fix": "eslint . --fix",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "jsr:check": "jsr publish --dry-run --allow-dirty",
+    "package:check": "publint && attw \"$(pnpm pack --pack-destination .pack | tail -1)\""
   },
   "keywords": [
     "strapi",

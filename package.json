@@ -6,11 +6,26 @@
   "type": "module",
   "scripts": {
     "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "pnpm -r lint",
     "test": "pnpm -r test",
-    "lint": "pnpm -r lint"
+    "test:watch": "pnpm -r test:watch",
+    "test:coverage": "pnpm -r test:coverage",
+    "jsr:check": "pnpm -r jsr:check",
+    "package:check": "pnpm -r package:check",
+    "docs:build": "vitepress build docs",
+    "docs:dev": "vitepress dev docs",
+    "docs:preview": "vitepress preview docs"
   },
   "devDependencies": {
-    "@types/node": "^26.6.2"
+    "@types/node": "^26.6.2",
+    "fast-glob": "^3.3.3",
+    "typescript": "^6.0.3",
+    "vitepress": "^1.6.4"
   },
-  "packageManager": "pnpm@12.5.1"
+  "packageManager": "pnpm@12.5.1",
+  "dependencies": {
+    "@types/koa": "^3.0.3",
+    "koa": "^3.2.1"
+  }
 }

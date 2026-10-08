@@ -25,12 +25,10 @@
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
-    "noEmit": true,
+    "outDir": "./dist",
+    "rootDir": "./src",
     "jsx": "preserve"
   },
-  "include": [],
-  "references": [
-    { "path": "packages/client" },
-    { "path": "packages/admin-api" }
-  ]
+  "include": ["src/**/*.ts", "src/**/*.tsx"],
+  "exclude": ["node_modules", "dist", "**/*.spec.ts", "**/*.test.ts", "src/cli/__fixtures__"]
 }

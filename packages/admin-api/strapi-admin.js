@@ -1,9 +1,9 @@
-export default {
-  register(app) {},
+module.exports = {
+  register(_app) {},
   bootstrap() {
     console.log('🚀 Admin API Plugin initialized');
   },
-  registerTrads({ locales }) {
+  registerTrads(_locales) {
     return {
       messages: {},
     };

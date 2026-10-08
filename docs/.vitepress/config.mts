@@ -91,10 +91,6 @@ export default defineConfig({
     },
     // JSR Toggle (Sidebar)
     docFooter: {
-      previous: 'Previous',
-      next: 'Next',
-    },
-    docFooter: {
       prev: 'Prev',
       next: 'Next'
     },

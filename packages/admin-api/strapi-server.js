@@ -1,6 +1,6 @@
 module.exports = () => {
   return {
-    register({ strapi }: any) {
+    register({ strapi }) {
       console.log('🚀 Admin API Plugin registering...');
 
       // Define custom admin routes

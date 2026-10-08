@@ -1,39 +1,39 @@
-import type { Context } from '@strapi/strapi';
+import { randomBytes } from 'node:crypto';
+import type { Context } from 'koa';
+
+declare const strapi: any;
 
 /**
  * Admin API Token Controller
  * Provides CRUD operations for admin authentication tokens
  */
 
-export default {
+// ponytail: strapi.entityService doesn't support `where` on findOne;
+// strapi.db.query is the correct escape hatch for owner-scoped lookups.
+const tokenController = {
   /**
    * List all tokens for the authenticated user
    */
-  async find(ctx: Context) {
+  async find(ctx: Context): Promise<any> {
     try {
-      const { query } = ctx;
-
-      // Get the authenticated user from the context
       const user = ctx.state.user;
       if (!user) {
         ctx.throw(401, 'Authentication required');
       }
 
-      // Query tokens for this user
-      const tokens = await strapi.entityService.findMany('admin::token', {
-        ...query,
+      const tokens = await strapi.db.query('admin::token').findMany({
         where: { user: user.id },
+        orderBy: { createdAt: 'desc' },
       });
 
-      return tokens.map((token: any) => ({
+      return (tokens as any[]).map((token) => ({
         id: token.id,
         label: token.label,
         type: token.type,
-        value: token.value,
         expiresAt: token.expiresAt,
         createdAt: token.createdAt,
         updatedAt: token.updatedAt,
-        active: token.active !== false, // default to true if not specified
+        active: token.active !== false,
       }));
     } catch (error: any) {
       ctx.throw(500, `Failed to fetch tokens: ${error.message}`);
@@ -43,7 +43,7 @@ export default {
   /**
    * Get a single token by ID
    */
-  async findOne(ctx: Context) {
+  async findOne(ctx: Context): Promise<any> {
     try {
       const { id } = ctx.params;
       const { user } = ctx.state;
@@ -52,8 +52,8 @@ export default {
         ctx.throw(401, 'Authentication required');
       }
 
-      const token = await strapi.entityService.findOne('admin::token', id, {
-        where: { user: user.id },
+      const token = await strapi.db.query('admin::token').findOne({
+        where: { id: Number(id), user: user.id },
       });
 
       if (!token) {
@@ -78,44 +78,40 @@ export default {
   /**
    * Create a new admin token
    */
-  async create(ctx: Context) {
+  async create(ctx: Context): Promise<any> {
     try {
-      const { body } = ctx;
+      const body = (ctx.request as any).body as {
+        label?: string;
+        type?: string;
+        expiresAt?: string;
+      };
       const { user } = ctx.state;
 
       if (!user) {
         ctx.throw(401, 'Authentication required');
       }
 
-      // Validate required fields
       if (!body.label) {
         ctx.throw(400, 'label is required');
       }
 
-      // Generate a secure random token
-      const tokenValue = crypto.randomBytes(64).toString('base64');
+      const tokenValue = randomBytes(64).toString('base64');
 
-      // Determine expiration (default: 30 days if not specified)
-      let expiresAt: Date | null = null;
-      if (body.expiresAt) {
-        expiresAt = new Date(body.expiresAt);
-      } else {
-        expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
-      }
+      const expiresAt = body.expiresAt
+        ? new Date(body.expiresAt)
+        : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
 
-      // Create the token
-      const token = await strapi.entityService.create('admin::token', {
+      const token = await strapi.db.query('admin::token').create({
         data: {
           user: user.id,
           label: body.label,
-          type: body.type || 'api', // default: api token
+          type: body.type || 'api',
           value: tokenValue,
           expiresAt,
           active: true,
         },
       });
 
-      // Don't return the actual token value, just confirmation
       return {
         id: token.id,
         label: token.label,
@@ -123,8 +119,7 @@ export default {
         expiresAt: token.expiresAt,
         createdAt: token.createdAt,
         message: 'Token created successfully',
-        // Note: In production, you might want to send this via email instead
-        value: tokenValue, // Only temporarily returned for creation
+        value: tokenValue,
       };
     } catch (error: any) {
       ctx.throw(500, `Failed to create token: ${error.message}`);
@@ -134,33 +129,30 @@ export default {
   /**
    * Update an existing token
    */
-  async update(ctx: Context) {
+  async update(ctx: Context): Promise<any> {
     try {
       const { id } = ctx.params;
-      const { body } = ctx;
+      const body = (ctx.request as any).body as any;
       const { user } = ctx.state;
 
       if (!user) {
         ctx.throw(401, 'Authentication required');
       }
 
-      // Check if token exists and belongs to this user
-      const existingToken = await strapi.entityService.findOne('admin::token', id, {
-        where: { user: user.id },
+      const existingToken = await strapi.db.query('admin::token').findOne({
+        where: { id: Number(id), user: user.id },
       });
 
       if (!existingToken) {
         ctx.throw(404, 'Token not found');
       }
 
-      // Prepare update data
-      const updateData: any = { ...body };
-
-      // Don't allow changing the value (requires regeneration instead)
+      const updateData: any = { ...(body as object) };
       delete updateData.value;
+      delete updateData.user;
 
-      // Update the token
-      const token = await strapi.entityService.update('admin::token', id, {
+      const token = await strapi.db.query('admin::token').update({
+        where: { id: Number(id) },
         data: updateData,
       });
 
@@ -180,7 +172,7 @@ export default {
   /**
    * Delete a token
    */
-  async delete(ctx: Context) {
+  async delete(ctx: Context): Promise<any> {
     try {
       const { id } = ctx.params;
       const { user } = ctx.state;
@@ -189,17 +181,17 @@ export default {
         ctx.throw(401, 'Authentication required');
       }
 
-      // Check if token exists and belongs to this user
-      const existingToken = await strapi.entityService.findOne('admin::token', id, {
-        where: { user: user.id },
+      const existingToken = await strapi.db.query('admin::token').findOne({
+        where: { id: Number(id), user: user.id },
       });
 
       if (!existingToken) {
         ctx.throw(404, 'Token not found');
       }
 
-      // Delete the token
-      await strapi.entityService.delete('admin::token', id);
+      await strapi.db.query('admin::token').delete({
+        where: { id: Number(id) },
+      });
 
       return {
         success: true,
@@ -214,7 +206,7 @@ export default {
   /**
    * Revoke/expire a token immediately
    */
-  async revoke(ctx: Context) {
+  async revoke(ctx: Context): Promise<any> {
     try {
       const { id } = ctx.params;
       const { user } = ctx.state;
@@ -223,17 +215,16 @@ export default {
         ctx.throw(401, 'Authentication required');
       }
 
-      // Check if token exists and belongs to this user
-      const existingToken = await strapi.entityService.findOne('admin::token', id, {
-        where: { user: user.id },
+      const existingToken = await strapi.db.query('admin::token').findOne({
+        where: { id: Number(id), user: user.id },
       });
 
       if (!existingToken) {
         ctx.throw(404, 'Token not found');
       }
 
-      // Revoke the token by setting active to false
-      await strapi.entityService.update('admin::token', id, {
+      await strapi.db.query('admin::token').update({
+        where: { id: Number(id) },
         data: { active: false },
       });
 
@@ -250,35 +241,30 @@ export default {
   /**
    * Refresh a token (extend expiration)
    */
-  async refresh(ctx: Context) {
+  async refresh(ctx: Context): Promise<any> {
     try {
       const { id } = ctx.params;
-      const body = ctx.request.body as { expiresAt?: string };
+      const body = (ctx.request as any).body as { expiresAt?: string };
       const { user } = ctx.state;
 
       if (!user) {
         ctx.throw(401, 'Authentication required');
       }
 
-      // Check if token exists and belongs to this user
-      const existingToken = await strapi.entityService.findOne('admin::token', id, {
-        where: { user: user.id },
+      const existingToken = await strapi.db.query('admin::token').findOne({
+        where: { id: Number(id), user: user.id },
       });
 
       if (!existingToken) {
         ctx.throw(404, 'Token not found');
       }
 
-      // Set new expiration (default: 30 days if not specified)
-      let expiresAt: Date;
-      if (body.expiresAt) {
-        expiresAt = new Date(body.expiresAt);
-      } else {
-        expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
-      }
+      const expiresAt = body.expiresAt
+        ? new Date(body.expiresAt)
+        : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
 
-      // Update expiration
-      const token = await strapi.entityService.update('admin::token', id, {
+      const token = await strapi.db.query('admin::token').update({
+        where: { id: Number(id) },
         data: { expiresAt },
       });
 
@@ -293,3 +279,5 @@ export default {
     }
   },
 };
+
+export default tokenController;
