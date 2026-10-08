@@ -47,4 +47,4 @@ const articles = new StrapiClient<Article>({
 });
 ```
 
-Once you [generate types](/codegen/content-types), drop the type argument: `strapi.collection("articles")` infers the document.
+Once you [generate types](../codegen/content-types), drop the type argument: `strapi.collection("articles")` infers the document.

@@ -51,4 +51,4 @@ Flags and config fields fall back to the same environment variables:
 
 Default output files, when `output` is omitted: `strapi-types.ts`, `strapi-routes.ts`, `strapi-graphql.ts`.
 
-`watch.interval` is the poll period for URL sources under `--watch`. See [Watch mode](/codegen/watch).
+`watch.interval` is the poll period for URL sources under `--watch`. See [Watch mode](./watch).

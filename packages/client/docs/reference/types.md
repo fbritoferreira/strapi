@@ -28,7 +28,7 @@ These are exported from `@fbritoferreira/strapi`. Generated files augment the em
 
 `StrapiDocument` is `id`, `documentId`, `createdAt`, `updatedAt`, `publishedAt`, and optional `locale`.
 
-`StrapiMedia` is an uploaded file. See [Uploads](/guide/uploads). `StrapiMediaFormat` is one generated size. `StrapiUser` and `StrapiRole` are the users-permissions shapes. `StrapiBlock` is one node of a blocks field (`type`, optional `children` and `text`).
+`StrapiMedia` is an uploaded file. See [Uploads](../guide/uploads). `StrapiMediaFormat` is one generated size. `StrapiUser` and `StrapiRole` are the users-permissions shapes. `StrapiBlock` is one node of a blocks field (`type`, optional `children` and `text`).
 
 `AuthSession` is `{ jwt, refreshToken?, user }`. `RegisterResult` makes `jwt` optional. `RefreshedSession` is `{ jwt, refreshToken? }`. `SentEmailConfirmation` is `{ email, sent }`. `LogoutResult` is `{ ok }`.
 

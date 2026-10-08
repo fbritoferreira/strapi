@@ -2,7 +2,7 @@
 
 `strapi-client generate` writes the interfaces and the registry augmentation. The installed binary is `strapi-client`, so `npx @fbritoferreira/strapi generate` and `strapi-client generate` run the same command.
 
-It takes exactly one source, or a [config file](/codegen/config) for all of them: `--dir` or `--url` for content types (this page), `--openapi` for [route types](/codegen/openapi), or `--graphql` for [GraphQL schema types](/graphql/). Each writes its own file. They are meant to be used side by side.
+It takes exactly one source, or a [config file](./config) for all of them: `--dir` or `--url` for content types (this page), `--openapi` for [route types](./openapi), or `--graphql` for [GraphQL schema types](../graphql/). Each writes its own file. They are meant to be used side by side.
 
 ```sh
 # From a Strapi project checked out next to your app
@@ -44,4 +44,4 @@ The output augments `StrapiContentTypes` and `StrapiSingleTypes`. Once that file
 
 `--url` calls `POST /admin/login` and the Content-Type Builder routes. That needs an admin user with `plugin::content-type-builder.read`. Strapi does not accept API tokens on admin routes. `--email` and `--password` override `STRAPI_ADMIN_EMAIL` and `STRAPI_ADMIN_PASSWORD`.
 
-Add `--watch` to regenerate as schemas change. See [Watch mode](/codegen/watch).
+Add `--watch` to regenerate as schemas change. See [Watch mode](./watch).

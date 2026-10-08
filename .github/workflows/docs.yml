@@ -1,20 +1,25 @@
 name: Docs
 
 on:
-  pull_request:
-    branches: [main]
   push:
+    branches: [main]
+  pull_request:
     branches: [main]
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
+  pull-requests: write
 
 concurrency:
   group: pages
   cancel-in-progress: false
+
+env:
+  BUILD_OUTPUT_DIR: docs/.vitepress/dist
+  PREVIEW_DIR: pr-preview
 
 jobs:
   build:
@@ -40,24 +45,90 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # Production is served from the custom domain root (base "/").
+      # PR previews are served from /pr-preview/pr-N/ — VitePress bakes the
+      # base in at build time, so each event type builds with its own base.
+      - name: Build with VitePress (production base)
+        if: github.event_name != 'pull_request'
+        run: pnpm docs:build
+
+      - name: Build with VitePress (PR preview base)
+        if: github.event_name == 'pull_request'
+        run: pnpm docs:build
+        env:
+          DOCS_BASE: /pr-preview/pr-${{ github.event.pull_request.number }}/
+
+      # PR preview: hand the build to the preview job via artifact
+      - name: Upload preview artifact
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v6
+        with:
+          name: docs-preview
+          path: ${{ env.BUILD_OUTPUT_DIR }}
+
+  # Production: push the built site to the ROOT of gh-pages, keeping the
+  # pr-preview/ folder untouched (clean-exclude). GitHub Pages serves the
+  # gh-pages branch at the custom domain.
+  deploy-production:
+    name: Deploy production docs
+    if: github.event_name == 'push'
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
       - name: Build with VitePress
         run: pnpm docs:build
 
-      - name: Upload Pages artifact
-        if: github.event_name != 'pull_request'
-        uses: actions/upload-pages-artifact@v5
+      - name: Deploy to gh-pages
+        uses: JamesIves/github-pages-deploy-action@v4
         with:
-          path: docs/.vitepress/dist
+          branch: gh-pages
+          folder: ${{ env.BUILD_OUTPUT_DIR }}
+          clean: true
+          clean-exclude: |
+            pr-preview/**
 
-  deploy:
-    name: Deploy to GitHub Pages
-    if: github.event_name != 'pull_request'
+  # PR preview: deploy to gh-pages under pr-preview/pr-{number}/ and comment
+  # the URL on the PR. Preview URL:
+  # https://strapi.fbritoferreira.com/pr-preview/pr-{number}/
+  deploy-pr-preview:
+    name: Deploy PR preview
+    if: github.event_name == 'pull_request'
     needs: build
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - name: Deploy
-        id: deployment
-        uses: actions/deploy-pages@v5
+      # The preview action pushes to gh-pages via git, so the repo must exist.
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Download preview artifact
+        uses: actions/download-artifact@v6
+        with:
+          name: docs-preview
+          path: ${{ env.BUILD_OUTPUT_DIR }}
+
+      # The action nests each preview as {umbrella-dir}/pr-{number}, which
+      # matches the DOCS_BASE the preview was built with.
+      - name: Deploy PR preview
+        uses: rossjrw/pr-preview-action@v1
+        with:
+          source-dir: ${{ env.BUILD_OUTPUT_DIR }}
+          preview-branch: gh-pages
+          umbrella-dir: ${{ env.PREVIEW_DIR }}
+          action: auto

@@ -1,0 +1,52 @@
+{
+  "name": "@fbritoferreira/strapi-admin-api",
+  "version": "1.0.0",
+  "description": "Plugin to manage Strapi admin users and tokens via REST API",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc --watch",
+    "test": "echo \"No tests yet\"",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "jsr:check": "jsr publish --dry-run"
+  },
+  "keywords": [
+    "strapi",
+    "plugin",
+    "admin",
+    "user-management",
+    "tokens"
+  ],
+  "author": "Filipe Brito Ferreira <me@fbritoferreira.com>",
+  "license": "MIT",
+  "peerDependencies": {
+    "@strapi/strapi": "^5.0.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/koa": "^3.0.3",
+    "@types/node": "^20.0.0",
+    "eslint": "^10.11.0",
+    "globals": "^17.13.0",
+    "jsr": "^0.14.3",
+    "typescript": "^5.0.0",
+    "typescript-eslint": "^8.70.1",
+    "vite": "^8.3.1",
+    "vitest": "^5.0.2"
+  },
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org/",
+    "access": "public"
+  }
+}

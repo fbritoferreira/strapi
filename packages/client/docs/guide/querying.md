@@ -39,7 +39,7 @@ Conditional params, present when the content type is localized or uses Draft & P
 
 `pagination.pageCount` is ignored by Strapi on requests. `withCount` is passed through.
 
-Users and upload routes take a narrower set. See [Users](/guide/users) and [Uploads](/guide/uploads).
+Users and upload routes take a narrower set. See [Users](./users) and [Uploads](./uploads).
 
 ## fields and populate
 
