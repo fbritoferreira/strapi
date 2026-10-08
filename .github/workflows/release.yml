@@ -38,6 +38,8 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
           registry-url: "https://registry.npmjs.org"
+          # Enables OIDC trusted publishing with id-token: write permission
+          always-auth: true
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -53,8 +55,6 @@ jobs:
 
       - name: Check for pending changesets
         id: changesets
-        # Only .md files other than README.md are changesets. `changeset version`
-        # exits 1 when there are none (changesets v3), so gate on this first.
         run: |
           pending=false
           for f in .changeset/*.md; do
@@ -90,7 +90,7 @@ jobs:
         if: steps.changesets.outputs.pending == 'true'
         run: pnpm build
 
-      # Publish every non-private workspace package to npm.
+      # Publish every non-private workspace package to npm using OIDC trusted publishing.
       - name: Publish to npm (OIDC / Trusted Publishing)
         if: steps.changesets.outputs.pending == 'true'
         run: pnpm publish --access public --no-git-checks --recursive --filter '!./'
@@ -142,6 +142,7 @@ jobs:
       # package's jsr.json version is not on JSR yet, so a version that already
       # went to npm can be back-filled by pushing to main.
       - name: Publish to JSR (all unpublished packages)
+        if: steps.changesets.outputs.pending == 'true'
         run: |
           for jsr_file in packages/*/jsr.json; do
             pkg_dir=$(dirname "$jsr_file")
