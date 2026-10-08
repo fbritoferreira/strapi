@@ -18,14 +18,12 @@
     "docs:preview": "vitepress preview docs"
   },
   "devDependencies": {
+    "@changesets/cli": "^3.0.3",
     "@types/node": "^26.6.2",
     "fast-glob": "^3.3.3",
+    "jsr": "^0.14.3",
     "typescript": "^6.0.3",
     "vitepress": "^1.6.4"
   },
-  "packageManager": "pnpm@12.5.1",
-  "dependencies": {
-    "@types/koa": "^3.0.3",
-    "koa": "^3.2.1"
-  }
+  "packageManager": "pnpm@12.5.1"
 }

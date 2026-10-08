@@ -1,4 +1,9 @@
-export default {
+interface PluginDefinition {
+  register(ctx: { strapi: unknown }): void;
+  config(): { admin: { enabled: boolean } };
+}
+
+const plugin: PluginDefinition = {
   register({ strapi }: { strapi: any }) {
     console.log('🚀 Admin API Plugin registering...');
 
@@ -167,3 +172,5 @@ export default {
     };
   },
 };
+
+export default plugin;

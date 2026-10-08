@@ -49,33 +49,47 @@ jobs:
       - name: Build
         run: pnpm build
 
-      - name: Check the published package
+      - name: Check the published packages
         if: matrix.node == 24
         run: pnpm package:check
 
-      - name: Check jsr.json version matches package.json (client package)
+      # Every publishable package has a jsr.json next to its package.json;
+      # verify they stay in sync. Discovers packages dynamically so adding a
+      # new one needs no workflow change.
+      - name: Check jsr.json versions match package.json versions
         run: |
-          pkg_version=$(jq -r .version packages/client/package.json)
-          jsr_version=$(jq -r .version jsr.json)
-          if [[ "$pkg_version" != "$jsr_version" ]]; then
-            echo "jsr.json version ($jsr_version) does not match packages/client/package.json version ($pkg_version)"
-            exit 1
-          fi
+          failed=false
+          for jsr_file in packages/*/jsr.json; do
+            pkg_dir=$(dirname "$jsr_file")
+            pkg_version=$(jq -r .version "$pkg_dir/package.json")
+            jsr_version=$(jq -r .version "$jsr_file")
+            pkg_name=$(jq -r .name "$pkg_dir/package.json")
+            if [[ "$pkg_version" != "$jsr_version" ]]; then
+              echo "::error::${pkg_name}: jsr.json version ($jsr_version) != package.json version ($pkg_version)"
+              failed=true
+            fi
+          done
+          $failed && exit 1 || true
 
-      - name: JSR publish dry run
-        run: pnpm jsr publish --dry-run
+      # Dry-run JSR publish for every package that ships to JSR.
+      - name: JSR publish dry run (all packages)
+        run: |
+          for jsr_file in packages/*/jsr.json; do
+            pkg_dir=$(dirname "$jsr_file")
+            echo "::group::JSR dry run: $pkg_dir"
+            (cd "$pkg_dir" && pnpm jsr publish --dry-run)
+            echo "::endgroup::"
+          done
 
       - name: Report coverage to PR
         if: always() && matrix.node == 24
         uses: davelosert/vitest-coverage-report-action@v2
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          file: packages/client/coverage/coverage-final.json
-          skip-if-no-coverage: false
-          title: "Test Coverage Report"
-          hide-badge: false
-          hide-report: false
-          report-only-changed-files: true
+          working-directory: packages/client
+          name: "Test Coverage Report"
+          json-summary-path: packages/client/coverage/coverage-summary.json
+          json-final-path: packages/client/coverage/coverage-final.json
+          vite-config-path: packages/client/vitest.config.mts
 
   smoke:
     name: Built package on the oldest supported Node
@@ -103,11 +117,18 @@ jobs:
       - name: Build
         run: pnpm build
 
-      # ...and exercise what ships on the oldest Node the package claims.
+      # ...and exercise what ships on the oldest Node the packages claim.
+      # Every package with a scripts/smoke.mjs gets exercised.
       - name: Setup oldest supported Node.js
         uses: actions/setup-node@v7
         with:
           node-version: 20
 
-      - name: Smoke test the built package
-        run: node packages/client/scripts/smoke.mjs
+      - name: Smoke test built packages
+        run: |
+          for smoke in packages/*/scripts/smoke.mjs; do
+            pkg_dir=$(dirname "$(dirname "$smoke")")
+            echo "::group::Smoke test: $pkg_dir"
+            (cd "$pkg_dir" && node scripts/smoke.mjs)
+            echo "::endgroup::"
+          done

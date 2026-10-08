@@ -8,13 +8,23 @@ declare const strapi: any;
  * Provides CRUD operations for admin authentication tokens
  */
 
+interface TokenController {
+  find(ctx: Context): Promise<unknown>;
+  findOne(ctx: Context): Promise<unknown>;
+  create(ctx: Context): Promise<unknown>;
+  update(ctx: Context): Promise<unknown>;
+  delete(ctx: Context): Promise<unknown>;
+  revoke(ctx: Context): Promise<unknown>;
+  refresh(ctx: Context): Promise<unknown>;
+}
+
 // ponytail: strapi.entityService doesn't support `where` on findOne;
 // strapi.db.query is the correct escape hatch for owner-scoped lookups.
-const tokenController = {
+const tokenController: TokenController = {
   /**
    * List all tokens for the authenticated user
    */
-  async find(ctx: Context): Promise<any> {
+  async find(ctx: Context): Promise<unknown> {
     try {
       const user = ctx.state.user;
       if (!user) {
@@ -43,7 +53,7 @@ const tokenController = {
   /**
    * Get a single token by ID
    */
-  async findOne(ctx: Context): Promise<any> {
+  async findOne(ctx: Context): Promise<unknown> {
     try {
       const { id } = ctx.params;
       const { user } = ctx.state;
@@ -78,7 +88,7 @@ const tokenController = {
   /**
    * Create a new admin token
    */
-  async create(ctx: Context): Promise<any> {
+  async create(ctx: Context): Promise<unknown> {
     try {
       const body = (ctx.request as any).body as {
         label?: string;
@@ -129,7 +139,7 @@ const tokenController = {
   /**
    * Update an existing token
    */
-  async update(ctx: Context): Promise<any> {
+  async update(ctx: Context): Promise<unknown> {
     try {
       const { id } = ctx.params;
       const body = (ctx.request as any).body as any;
@@ -172,7 +182,7 @@ const tokenController = {
   /**
    * Delete a token
    */
-  async delete(ctx: Context): Promise<any> {
+  async delete(ctx: Context): Promise<unknown> {
     try {
       const { id } = ctx.params;
       const { user } = ctx.state;
@@ -206,7 +216,7 @@ const tokenController = {
   /**
    * Revoke/expire a token immediately
    */
-  async revoke(ctx: Context): Promise<any> {
+  async revoke(ctx: Context): Promise<unknown> {
     try {
       const { id } = ctx.params;
       const { user } = ctx.state;
@@ -241,7 +251,7 @@ const tokenController = {
   /**
    * Refresh a token (extend expiration)
    */
-  async refresh(ctx: Context): Promise<any> {
+  async refresh(ctx: Context): Promise<unknown> {
     try {
       const { id } = ctx.params;
       const body = (ctx.request as any).body as { expiresAt?: string };
