@@ -21,7 +21,27 @@ const positiveInt = (value: unknown, fallback: number) => {
 const safeFileName = (name: unknown, fallback: string) =>
   (typeof name === 'string' ? name.replace(/["\\\r\n]/g, '') : '') || fallback;
 
-export default ({ strapi }: { strapi: any }) => {
+/** Koa handlers behind the plugin's admin routes; each one sets `ctx.body`. */
+export interface CsvController {
+  /** `GET /content-types`: collections the user can read, plus `meta.maxFileSizeMb`. */
+  contentTypes(ctx: any): Promise<void>;
+  /** `GET /content-types/:uid/schema`: the fields an import can map to. */
+  schema(ctx: any): Promise<void>;
+  /** `POST /jobs`: starts an import job for the calling admin. */
+  createJob(ctx: any): Promise<void>;
+  /** `POST /import/:uid`: imports or dry-runs one batch of rows. */
+  import(ctx: any): Promise<void>;
+  /** `POST /jobs/:id/finish`: marks the caller's import job completed or failed. */
+  finishJob(ctx: any): Promise<void>;
+  /** `POST /export/:uid`: exports the chosen columns as `{ fileName, rowCount, csv }`. */
+  export(ctx: any): Promise<void>;
+  /** `GET /jobs`: pages through jobs for collections the user can read. */
+  jobs(ctx: any): Promise<void>;
+  /** `GET /jobs/:id`: one job with its failed rows. */
+  job(ctx: any): Promise<void>;
+}
+
+export default ({ strapi }: { strapi: any }): CsvController => {
   const jobs = createJobs(strapi);
   const config = (key: string) => strapi.plugin(PLUGIN).config(key);
 

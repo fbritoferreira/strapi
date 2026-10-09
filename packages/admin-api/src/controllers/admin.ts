@@ -2,12 +2,19 @@ import type { Context } from 'koa';
 
 declare const strapi: any;
 
+/** Koa handlers behind the `/admin-api/users` routes. */
 export interface AdminController {
+  /** `GET /users`: lists admin users; filters and sort are limited to non-secret fields. */
   find(ctx: Context): Promise<any>;
+  /** `GET /users/:id`: one admin user. */
   findOne(ctx: Context): Promise<any>;
+  /** `POST /users`: creates an admin user with the given role ids and password. */
   create(ctx: Context): Promise<any>;
+  /** `PUT /users/:id`: updates an admin user. */
   update(ctx: Context): Promise<any>;
+  /** `DELETE /users/:id`: deletes an admin user. */
   delete(ctx: Context): Promise<any>;
+  /** `POST /users/:id/reset-password`: sets a new password that meets Strapi's admin password policy. */
   resetPassword(ctx: Context): Promise<any>;
 }
 

@@ -14,6 +14,8 @@ Strapi 5 plugin to import and export collection types as CSV from the admin pane
 npm install @fbritoferreira/strapi-csv-import-export
 ```
 
+Install it from npm. The [JSR package](https://jsr.io/@fbritoferreira/strapi-csv-import-export) holds the TypeScript source and API docs, not the built `dist/` server and admin bundles that Strapi loads.
+
 ```typescript
 // config/plugins.ts
 export default () => ({

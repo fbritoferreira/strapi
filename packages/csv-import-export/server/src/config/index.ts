@@ -1,4 +1,16 @@
-export default {
+/** Plugin options under `'csv-import-export'.config` in `config/plugins.ts`. */
+export interface CsvImportExportConfig {
+  /** Prefix formula-looking export cells with `'`. Default `true`. */
+  escapeFormulas: boolean;
+  /** Largest CSV, in MB, the import screen accepts. Default `10`. */
+  maxFileSizeMb: number;
+}
+
+/** Defaults and validation for the plugin options. */
+const config: {
+  default: CsvImportExportConfig;
+  validator(config: Record<string, unknown>): void;
+} = {
   default: {
     escapeFormulas: true,
     maxFileSizeMb: 10,
@@ -12,3 +24,5 @@ export default {
     }
   },
 };
+
+export default config;

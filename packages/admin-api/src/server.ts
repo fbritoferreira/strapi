@@ -1,11 +1,38 @@
-import adminController from './controllers/admin.js';
-import tokenController from './controllers/tokens.js';
+import adminController, { type AdminController } from './controllers/admin.js';
+import tokenController, { type TokenController } from './controllers/tokens.js';
+
+/** One route of the plugin, in Strapi's route config shape. */
+export interface AdminRoute {
+  /** HTTP method. */
+  method: string;
+  /** Path under `/admin-api`. */
+  path: string;
+  /** `controller.method` that handles it. */
+  handler: string;
+  /** Admin authentication and the Strapi admin permission the caller needs. */
+  config: {
+    auth: { scope: string[] };
+    policies: Array<string | { name: string; config: { actions: string[] } }>;
+  };
+}
+
+/** What `strapi-server.js` returns: the plugin's controllers, routes and lifecycle. */
+export interface AdminApiPlugin {
+  /** The user and token controllers. */
+  controllers: { adminController: AdminController; tokenController: TokenController };
+  /** The 13 `/admin-api/users` and `/admin-api/tokens` routes. */
+  routes: AdminRoute[];
+  /** Strapi register lifecycle; does nothing. */
+  register(): void;
+  /** Plugin config. */
+  config(): { admin: { enabled: boolean } };
+}
 
 /**
  * Admin-type route that requires an authenticated admin holding `action`,
  * mirroring how Strapi guards its own /admin/users and /admin/api-tokens routes.
  */
-const route = (method: string, path: string, handler: string, action: string) => ({
+const route = (method: string, path: string, handler: string, action: string): AdminRoute => ({
   method,
   path,
   handler,
@@ -22,7 +49,7 @@ const route = (method: string, path: string, handler: string, action: string) =>
  * Admin API plugin (strapi-server entry): controllers plus /admin-api/users
  * and /admin-api/tokens routes.
  */
-const createPlugin = () => ({
+const createPlugin = (): AdminApiPlugin => ({
   controllers: {
     adminController,
     tokenController,

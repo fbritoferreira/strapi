@@ -1,8 +1,34 @@
+/**
+ * Admin panel side of the Strapi 5 CSV import/export plugin: the CSV Import /
+ * Export page and the Import CSV and Export CSV buttons in the Content
+ * Manager. Strapi's admin build loads it from the package's `strapi-admin`
+ * export when the plugin is enabled:
+ *
+ * ```ts
+ * // config/plugins.ts
+ * export default () => ({
+ *   'csv-import-export': { enabled: true },
+ * });
+ * ```
+ *
+ * @module
+ */
 import { ListViewActions } from './components/ListViewActions';
 import { PluginIcon } from './components/PluginIcon';
 import { PLUGIN_ID } from './pluginId';
 
-export default {
+/** What Strapi's admin loads from `strapi-admin`. */
+export interface CsvImportExportAdmin {
+  /** Adds the menu link and registers the plugin. */
+  register(app: any): void;
+  /** Adds the Import CSV and Export CSV buttons to the Content Manager list view. */
+  bootstrap(app: any): void;
+  /** Loads the plugin's translations for each admin locale. */
+  registerTrads(context: { locales: string[] }): Promise<Array<{ data: Record<string, string>; locale: string }>>;
+}
+
+/** Admin entry for the CSV import/export plugin. */
+const plugin: CsvImportExportAdmin = {
   register(app: any) {
     app.addMenuLink({
       to: `plugins/${PLUGIN_ID}`,
@@ -43,3 +69,5 @@ export default {
     );
   },
 };
+
+export default plugin;

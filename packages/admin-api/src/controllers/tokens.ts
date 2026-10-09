@@ -8,13 +8,21 @@ declare const strapi: any;
  * backed by Strapi's official api-token service.
  */
 
+/** Koa handlers behind the `/admin-api/tokens` routes. */
 export interface TokenController {
+  /** `GET /tokens`: lists API tokens, without their access keys. */
   find(ctx: Context): Promise<unknown>;
+  /** `GET /tokens/:id`: one API token, without its access key. */
   findOne(ctx: Context): Promise<unknown>;
+  /** `POST /tokens`: creates an API token; the access key is returned only here. */
   create(ctx: Context): Promise<unknown>;
+  /** `PUT /tokens/:id`: updates a token's name, description, type, permissions or lifespan. */
   update(ctx: Context): Promise<unknown>;
+  /** `DELETE /tokens/:id`: deletes a token. */
   delete(ctx: Context): Promise<unknown>;
+  /** `POST /tokens/:id/revoke`: deletes the token, the same as Strapi's own revoke. */
   revoke(ctx: Context): Promise<unknown>;
+  /** `POST /tokens/:id/refresh`: resets the token's expiration from a lifespan (none, 7, 30 or 90 days) or an `expiresAt` date. */
   refresh(ctx: Context): Promise<unknown>;
 }
 
@@ -55,6 +63,7 @@ const persistExpiration = async (id: unknown, lifespan: number | null, expiresAt
 // error middleware turns it into a 400, so both must escape the 500 wrapper.
 const isClientError = (error: any) => Boolean(error.status) || error.name === 'ValidationError';
 
+/** Token handlers, backed by Strapi's own `api-token` service. */
 const tokenController: TokenController = {
   /**
    * List all API tokens

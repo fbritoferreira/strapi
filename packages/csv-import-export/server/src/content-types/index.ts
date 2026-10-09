@@ -1,5 +1,8 @@
-import schema from './job/schema.json';
+import schema from './job/schema';
 
-export default {
+/** The plugin's content types. */
+const contentTypes: { job: { schema: typeof schema } } = {
   job: { schema },
 };
+
+export default contentTypes;
