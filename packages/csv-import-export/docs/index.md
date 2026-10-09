@@ -44,7 +44,14 @@ On top of those, every request checks the Content Manager permissions of the col
 | Import as published | create, update, publish |
 | Export, history, schema | read |
 
-A role that cannot edit a collection in the Content Manager cannot import into it either. The History tab only lists jobs for collections the user can read.
+The checks follow the role's limits in detail:
+
+- **Fields.** Every mapped column needs the permission on that field, and every exported column needs read on it. A role that may update only `title` cannot import a `price` column.
+- **Locales.** The import or export locale must be one the role may use. Without a locale the default locale applies.
+- **Relations.** Linking or exporting a relation by a field of the related collection, such as `category.slug`, needs read permission on that field of the related collection.
+- **Entry conditions.** Rules limited by a condition on the entry itself, such as "is creator", are refused: a bulk import or export cannot apply them row by row.
+
+Private attributes (`private: true` in the schema, such as users-permissions' reset tokens) are never imported, exported or used to match relations. The History tab only lists jobs for collections the user can read.
 
 ## Importing
 
@@ -53,7 +60,7 @@ Open **CSV Import / Export** in the main menu, or use **Import CSV** in a collec
 1. **Source.** Choose the collection, the locale (localized collections only) and whether entries are saved as draft or published (Draft & Publish collections only). Pick the file.
 2. **Mapping.** Each CSV column maps to a field or is ignored. Columns whose header matches a field name are mapped automatically, ignoring case, spaces, `_` and `-`. If an earlier import of the same collection had the same set of columns, its whole mapping is reused.
 3. **Preview.** A dry run of the first 100 rows shows what each row will do (create, update, skip, error) without writing anything.
-4. **Run.** Rows are sent in batches of 100. A progress bar and live counts show the result. Rows that failed or were skipped can be downloaded as a CSV with the row number and the reason, fixed and imported again.
+4. **Run.** Rows are sent in batches of 100. A progress bar and live counts show the result. Rows that failed or were skipped can be downloaded as a CSV with the row number and the reason, fixed and imported again. A batch whose request fails is not retried automatically, because it may have been written before the connection dropped; importing the file again updates the rows that match.
 
 ### How existing entries are matched
 
@@ -107,7 +114,7 @@ Choose the collection, locale and draft or published version. Every scalar field
 
 The file is UTF-8 with a byte order mark, so Excel opens accented characters correctly. Cells that start with `=`, `+`, `-`, `@`, a tab or a carriage return are prefixed with `'` so spreadsheet programs do not run them as formulas ([OWASP CSV injection](https://owasp.org/www-community/attacks/CSV_Injection)). Numbers are not prefixed.
 
-An export that includes `documentId` can be imported back with **Find existing entries by: documentId**, which updates every row in place.
+On import, a leading `'` before one of those characters is removed again, so an export re-imports unchanged. An export that includes `documentId` can be imported back with **Find existing entries by: documentId**, which updates every row in place.
 
 ## History
 

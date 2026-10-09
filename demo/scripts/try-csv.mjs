@@ -17,15 +17,34 @@ const login = await fetch(`${base}/admin/login`, {
 assert.equal(login.status, 200, `admin login failed; create the admin first (see README)`);
 const { token } = (await login.json()).data;
 
-const api = async (method, path, body) => {
-  const res = await fetch(`${base}/csv-import-export${path}`, {
+const request = async (bearer, method, path, body) => {
+  const res = await fetch(`${base}${path}`, {
     method,
-    headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+    headers: { authorization: `Bearer ${bearer}`, 'content-type': 'application/json' },
     body: body && JSON.stringify(body),
   });
   const text = await res.text();
-  assert.ok(res.ok, `${method} ${path} -> ${res.status} ${text}`);
-  return res.headers.get('content-type')?.includes('json') ? JSON.parse(text) : text;
+  return { status: res.status, body: text ? JSON.parse(text) : null };
+};
+
+const api = async (method, path, body) => {
+  const res = await request(token, method, `/csv-import-export${path}`, body);
+  assert.ok(res.status < 300, `${method} ${path} -> ${res.status} ${JSON.stringify(res.body)}`);
+  return res.body;
+};
+
+/** Real imports are logged, so each one needs a running job. */
+const importWithJob = async (config, rows) => {
+  const { data: job } = await api('POST', '/jobs', {
+    uid: ARTICLE,
+    status: config.status,
+    fileName: 'try-csv',
+    totalRows: rows.length,
+    config,
+  });
+  const { data: result } = await api('POST', `/import/${ARTICLE}`, { ...config, dryRun: false, jobId: job.id, rowOffset: 0, rows });
+  await api('POST', `/jobs/${job.id}/finish`, { state: result.aborted ? 'failed' : 'completed' });
+  return result;
 };
 
 // The fixture has no quoted fields, so a plain split is enough here.
@@ -88,19 +107,19 @@ assert.doesNotMatch(csv, /missing-category|bad-views/, 'skipped and failed rows 
 console.log(`export: ${csv.trim().split('\r\n').length - 1} rows`);
 
 // A row whose relation target is missing aborts its whole batch with onMissingRelation: fail.
-const { data: failed } = await api('POST', `/import/${ARTICLE}`, {
-  status: 'draft',
-  matchField: 'slug',
-  mapping: { slug: 'slug', category: 'category' },
-  relations: { category: { matchOn: 'slug' } },
-  onMissingRelation: 'fail',
-  dryRun: false,
-  rowOffset: 0,
-  rows: [
+const failed = await importWithJob(
+  {
+    status: 'draft',
+    matchField: 'slug',
+    mapping: { slug: 'slug', category: 'category' },
+    relations: { category: { matchOn: 'slug' } },
+    onMissingRelation: 'fail',
+  },
+  [
     { slug: 'should-not-exist', category: 'news' },
     { slug: 'missing-category', category: 'cooking' },
-  ],
-});
+  ]
+);
 assert.equal(failed.aborted, true, 'fail mode aborts the batch');
 const check = await api('POST', `/export/${ARTICLE}`, { status: 'draft', columns: [{ field: 'slug', header: 'slug' }] });
 assert.doesNotMatch(check.data.csv, /should-not-exist/, 'nothing in an aborted batch is written');
@@ -115,21 +134,72 @@ const roundTrip = await api('POST', `/export/${ARTICLE}`, {
   ],
 });
 const [, ...exportedLines] = roundTrip.data.csv.trim().split('\r\n');
-const { data: reimport } = await api('POST', `/import/${ARTICLE}`, {
-  status: 'published',
-  matchField: 'documentId',
-  mapping: { documentId: 'documentId', views: 'views' },
-  relations: {},
-  onMissingRelation: 'skip',
-  dryRun: false,
-  rowOffset: 0,
-  rows: exportedLines.map((line) => {
+const reimport = await importWithJob(
+  {
+    status: 'published',
+    matchField: 'documentId',
+    mapping: { documentId: 'documentId', views: 'views' },
+    relations: {},
+    onMissingRelation: 'skip',
+  },
+  exportedLines.map((line) => {
     const [documentId, views] = line.split(',');
     return { documentId, views };
-  }),
-});
+  })
+);
 assert.ok(reimport.results.every((r) => r.action === 'updated'), 'every exported row updates its own entry');
 console.log(`round trip on documentId: ${reimport.results.length} updated, 0 created`);
+
+// Field-level permissions: an editor who may read only title and slug cannot export views.
+const EDITOR = { email: 'csv-editor@demo.local', password: 'EditorPass123' };
+const roles = (await request(token, 'GET', '/admin/roles')).body.data;
+let role = roles.find((r) => r.name === 'CSV editor');
+if (!role) {
+  role = (await request(token, 'POST', '/admin/roles', { name: 'CSV editor', description: 'try-csv' })).body.data;
+}
+await request(token, 'PUT', `/admin/roles/${role.id}/permissions`, {
+  permissions: [
+    {
+      action: 'plugin::content-manager.explorer.read',
+      subject: ARTICLE,
+      properties: { fields: ['title', 'slug'] },
+      conditions: [],
+    },
+    { action: 'plugin::csv-import-export.export', subject: null, properties: {}, conditions: [] },
+  ],
+});
+let editorLogin = await request('', 'POST', '/admin/login', EDITOR);
+if (editorLogin.status !== 200) {
+  const invited = await request(token, 'POST', '/admin/users', {
+    email: EDITOR.email,
+    firstname: 'CSV',
+    lastname: 'Editor',
+    roles: [role.id],
+  });
+  await request('', 'POST', '/admin/register', {
+    registrationToken: invited.body.data.registrationToken,
+    userInfo: { firstname: 'CSV', lastname: 'Editor', password: EDITOR.password },
+  });
+  editorLogin = await request('', 'POST', '/admin/login', EDITOR);
+}
+const editorToken = editorLogin.body.data.token;
+const exportAs = (columns) =>
+  request(editorToken, 'POST', `/csv-import-export/export/${ARTICLE}`, { status: 'published', columns });
+const allowed = await exportAs([{ field: 'title', header: 'title' }]);
+assert.equal(allowed.status, 200, `editor exports title: ${JSON.stringify(allowed.body)}`);
+const refused = await exportAs([
+  { field: 'title', header: 'title' },
+  { field: 'views', header: 'views' },
+]);
+assert.equal(refused.status, 403, 'editor cannot export a field outside the role');
+const importRefused = await request(editorToken, 'POST', '/csv-import-export/jobs', {
+  uid: ARTICLE,
+  status: 'draft',
+  totalRows: 1,
+  config: {},
+});
+assert.equal(importRefused.status, 403, 'editor without the import permission cannot start an import');
+console.log(`permissions: editor export of title ${allowed.status}, of views ${refused.status}, import ${importRefused.status}`);
 
 const { data: history, meta } = await api('GET', `/jobs?uid=${ARTICLE}`);
 assert.ok(history.length >= 3, 'history lists both imports and the export');

@@ -5,7 +5,7 @@ description: HTTP routes of the CSV import/export plugin
 
 # Admin API
 
-The admin panel uses these routes, and scripts can call them with an admin JWT. Every route needs an authenticated admin and the Content Manager permissions listed in [Permissions](./#permissions). All paths are under `/csv-import-export`.
+The admin panel uses these routes, and scripts can call them with an admin JWT. Every route needs an authenticated admin and the Content Manager permissions listed in [Permissions](./#permissions), checked per field, locale and relation target. A missing permission returns `403` with the action, collection, fields and locale in the message. All paths are under `/csv-import-export`.
 
 ```bash
 TOKEN=$(curl -s -X POST localhost:1337/admin/login -H 'content-type: application/json' \
@@ -76,7 +76,7 @@ Returns `201` with `{ "data": { "id": 12, "state": "running", ... } }`. `config`
 | `onMissingRelation` | `skip` the row, or `fail` the whole batch without writing any of it. |
 | `rowOffset` | Rows sent in earlier batches. Result row numbers are `rowOffset + index + 1`. |
 | `dryRun` | Decide every action without writing, and leave the job alone. |
-| `jobId` | Optional. Adds the batch counts and failed rows to that running job. |
+| `jobId` | Required unless `dryRun` is `true`: a running import job for this collection that the caller started. The batch counts and failed rows are added to it. |
 
 ```json
 {
