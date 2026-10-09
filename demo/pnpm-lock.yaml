@@ -14,6 +14,9 @@ importers:
       '@fbritoferreira/strapi-admin-api':
         specifier: link:../packages/admin-api
         version: link:../packages/admin-api
+      '@fbritoferreira/strapi-csv-import-export':
+        specifier: link:../packages/csv-import-export
+        version: link:../packages/csv-import-export
       '@fbritoferreira/strapi-provider-email-cloudflare':
         specifier: link:../packages/provider-email-cloudflare
         version: link:../packages/provider-email-cloudflare

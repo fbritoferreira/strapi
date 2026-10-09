@@ -1,0 +1,6 @@
+slug,title,views,featured,category,tags
+hello-strapi,Hello Strapi (imported),10,true,news,strapi
+csv-import,CSV import,5,false,sport,csv|typescript
+csv-export,CSV export,,yes,news,
+bad-views,Bad views,many,false,news,
+missing-category,Missing category,1,false,cooking,
