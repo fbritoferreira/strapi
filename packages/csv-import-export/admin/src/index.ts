@@ -1,5 +1,6 @@
-import { PLUGIN_ID } from './pluginId';
+import { ListViewActions } from './components/ListViewActions';
 import { PluginIcon } from './components/PluginIcon';
+import { PLUGIN_ID } from './pluginId';
 
 export default {
   register(app: any) {
@@ -8,10 +9,19 @@ export default {
       icon: PluginIcon,
       intlLabel: { id: `${PLUGIN_ID}.plugin.name`, defaultMessage: 'CSV Import / Export' },
       Component: () => import('./pages/App'),
-      permissions: [],
+      permissions: [
+        { action: `plugin::${PLUGIN_ID}.import`, subject: null },
+        { action: `plugin::${PLUGIN_ID}.export`, subject: null },
+      ],
     });
 
     app.registerPlugin({ id: PLUGIN_ID, name: PLUGIN_ID });
+  },
+
+  bootstrap(app: any) {
+    app
+      .getPlugin('content-manager')
+      .injectComponent('listView', 'actions', { name: `${PLUGIN_ID}-actions`, Component: ListViewActions });
   },
 
   async registerTrads({ locales }: { locales: string[] }) {
