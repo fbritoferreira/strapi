@@ -132,10 +132,10 @@ jobs:
             NAME=$(jq -r .name "$dir/package.json")
             VERSION=$(jq -r .version "$dir/package.json")
             TAG="${NAME}@${VERSION}"
-            awk -v v="## $VERSION" '$0 == v {f=1; next} f && /^## / {exit} f' "$dir/CHANGELOG.md" > notes.md
-            echo "" >> notes.md
-            echo "Full changelog: https://github.com/${GITHUB_REPOSITORY}/blob/${TAG}/${dir}/CHANGELOG.md" >> notes.md
-            gh release create "$TAG" --title "$TAG" --notes-file notes.md --target "$(git rev-parse HEAD)"
+            awk -v v="## $VERSION" '$0 == v {f=1; next} f && /^## / {exit} f' "$dir/CHANGELOG.md" > "$RUNNER_TEMP/notes.md"
+            echo "" >> "$RUNNER_TEMP/notes.md"
+            echo "Full changelog: https://github.com/${GITHUB_REPOSITORY}/blob/${TAG}/${dir}/CHANGELOG.md" >> "$RUNNER_TEMP/notes.md"
+            gh release create "$TAG" --title "$TAG" --notes-file "$RUNNER_TEMP/notes.md" --target "$(git rev-parse HEAD)"
           done
 
       # JSR runs after npm and the GitHub release so a JSR failure never blocks
