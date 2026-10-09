@@ -188,6 +188,14 @@ describe("fetchAll", () => {
 		expect(fetchMock).toHaveBeenCalledTimes(1);
 	});
 
+	it("returns the first page when it already reaches the end", async () => {
+		fetchMock.mockResolvedValueOnce(offset([9, 10], 8, 5, 10));
+		const [err, data] = await fetchAll<Item>({ http, ...base, params: { pagination: { start: 8, limit: 5 } } });
+		expect(err).toBeNull();
+		expect(data?.map((i) => i.id)).toEqual([9, 10]);
+		expect(fetchMock).toHaveBeenCalledTimes(1);
+	});
+
 	it("drops withCount: false, since the count is what finds the remaining pages", async () => {
 		fetchMock.mockResolvedValueOnce(page([1], 1, 1, 2)).mockResolvedValueOnce(page([2], 2, 1, 2));
 		const [err, data] = await fetchAll<Item>({ http, ...base, params: { pagination: { pageSize: 1, withCount: false } } });

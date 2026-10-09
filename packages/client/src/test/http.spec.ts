@@ -149,6 +149,12 @@ describe("HttpClient", () => {
 			expect(err).toEqual({ status: 400, name: "GRAPHQL_VALIDATION_FAILED", message: 'Cannot query field "nope"', details: errors });
 		});
 
+		it("falls back to the status for a JSON body with neither error nor errors", async () => {
+			fetchMock.mockResolvedValueOnce(jsonResponse({ ok: false }, 500));
+			const [err] = await new HttpClient({ baseURL: "http://h" }).request("x");
+			expect(err).toEqual({ status: 500, name: "HTTPError", message: "Strapi API error: 500" });
+		});
+
 		it("maps a non-JSON error response", async () => {
 			fetchMock.mockResolvedValueOnce(textResponse("Bad Gateway", 502));
 			const [err] = await new HttpClient({ baseURL: "http://h" }).request("x");
