@@ -28,7 +28,8 @@
 		"test:coverage": "vitest run --coverage",
 		"typecheck": "tsc -p tsconfig.test.json",
 		"lint": "eslint .",
-		"lint:fix": "eslint . --fix"
+		"lint:fix": "eslint . --fix",
+		"jsr:check": "jsr publish --dry-run --allow-dirty"
 	},
 	"keywords": [
 		"strapi",

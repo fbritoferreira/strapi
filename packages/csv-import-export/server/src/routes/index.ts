@@ -5,7 +5,19 @@ import { ACTIONS } from '../bootstrap';
  * `action` is given. Content-manager permissions on the target collection are
  * checked again in the controller, per uid.
  */
-const route = (method: string, path: string, handler: string, action?: string) => ({
+/** One admin route, in Strapi's route config shape. */
+export interface CsvRoute {
+  /** HTTP method. */
+  method: string;
+  /** Path under `/csv-import-export`. */
+  path: string;
+  /** `csv.<handler>` in the plugin's controller. */
+  handler: string;
+  /** Policies: an authenticated admin, plus the plugin permission for writes. */
+  config: { policies: Array<string | { name: string; config: { actions: string[] } }> };
+}
+
+const route = (method: string, path: string, handler: string, action?: string): CsvRoute => ({
   method,
   path,
   handler: `csv.${handler}`,
@@ -17,7 +29,8 @@ const route = (method: string, path: string, handler: string, action?: string) =
   },
 });
 
-export default {
+/** The plugin's admin routes. */
+const routes: { admin: { type: string; routes: CsvRoute[] } } = {
   admin: {
     type: 'admin',
     routes: [
@@ -32,3 +45,5 @@ export default {
     ],
   },
 };
+
+export default routes;

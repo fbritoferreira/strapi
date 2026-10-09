@@ -1,7 +1,38 @@
+/**
+ * Strapi 5 email provider that sends through Cloudflare Email Sending.
+ *
+ * Install it from npm and point Strapi's email plugin at it:
+ *
+ * ```ts
+ * // config/plugins.ts
+ * export default ({ env }) => ({
+ *   email: {
+ *     config: {
+ *       provider: '@fbritoferreira/strapi-provider-email-cloudflare',
+ *       providerOptions: {
+ *         apiToken: env('CLOUDFLARE_API_TOKEN'),
+ *         accountId: env('CLOUDFLARE_ACCOUNT_ID'),
+ *       },
+ *       settings: { defaultFrom: 'Example <hello@example.com>' },
+ *     },
+ *   },
+ * });
+ * ```
+ *
+ * @module
+ */
 import { mapSendOptions, type SendOptions, type Settings } from './map.js';
 
-export type { Attachment, CloudflareBody, SendOptions, Settings } from './map.js';
+export type {
+  Address,
+  Attachment,
+  CloudflareAttachment,
+  CloudflareBody,
+  SendOptions,
+  Settings,
+} from './map.js';
 
+/** The `providerOptions` block of the email plugin config. */
 export interface ProviderOptions {
   /** Cloudflare API token with the Email Sending permission. */
   apiToken: string;
@@ -13,11 +44,17 @@ export interface ProviderOptions {
   timeoutMs?: number;
 }
 
-interface DeliveryResult {
+/** Cloudflare's delivery report for one message, returned by `send()`. */
+export interface DeliveryResult {
+  /** Recipients the message was delivered to. */
   delivered?: string[];
+  /** Recipients the message is queued for. */
   queued?: string[];
+  /** Recipients that bounced permanently. */
   permanent_bounces?: string[];
+  /** Recipients skipped because they are on the suppression list. */
   suppressed_recipients?: string[];
+  /** Cloudflare's ID for the message. */
   message_id?: string;
 }
 
@@ -35,11 +72,15 @@ const describeFailure = (status: number, payload: CloudflareResponse | null): st
 
 /** What Strapi gets back from `init()` — one method, called for every send. */
 export interface EmailProviderInstance {
+  /** Sends one message and resolves with Cloudflare's delivery report; rejects on an API error. */
   send(options: SendOptions): Promise<DeliveryResult>;
 }
 
+/** The provider object Strapi loads from `email.config.provider`. */
 export interface CloudflareEmailProvider {
+  /** Provider name, `cloudflare`. */
   name: string;
+  /** Called once at boot with `providerOptions` and `settings`; throws if `apiToken` or `accountId` is missing. */
   init(providerOptions: ProviderOptions, settings?: Settings): EmailProviderInstance;
 }
 

@@ -14,6 +14,8 @@ curl -X POST http://localhost:1337/admin/auth/admin/login \
   -d '{"email": "admin@example.com", "password": "password"}' | jq -r '.jwt'
 ```
 
+Install it from npm. The [JSR package](https://jsr.io/@fbritoferreira/strapi-admin-api) holds the TypeScript source and API docs, not the built `dist/` that Strapi loads.
+
 For full API documentation, see [admin-api documentation](https://strapi.fbritoferreira.com/packages/admin-api/) which includes:
 - Complete API reference
 - Authentication guide

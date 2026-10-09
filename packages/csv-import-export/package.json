@@ -37,7 +37,8 @@
     "typecheck": "tsc -p server/tsconfig.json --noEmit && tsc -p admin/tsconfig.json --noEmit",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
-    "smoke": "node scripts/smoke.mjs"
+    "smoke": "node scripts/smoke.mjs",
+    "jsr:check": "jsr publish --dry-run --allow-dirty"
   },
   "keywords": [
     "strapi",

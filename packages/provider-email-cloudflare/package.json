@@ -30,7 +30,8 @@
 		"test:watch": "vitest",
 		"typecheck": "tsc -p tsconfig.test.json",
 		"lint": "eslint .",
-		"lint:fix": "eslint . --fix"
+		"lint:fix": "eslint . --fix",
+		"jsr:check": "jsr publish --dry-run --allow-dirty"
 	},
 	"keywords": [
 		"strapi",

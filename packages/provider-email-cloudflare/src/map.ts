@@ -4,55 +4,103 @@ import { basename } from 'node:path';
 /** A Cloudflare Email Sending address: bare string, or `{ address, name }`. */
 export type Address = string | { address: string; name?: string };
 
+/**
+ * An attachment as Strapi's Email feature passes it: the Nodemailer shape.
+ * Either `content` or `path` must be set.
+ */
 export interface Attachment {
+  /** File name shown to the recipient; defaults to the base name of `path`, else `attachment`. */
   filename?: string;
+  /** File contents: a string (see `encoding`) or a Buffer. */
   content?: string | Buffer;
+  /** Local file to read when `content` is not given. */
   path?: string;
+  /** Content-ID for inline images referenced as `cid:` in the HTML body (Nodemailer name); used when `content_id` is missing. */
   cid?: string;
+  /** Content-ID for inline images (Cloudflare name). */
   content_id?: string;
+  /** MIME type (Cloudflare name); guessed from the file extension when missing. */
   type?: string;
+  /** MIME type (Nodemailer name); used when `type` is missing. */
   contentType?: string;
+  /** Encoding of a string `content`, such as `base64`; plain text otherwise. */
   encoding?: string;
+  /** `attachment` (default) or `inline`; inline is implied when a content ID is set. */
   disposition?: string;
+  /** Other Nodemailer fields are accepted and ignored. */
   [key: string]: unknown;
 }
 
+/** The options Strapi passes to the provider's `send()`. */
 export interface SendOptions {
+  /** Sender; falls back to the `defaultFrom` setting. Accepts `Name <a@b.com>`. */
   from?: string;
+  /** One or more recipients. */
   to: string | string[];
+  /** Carbon-copy recipients. */
   cc?: string | string[];
+  /** Blind carbon-copy recipients. */
   bcc?: string | string[];
+  /** Reply-To address; an empty string falls back to the `defaultReplyTo` setting. */
   replyTo?: string;
+  /** Subject line. */
   subject: string;
+  /** Plain-text body; at least one of `text` and `html` is required. */
   text?: string;
+  /** HTML body; at least one of `text` and `html` is required. */
   html?: string;
+  /** Extra message headers. */
   headers?: Record<string, string>;
+  /** Files to attach. */
   attachments?: Attachment[];
+  /** Other Strapi options are accepted and ignored. */
   [key: string]: unknown;
 }
 
+/** The `settings` block of the email plugin config. */
 export interface Settings {
+  /** Sender used when `send()` gets no `from`. */
   defaultFrom?: string;
+  /** Reply-To used when `send()` gets no `replyTo`. */
   defaultReplyTo?: string;
 }
 
+/** The request body sent to Cloudflare's Email Sending API. */
 export interface CloudflareBody {
+  /** Sender address. */
   from: Address;
+  /** Recipients. */
   to: Address | Address[];
+  /** Subject line. */
   subject: string;
+  /** Plain-text body. */
   text?: string;
+  /** HTML body. */
   html?: string;
+  /** Carbon-copy recipients. */
   cc?: Address | Address[];
+  /** Blind carbon-copy recipients. */
   bcc?: Address | Address[];
+  /** Reply-To address. */
   reply_to?: Address;
+  /** Extra message headers. */
   headers?: Record<string, string>;
-  attachments?: {
-    content: string;
-    filename: string;
-    type: string;
-    disposition: string;
-    content_id?: string;
-  }[];
+  /** Attachments, base64-encoded. */
+  attachments?: CloudflareAttachment[];
+}
+
+/** One attachment in Cloudflare's request shape. */
+export interface CloudflareAttachment {
+  /** Base64-encoded file contents. */
+  content: string;
+  /** File name. */
+  filename: string;
+  /** MIME type. */
+  type: string;
+  /** `attachment` or `inline`. */
+  disposition: string;
+  /** Content-ID for inline images. */
+  content_id?: string;
 }
 
 // Minimal extension → MIME table. Cloudflare requires a `type` per attachment;
@@ -101,8 +149,6 @@ const mimeFor = (filename: string): string => {
   const ext = filename.split('.').pop()?.toLowerCase() ?? '';
   return MIME_TYPES[ext] ?? 'application/octet-stream';
 };
-
-type CloudflareAttachment = NonNullable<CloudflareBody['attachments']>[number];
 
 /** Convert a Strapi/Nodemailer-style attachment into Cloudflare's shape. */
 export const toCloudflareAttachment = async (attachment: Attachment): Promise<CloudflareAttachment> => {

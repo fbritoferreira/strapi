@@ -1,0 +1,20 @@
+{
+	"$schema": "https://jsr.io/schema/config-file.v1.json",
+	"name": "@fbritoferreira/strapi-provider-email-cloudflare",
+	"version": "1.0.1",
+	"license": "MIT",
+	"exports": "./src/index.ts",
+	"publish": {
+		"include": [
+			"src/**/*.ts",
+			"README.md",
+			"LICENCE.md",
+			"package.json",
+			"jsr.json",
+			"CHANGELOG.md"
+		],
+		"exclude": [
+			"src/test"
+		]
+	}
+}

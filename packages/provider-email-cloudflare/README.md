@@ -25,6 +25,8 @@ npm install @fbritoferreira/strapi-provider-email-cloudflare
 # yarn add / pnpm add / bun add the same package name
 ```
 
+Install it from npm. The [JSR package](https://jsr.io/@fbritoferreira/strapi-provider-email-cloudflare) holds the TypeScript source and API docs, not the built `dist/` that Strapi loads.
+
 ## Configuration
 
 ```ts
