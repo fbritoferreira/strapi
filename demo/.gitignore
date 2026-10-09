@@ -1,0 +1,8 @@
+.tmp/
+.strapi/
+dist/
+.tsbuildinfo
+public/uploads/*
+!public/uploads/.gitkeep
+types/
+.strapi-updater.json
