@@ -35,8 +35,12 @@ try {
   for (const key of ['register', 'bootstrap', 'destroy']) {
     assert.equal(typeof plugin[key], 'function', `server entry must export ${key}()`);
   }
+  assert.equal(plugin.routes.admin.type, 'admin', 'routes must be admin routes');
+  assert.equal(plugin.routes.admin.routes.length, 8, 'expected 8 admin routes');
+  assert.ok(plugin.contentTypes.job?.schema?.attributes?.targetUid, 'job content type must ship in the build');
+  require('papaparse');
 
-  console.log('smoke ok: tarball has admin and server builds, server entry loads');
+  console.log(`smoke ok: tarball loads, ${plugin.routes.admin.routes.length} routes registered`);
 } finally {
   await rm(tmp, { recursive: true, force: true });
 }
