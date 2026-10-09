@@ -57,6 +57,15 @@ describe("HttpClient", () => {
 			expect(headerOf(init, "x-trace")).toBe("1");
 		});
 
+		it("sends Authorization to absolute URLs on the Strapi origin only", async () => {
+			fetchMock.mockImplementation(() => Promise.resolve(jsonResponse({})));
+			const http = new HttpClient({ baseURL: "http://h", token: "t" });
+			await http.request("http://h/graphql");
+			expect(headerOf(lastCall(fetchMock).init, "authorization")).toBe("Bearer t");
+			await http.request("https://bucket.s3.amazonaws.com/uploads/a.jpg");
+			expect(headerOf(lastCall(fetchMock).init, "authorization")).toBeNull();
+		});
+
 		it("omits Authorization without a token", async () => {
 			fetchMock.mockResolvedValueOnce(jsonResponse({ data: [] }));
 			await new HttpClient({ baseURL: "http://h" }).request("articles");
@@ -131,6 +140,13 @@ describe("HttpClient", () => {
 			const [err, data] = await new HttpClient({ baseURL: "http://h" }).request("x");
 			expect(data).toBeNull();
 			expect(err).toEqual({ status: 400, name: "HTTPError", message: "x" });
+		});
+
+		it("maps a GraphQL errors body", async () => {
+			const errors = [{ message: 'Cannot query field "nope"', extensions: { code: "GRAPHQL_VALIDATION_FAILED" } }];
+			fetchMock.mockResolvedValueOnce(jsonResponse({ errors }, 400));
+			const [err] = await new HttpClient({ baseURL: "http://h" }).request("http://h/graphql");
+			expect(err).toEqual({ status: 400, name: "GRAPHQL_VALIDATION_FAILED", message: 'Cannot query field "nope"', details: errors });
 		});
 
 		it("maps a non-JSON error response", async () => {

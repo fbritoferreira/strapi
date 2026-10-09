@@ -4,7 +4,7 @@ import { FilesClient } from "./clients/files";
 import { SingleTypeClient } from "./clients/single";
 import { UsersClient } from "./clients/users";
 import { HttpClient, type HttpConfig } from "./http";
-import { fail, ok, type Result } from "./errors";
+import { fail, graphqlError, ok, type Result } from "./errors";
 import { buildRoutePath } from "./route";
 import { buildOperation, type Selection } from "./graphql-query";
 import type {
@@ -232,10 +232,7 @@ export class Strapi {
 			return fail(err);
 		}
 		const errors = body?.errors;
-		if (errors !== undefined && errors.length > 0) {
-			const name = errors.length === 1 ? (errors[0]?.extensions?.code ?? "GraphQLError") : "GraphQLError";
-			return fail({ name, message: errors.map((e) => e.message).join("; "), details: errors });
-		}
+		if (errors !== undefined && errors.length > 0) return fail(graphqlError(errors));
 		if (body?.data === undefined || body.data === null) {
 			return fail({ name: "GraphQLError", message: `Strapi: GraphQL response from ${this.graphqlUrl} had no data` });
 		}

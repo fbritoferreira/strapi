@@ -1,191 +1,53 @@
-interface PluginDefinition {
-  register(ctx: { strapi: unknown }): void;
-  config(): { admin: { enabled: boolean } };
-}
+import adminController from './controllers/admin.js';
+import tokenController from './controllers/tokens.js';
 
 /**
- * Admin API Plugin definition
- * Provides a plugin for Strapi that registers custom routes for admin users and tokens
- * This enables the Strapi admin API to manage users and their authentication tokens
+ * Admin-type route that requires an authenticated admin holding `action`,
+ * mirroring how Strapi guards its own /admin/users and /admin/api-tokens routes.
  */
-const plugin: PluginDefinition = {
-  /**
-   * Registers the admin-api plugin routes with Strapi
-   * Sets up /admin-api/users and /admin-api/tokens endpoints
-   * @param ctx The Strapi plugin context containing the strapi instance
-   */
-  register({ strapi }: { strapi: any }) {
-    console.log('🚀 Admin API Plugin registering...');
-
-    // Define custom admin routes
-    const usersRoutes = [
-      {
-        method: 'GET',
-        path: '/users',
-        handler: 'admin-api.controller.find',
-        config: {
-          auth: {
-            strategies: ['admin'],
-          },
-        },
-      },
-      {
-        method: 'GET',
-        path: '/users/:id',
-        handler: 'admin-api.controller.findOne',
-        config: {
-          auth: {
-            strategies: ['admin'],
-          },
-        },
-      },
-      {
-        method: 'POST',
-        path: '/users',
-        handler: 'admin-api.controller.create',
-        config: {
-          auth: {
-            strategies: ['admin'],
-          },
-        },
-      },
-      {
-        method: 'PUT',
-        path: '/users/:id',
-        handler: 'admin-api.controller.update',
-        config: {
-          auth: {
-            strategies: ['admin'],
-          },
-        },
-      },
-      {
-        method: 'DELETE',
-        path: '/users/:id',
-        handler: 'admin-api.controller.delete',
-        config: {
-          auth: {
-            strategies: ['admin'],
-          },
-        },
-      },
-      {
-        method: 'POST',
-        path: '/users/:id/reset-password',
-        handler: 'admin-api.controller.resetPassword',
-        config: {
-          auth: {
-            strategies: ['admin'],
-          },
-        },
-      },
-    ];
-
-    // Register users routes
-    strapi.router('content-api').routes(
-      usersRoutes.map((route) => ({
-        ...route,
-        path: `/admin-api${route.path}`,
-      }))
-    );
-
-    // Define tokens routes
-    const tokensRoutes = [
-      {
-        method: 'GET',
-        path: '/tokens',
-        handler: 'admin-api.controller.find',
-        config: {
-          auth: {
-            strategies: ['admin'],
-          },
-        },
-      },
-      {
-        method: 'GET',
-        path: '/tokens/:id',
-        handler: 'admin-api.controller.findOne',
-        config: {
-          auth: {
-            strategies: ['admin'],
-          },
-        },
-      },
-      {
-        method: 'POST',
-        path: '/tokens',
-        handler: 'admin-api.controller.create',
-        config: {
-          auth: {
-            strategies: ['admin'],
-          },
-        },
-      },
-      {
-        method: 'PUT',
-        path: '/tokens/:id',
-        handler: 'admin-api.controller.update',
-        config: {
-          auth: {
-            strategies: ['admin'],
-          },
-        },
-      },
-      {
-        method: 'DELETE',
-        path: '/tokens/:id',
-        handler: 'admin-api.controller.delete',
-        config: {
-          auth: {
-            strategies: ['admin'],
-          },
-        },
-      },
-      {
-        method: 'POST',
-        path: '/tokens/:id/revoke',
-        handler: 'admin-api.controller.revoke',
-        config: {
-          auth: {
-            strategies: ['admin'],
-          },
-        },
-      },
-      {
-        method: 'POST',
-        path: '/tokens/:id/refresh',
-        handler: 'admin-api.controller.refresh',
-        config: {
-          auth: {
-            strategies: ['admin'],
-          },
-        },
-      },
-    ];
-
-    // Register tokens routes
-    strapi.router('content-api').routes(
-      tokensRoutes.map((route) => ({
-        ...route,
-        path: `/admin-api${route.path}`,
-      }))
-    );
-
-    console.log('✅ Admin API routes registered: /admin-api/users and /admin-api/tokens');
+const route = (method: string, path: string, handler: string, action: string) => ({
+  method,
+  path,
+  handler,
+  config: {
+    auth: { scope: ['admin'] },
+    policies: [
+      'admin::isAuthenticatedAdmin',
+      { name: 'admin::hasPermissions', config: { actions: [action] } },
+    ],
   },
+});
 
-  /**
-   * Returns the plugin configuration
-   * Indicates whether the admin API is enabled
-   * @returns Object with admin configuration
-   */
+/**
+ * Admin API plugin (strapi-server entry): controllers plus /admin-api/users
+ * and /admin-api/tokens routes.
+ */
+const createPlugin = () => ({
+  controllers: {
+    adminController,
+    tokenController,
+  },
+  routes: [
+    // Admin users routes
+    route('GET', '/users', 'adminController.find', 'admin::users.read'),
+    route('GET', '/users/:id', 'adminController.findOne', 'admin::users.read'),
+    route('POST', '/users', 'adminController.create', 'admin::users.create'),
+    route('PUT', '/users/:id', 'adminController.update', 'admin::users.update'),
+    route('DELETE', '/users/:id', 'adminController.delete', 'admin::users.delete'),
+    route('POST', '/users/:id/reset-password', 'adminController.resetPassword', 'admin::users.update'),
+    // Admin tokens routes
+    route('GET', '/tokens', 'tokenController.find', 'admin::api-tokens.read'),
+    route('GET', '/tokens/:id', 'tokenController.findOne', 'admin::api-tokens.read'),
+    route('POST', '/tokens', 'tokenController.create', 'admin::api-tokens.create'),
+    route('PUT', '/tokens/:id', 'tokenController.update', 'admin::api-tokens.update'),
+    route('DELETE', '/tokens/:id', 'tokenController.delete', 'admin::api-tokens.delete'),
+    route('POST', '/tokens/:id/revoke', 'tokenController.revoke', 'admin::api-tokens.delete'),
+    route('POST', '/tokens/:id/refresh', 'tokenController.refresh', 'admin::api-tokens.update'),
+  ],
+  register() {},
   config() {
-    return {
-      admin: {
-        enabled: true,
-      },
-    };
+    return { admin: { enabled: true } };
   },
-};
+});
 
-export default plugin;
+export default createPlugin;

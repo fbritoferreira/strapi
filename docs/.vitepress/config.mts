@@ -55,7 +55,7 @@ const rewrites = {
 export default defineConfig({
   title: 'Strapi Tooling',
   description:
-    'Typed Strapi 5 client and an admin API plugin for managing admin users and tokens over REST.',
+    'Typed Strapi 5 client, an admin API plugin for managing admin users and tokens over REST, and a Cloudflare email provider.',
 
   // The site is served from the custom domain root (strapi.fbritoferreira.com).
   // PR previews land at /pr-preview/pr-N/ — DOCS_BASE lets CI override the
@@ -81,6 +81,7 @@ export default defineConfig({
     '**/MIGRATION.md',
     'CLA.md',
     'SECURITY.md',
+    'CONTRIBUTING.md',
   ],
   rewrites,
 

@@ -170,4 +170,33 @@ describe("HttpClient refreshOnUnauthorized", () => {
 		});
 		expect((await client.request("articles"))[0]?.name).toBe("NetworkError");
 	});
+
+	it("lets one waiter abort without failing the shared rotation for the others", async () => {
+		fetchMock.mockImplementation(async (input, init) => {
+			if (String(input).endsWith("/auth/refresh")) {
+				await new Promise((resolve, reject) => {
+					const timer = setTimeout(resolve, 30);
+					init?.signal?.addEventListener("abort", () => {
+						clearTimeout(timer);
+						reject(init.signal?.reason);
+					});
+				});
+				return refreshed();
+			}
+			if (headerOf(init ?? {}, "authorization") === "Bearer next") return jsonResponse({ ok: true });
+			return unauthorized();
+		});
+		const client = new HttpClient({ baseURL: "http://h", token: "expired", refreshOnUnauthorized: { token: "r" } });
+		const controller = new AbortController();
+
+		const aborted = client.request("articles", { signal: controller.signal });
+		const other = client.request("pages");
+		setTimeout(() => controller.abort(), 10);
+
+		const [abortedErr] = await aborted;
+		const [otherErr, otherBody] = await other;
+		expect(abortedErr?.name).toBe("NetworkError");
+		expect(otherErr).toBeNull();
+		expect(otherBody).toEqual({ ok: true });
+	});
 });

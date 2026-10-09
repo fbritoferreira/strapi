@@ -32,6 +32,6 @@ Exactly one source, or `--config` for every section of a config file.
 | `--interval <ms>` | | Poll period for a URL source under `--watch`. Default `2000`. Overrides `watch.interval` |
 | `-h, --help` | | Print usage |
 
-`--config` with no path looks for `strapi-codegen.config.ts`, `.mts`, `.js`, `.mjs`, then `.json` in the current directory.
+`--config` with no path looks for `strapi-codegen.config.ts`, `.mts`, `.js`, `.mjs`, then `.json` in the current directory. With `--config`, set `output`, `includePlugins`, `token`, `email` and `password` per section in the file; passing those flags alongside it is an error.
 
-Exit code `0` means every requested file was written or already up to date. Exit code `1` means a source failed, a `--check` file was stale, or the arguments were invalid. Under `--config`, one failing section does not skip the others; the summary line is `N of M generated`.
+Exit code `0` means every requested file was written or already up to date. Exit code `1` means a source failed or a `--check` file was stale. Exit code `2` means the arguments were invalid. Under `--config`, one failing section does not skip the others; the summary line is `N of M generated`.

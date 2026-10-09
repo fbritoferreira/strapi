@@ -20,7 +20,7 @@ strapi.setToken(session.jwt);
 | `refresh` | `POST /api/auth/refresh` | `refreshToken?` | `{ jwt, refreshToken? }` |
 | `logout` | `POST /api/auth/logout` | `scope?`, `deviceId?` | `{ ok: true }` |
 
-`refresh` and `logout` exist only when the plugin runs with `jwtManagement: "refresh"`. Otherwise Strapi answers 404 and the error message says to enable that mode. With an httpOnly refresh cookie, omit `refreshToken`: it travels in the cookie, and the response may omit it too.
+`refresh` and `logout` exist only when the plugin runs with `jwtManagement: "refresh"`. Otherwise Strapi answers 404 and the error message says to enable that mode. With an httpOnly refresh cookie, omit `refreshToken`: it travels in the cookie, and the response may omit it too. Without a `refreshToken`, `refresh` sends `credentials: "include"` so the browser attaches the cookie; pass `init.credentials` to override it.
 
 ```ts
 if (session.refreshToken !== undefined) {

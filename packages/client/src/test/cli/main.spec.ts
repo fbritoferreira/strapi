@@ -367,6 +367,14 @@ describe("run", () => {
 		expect(i.err.join("\n")).toMatch(/--config cannot be combined/);
 	});
 
+	it("refuses a config alongside flags the config file sets per section", async () => {
+		for (const flags of [["-o", "out.ts"], ["--include-plugins"], ["--token", "t"], ["--email", "e"], ["--password", "p"]]) {
+			const i = io();
+			expect(await run(["generate", "--config", ...flags], i)).toBe(2);
+			expect(i.err[0]).toBe("Error: --config cannot be combined with --output, --include-plugins, --token, --email or --password; set them in the config file");
+		}
+	});
+
 	it("requires exactly one of --dir or --url", async () => {
 		expect(await run(["generate"], io())).toBe(2);
 		const both = io();

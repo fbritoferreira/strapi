@@ -57,7 +57,7 @@ describe("loadConfig", () => {
 	it("explains a Node that cannot import TypeScript", async () => {
 		const dir = await dirWith("strapi-codegen.config.ts");
 		const importModule = vi.fn().mockRejectedValue(Object.assign(new Error("Unknown file extension"), { code: "ERR_UNKNOWN_FILE_EXTENSION" }));
-		await expect(loadConfig({ cwd: dir, importModule })).rejects.toThrow(/Node 22\.6|\.mjs|\.json/);
+		await expect(loadConfig({ cwd: dir, importModule })).rejects.toThrow(/22\.18\+ or 23\.6\+, or 22\.6\+ with --experimental-strip-types/);
 	});
 
 	it("passes any other import failure through", async () => {

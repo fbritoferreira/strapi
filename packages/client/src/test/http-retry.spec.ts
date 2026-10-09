@@ -103,6 +103,18 @@ describe("HttpClient with retry", () => {
 		expect(fetchMock).toHaveBeenCalledTimes(1);
 	});
 
+	it("stops waiting as soon as the caller aborts", async () => {
+		const controller = new AbortController();
+		fetchMock.mockResolvedValue(new Response("nope", { status: 503 }));
+		const settled = vi.fn();
+		void client({ attempts: 5, delay: 60_000 }).request("articles", { signal: controller.signal }).then(settled);
+		await vi.advanceTimersByTimeAsync(10);
+		controller.abort();
+		await vi.advanceTimersByTimeAsync(10);
+		expect(settled).toHaveBeenCalledWith([expect.objectContaining({ status: 503 }), null]);
+		expect(fetchMock).toHaveBeenCalledTimes(1);
+	});
+
 	it("gives the timeout to each attempt, not to all of them together", async () => {
 		fetchMock
 			.mockResolvedValueOnce(new Response("nope", { status: 503 }))

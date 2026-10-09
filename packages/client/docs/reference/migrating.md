@@ -9,4 +9,4 @@
 - `defaultLocale` is required. There is no `"en"` default.
 - `StrapiClient` stays a shorthand for one collection and now takes `defaultLocale`. It has no `files`, `users()`, `single()`, `auth`, `route()` or `graphql()`. Use `new Strapi(...)` for those.
 
-The same notes are in [MIGRATION.md](https://github.com/fbritoferreira/strapi/blob/main/MIGRATION.md), which npm and JSR ship with the package.
+The same notes are in [MIGRATION.md](https://github.com/fbritoferreira/strapi/blob/main/packages/client/MIGRATION.md), which npm and JSR ship with the package.

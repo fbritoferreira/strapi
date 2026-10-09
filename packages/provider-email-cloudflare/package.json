@@ -30,8 +30,7 @@
 		"test:watch": "vitest",
 		"typecheck": "tsc -p tsconfig.test.json",
 		"lint": "eslint .",
-		"lint:fix": "eslint . --fix",
-		"jsr:check": "jsr publish --dry-run"
+		"lint:fix": "eslint . --fix"
 	},
 	"keywords": [
 		"strapi",
@@ -43,7 +42,7 @@
 	],
 	"author": "Filipe Brito Ferreira <me@fbritoferreira.com>",
 	"license": "MIT",
-	"homepage": "https://fbritoferreira.github.io/strapi/",
+	"homepage": "https://strapi.fbritoferreira.com/packages/provider-email-cloudflare/",
 	"repository": {
 		"type": "git",
 		"url": "git+https://github.com/fbritoferreira/strapi.git",
@@ -69,9 +68,13 @@
 		"@types/node": "^20.0.0",
 		"eslint": "^10.11.0",
 		"globals": "^17.13.0",
-		"jsr": "^0.14.3",
 		"typescript": "^5.0.0",
 		"typescript-eslint": "^8.71.0",
 		"vitest": "^5.0.2"
+	},
+	"lint-staged": {
+		"*.{ts,mts,js}": [
+			"eslint --fix"
+		]
 	}
 }

@@ -60,12 +60,11 @@ jobs:
         env:
           DOCS_BASE: /pr-preview/pr-${{ github.event.pull_request.number }}/
 
-      # PR preview: hand the build to the preview job via artifact
-      - name: Upload preview artifact
-        if: github.event_name == 'pull_request'
+      # Hand the build to the deploy job via artifact
+      - name: Upload docs artifact
         uses: actions/upload-artifact@v6
         with:
-          name: docs-preview
+          name: docs-build
           path: ${{ env.BUILD_OUTPUT_DIR }}
 
   # Production: push the built site to the ROOT of gh-pages, keeping the
@@ -73,29 +72,18 @@ jobs:
   # gh-pages branch at the custom domain.
   deploy-production:
     name: Deploy production docs
-    if: github.event_name == 'push'
+    if: github.event_name != 'pull_request'
     needs: build
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6
+      - name: Download docs artifact
+        uses: actions/download-artifact@v7
         with:
-          run_install: false
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v7
-        with:
-          node-version: 24
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Build with VitePress
-        run: pnpm docs:build
+          name: docs-build
+          path: ${{ env.BUILD_OUTPUT_DIR }}
 
       - name: Deploy to gh-pages
         uses: JamesIves/github-pages-deploy-action@v4
@@ -124,7 +112,7 @@ jobs:
         if: github.event.action != 'closed'
         uses: actions/download-artifact@v7
         with:
-          name: docs-preview
+          name: docs-build
           path: ${{ env.BUILD_OUTPUT_DIR }}
 
       # The action nests each preview as {umbrella-dir}/pr-{number}, which

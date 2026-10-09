@@ -29,10 +29,7 @@ pnpm add @fbritoferreira/strapi-admin-api
 bun add @fbritoferreira/strapi-admin-api
 ```
 
-### JSR
-```bash
-deno add @fbritoferreira/strapi-admin-api
-```
+Requires Node.js `^20.19.0 || >=22.12.0` (the plugin is ESM and Strapi loads it with `require()`).
 
 ## Quick Start
 
@@ -69,9 +66,12 @@ curl -X POST http://localhost:1337/admin-api/users \
     "username": "newadmin",
     "password": "SecurePassword123!",
     "firstName": "John",
-    "lastName": "Doe"
+    "lastName": "Doe",
+    "role": 2
   }'
 ```
+
+`role` (or `roles`) is the id of an existing admin role and is required.
 
 ## Features
 
@@ -88,7 +88,7 @@ curl -X POST http://localhost:1337/admin-api/users \
 - List and manage all tokens
 
 ### ✅ Security
-- All endpoints require admin JWT authentication
+- All endpoints require an authenticated admin holding the matching Strapi admin permission (see [Permissions](./api.md#permissions))
 - Passwords never exposed in API responses
 - Super-admin protection (cannot delete super-admin users)
 - Role-based access control (RBAC) ready

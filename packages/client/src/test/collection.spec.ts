@@ -234,10 +234,18 @@ describe("CollectionClient", () => {
 			expect(err).toBeNull();
 			expect(data?.locale).toBe("fr");
 			const urls = fetchMock.mock.calls.map(([u]) => decodeURIComponent(String(u)));
-			expect(urls[0]).toBe("http://h/api/articles?filters[title][$eq]=New&pagination[pageSize]=1");
+			expect(urls[0]).toBe("http://h/api/articles?filters[title][$eq]=New&pagination[pageSize]=1&status=draft");
 			expect(urls[1]).toBe("http://h/api/articles/base?locale=fr");
 			expect(lastCall(fetchMock).init.method).toBe("PUT");
 			expect(bodyOf(fetchMock)).toEqual(payload);
+		});
+
+		it("looks up the base document among drafts, so a draft-only one is not duplicated", async () => {
+			fetchMock
+				.mockResolvedValueOnce(jsonResponse({ data: [doc("base")] }))
+				.mockResolvedValueOnce(jsonResponse({ data: { ...doc("base", "Nouveau"), locale: "fr" } }));
+			await articles.create({ payload, locale: "fr", filters: { title: { $eq: "New" } } });
+			expect(decodeURIComponent(String(fetchMock.mock.calls[0]?.[0]))).toContain("status=draft");
 		});
 
 		it("excludes caller params from the base-document search", async () => {
@@ -252,7 +260,7 @@ describe("CollectionClient", () => {
 				init: { cache: "no-store" },
 			});
 			const urls = fetchMock.mock.calls.map(([u]) => decodeURIComponent(String(u)));
-			expect(urls[0]).toBe("http://h/api/articles?filters[title][$eq]=New&pagination[pageSize]=1");
+			expect(urls[0]).toBe("http://h/api/articles?filters[title][$eq]=New&pagination[pageSize]=1&status=draft");
 			expect(lastCall(fetchMock).init.cache).toBe("no-store");
 		});
 
@@ -410,9 +418,16 @@ describe("CollectionClient", () => {
 			expect(err).toBeNull();
 			expect(data?.documentId).toBe("found");
 			const urls = fetchMock.mock.calls.map(([u]) => decodeURIComponent(String(u)));
-			expect(urls[0]).toBe("http://h/api/articles?filters[title][$eq]=T&pagination[pageSize]=1&locale=fr");
+			expect(urls[0]).toBe("http://h/api/articles?filters[title][$eq]=T&status=draft&pagination[pageSize]=1&locale=fr");
 			expect(urls[1]).toBe("http://h/api/articles/found?locale=fr");
 			expect(lastCall(fetchMock).init.method).toBe("PUT");
+		});
+
+		it("looks up among drafts, so a draft-only match is updated rather than duplicated", async () => {
+			fetchMock.mockResolvedValueOnce(jsonResponse({ data: [doc("draft")] })).mockResolvedValueOnce(jsonResponse({ data: doc("draft", "T") }));
+			await articles.upsert({ payload, filters: { title: { $eq: "T" } }, params: { status: "published" } });
+			expect(decodeURIComponent(String(fetchMock.mock.calls[0]?.[0]))).toContain("status=draft");
+			expect(lastCall(fetchMock).url).toContain("status=published");
 		});
 
 		it("creates when nothing matches", async () => {
@@ -439,8 +454,8 @@ describe("CollectionClient", () => {
 			expect(err).toBeNull();
 			expect(data?.locale).toBe("fr");
 			const urls = fetchMock.mock.calls.map(([u]) => decodeURIComponent(String(u)));
-			expect(urls[0]).toBe("http://h/api/articles?filters[title][$eq]=T&pagination[pageSize]=1&locale=fr");
-			expect(urls[1]).toBe("http://h/api/articles?filters[title][$eq]=T&pagination[pageSize]=1");
+			expect(urls[0]).toBe("http://h/api/articles?filters[title][$eq]=T&status=draft&pagination[pageSize]=1&locale=fr");
+			expect(urls[1]).toBe("http://h/api/articles?filters[title][$eq]=T&pagination[pageSize]=1&status=draft");
 			expect(urls[2]).toBe("http://h/api/articles/base?locale=fr");
 			expect(lastCall(fetchMock).init.method).toBe("PUT");
 			expect(fetchMock).toHaveBeenCalledTimes(3);

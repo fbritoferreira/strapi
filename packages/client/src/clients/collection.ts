@@ -220,10 +220,11 @@ export class CollectionClient<T extends object> {
 		// The base-document lookup uses only `filters` (plus a forced pageSize of 1), never the
 		// caller's `params`. Sort, pagination and status shape the response, not which document
 		// is the localization base. With no `filters` there is nothing to match on, so the lookup
-		// is skipped entirely and a fresh default-locale document is created instead.
+		// is skipped entirely and a fresh default-locale document is created instead. Drafts are
+		// searched because every document has one, while Strapi reads published by default.
 		let documentId: string | undefined;
 		if (filters) {
-			const searchQuery = this.query({ filters, pagination: { pageSize: 1 } }, this.defaultLocale);
+			const searchQuery = this.query({ filters, pagination: { pageSize: 1 }, status: "draft" }, this.defaultLocale);
 			const [searchErr, found] = await this.http.request<StrapiResponse<T>>(`${this.uid}${searchQuery}`, {
 				...init,
 				method: "GET",
@@ -315,8 +316,10 @@ export class CollectionClient<T extends object> {
 		init?: FetchInit;
 	}): Promise<Result<SelectedDoc<T, P>>> {
 		const { payload, filters, params, locale, init } = options;
+		// Drafts are searched because every document has one, while Strapi reads published by
+		// default. A caller `status` is the write's, not the lookup's.
 		const [searchErr, existing] = await this.findFirst({
-			params: { ...params, ...(filters && { filters }) },
+			params: { ...params, ...(filters && { filters }), status: "draft" },
 			...(locale !== undefined && { locale }),
 			...(init && { init }),
 		});

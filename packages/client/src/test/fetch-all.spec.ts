@@ -165,4 +165,34 @@ describe("fetchAll", () => {
 		expect(data?.map((i) => i.id)).toEqual([1, 2]);
 		expect(urlsOf(fetchMock)[1]).toContain("pagination[limit]=25");
 	});
+
+	it("steps by the limit Strapi applied, not the one requested", async () => {
+		fetchMock
+			.mockResolvedValueOnce(offset([1], 0, 100, 300))
+			.mockResolvedValueOnce(offset([2], 100, 100, 300))
+			.mockResolvedValueOnce(offset([3], 200, 100, 300));
+		const [err, data] = await fetchAll<Item>({ http, ...base, params: { pagination: { start: 0, limit: 500 } } });
+		expect(err).toBeNull();
+		expect(data?.map((i) => i.id)).toEqual([1, 2, 3]);
+		expect(urlsOf(fetchMock).slice(1)).toEqual([
+			"http://h/api/articles?pagination[start]=100&pagination[limit]=100",
+			"http://h/api/articles?pagination[start]=200&pagination[limit]=100",
+		]);
+	});
+
+	it("returns the first page when the limit is not positive", async () => {
+		fetchMock.mockResolvedValueOnce(offset([1, 2], 0, -1, 10));
+		const [err, data] = await fetchAll<Item>({ http, ...base, params: { pagination: { limit: -1 } } });
+		expect(err).toBeNull();
+		expect(data?.map((i) => i.id)).toEqual([1, 2]);
+		expect(fetchMock).toHaveBeenCalledTimes(1);
+	});
+
+	it("drops withCount: false, since the count is what finds the remaining pages", async () => {
+		fetchMock.mockResolvedValueOnce(page([1], 1, 1, 2)).mockResolvedValueOnce(page([2], 2, 1, 2));
+		const [err, data] = await fetchAll<Item>({ http, ...base, params: { pagination: { pageSize: 1, withCount: false } } });
+		expect(err).toBeNull();
+		expect(data?.map((i) => i.id)).toEqual([1, 2]);
+		for (const url of urlsOf(fetchMock)) expect(url).not.toContain("withCount");
+	});
 });

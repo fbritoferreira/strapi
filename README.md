@@ -1,12 +1,16 @@
 # @fbritoferreira/strapi-monorepo
 
-Monorepo containing Strapi client and admin API plugin.
+Monorepo for Strapi 5 tooling: a typed client, an admin API plugin and a Cloudflare email provider. Docs: https://strapi.fbritoferreira.com/
 
 ## Packages
 
-### [@fbritoferreira/strapi-client](./packages/client)
+### [@fbritoferreira/strapi](./packages/client)
 
 TypeScript client for the Strapi 5 REST and GraphQL APIs with typed collections, auth, uploads, and custom routes.
+
+### [@fbritoferreira/strapi-admin-api](./packages/admin-api)
+
+Strapi 5 plugin that exposes REST endpoints for managing admin users and API tokens.
 
 ### [@fbritoferreira/strapi-provider-email-cloudflare](./packages/provider-email-cloudflare)
 
@@ -27,6 +31,8 @@ pnpm test
 # Lint all packages
 pnpm lint
 ```
+
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for changesets and how releases work.
 
 ## License
 
