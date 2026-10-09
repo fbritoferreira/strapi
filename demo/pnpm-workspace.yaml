@@ -1,0 +1,11 @@
+# The demo is its own pnpm project, outside the root workspace, so Strapi's
+# dependency tree stays out of the root lockfile, CI installs and Snyk.
+packages:
+  - '.'
+autoInstallPeers: false
+allowBuilds:
+  '@apollo/protobufjs': false
+  '@swc/core': true
+  better-sqlite3: true
+  core-js-pure: true
+  esbuild: true

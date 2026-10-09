@@ -32,6 +32,8 @@ pnpm test
 pnpm lint
 ```
 
+To try changes against a real Strapi, run the [demo app](./demo), which has every package wired in.
+
 See [CONTRIBUTING.md](./CONTRIBUTING.md) for changesets and how releases work.
 
 ## License
