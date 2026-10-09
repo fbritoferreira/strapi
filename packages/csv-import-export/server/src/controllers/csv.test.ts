@@ -8,7 +8,6 @@ const CM = 'plugin::content-manager.explorer.';
 
 /** koa context stand-in; `throw` always throws, like koa's. */
 const makeCtx = ({ params = {}, body = {}, query = {}, denied = [] as string[] } = {}): any => {
-  const headers: Record<string, string> = {};
   return {
     params,
     query,
@@ -17,10 +16,6 @@ const makeCtx = ({ params = {}, body = {}, query = {}, denied = [] as string[] }
       user: { id: 3, firstname: 'Ada', lastname: 'L' },
       userAbility: { can: (action: string, uid: string) => !denied.includes(`${action}@${uid}`) },
     },
-    set: (key: string, value: string) => {
-      headers[key] = value;
-    },
-    headers,
     throw: (status: number, message: string) => {
       throw Object.assign(new Error(message), { status });
     },
@@ -163,7 +158,7 @@ group('csv controller', () => {
     await expect(createController({ strapi }).finishJob(ctx)).rejects.toMatchObject({ status: 403 });
   });
 
-  it('exports CSV as an attachment and logs a completed export job', async () => {
+  it('exports CSV with its file name and logs a completed export job', async () => {
     const { strapi, jobQuery } = makeStrapi();
     const ctx = makeCtx({
       params: { uid: ARTICLE },
@@ -172,9 +167,7 @@ group('csv controller', () => {
 
     await createController({ strapi }).export(ctx);
 
-    expect(ctx.body).toBe('id\r\n');
-    expect(ctx.headers['Content-Type']).toBe('text/csv; charset=utf-8');
-    expect(ctx.headers['Content-Disposition']).toBe('attachment; filename="articles.csv"');
+    expect(ctx.body).toEqual({ data: { fileName: 'articles.csv', rowCount: 0, csv: 'id\r\n' } });
     expect(jobQuery.create.mock.calls[0][0].data).toMatchObject({ kind: 'export', targetUid: ARTICLE });
     expect(jobQuery.update).toHaveBeenCalledWith({
       where: { id: 9 },
@@ -182,14 +175,14 @@ group('csv controller', () => {
     });
   });
 
-  it('strips characters that would break the Content-Disposition header from the file name', async () => {
+  it('strips quotes and line breaks from the file name', async () => {
     const { strapi } = makeStrapi();
     const ctx = makeCtx({
       params: { uid: ARTICLE },
       body: { status: 'draft', columns: [{ field: 'documentId', header: 'id' }], fileName: 'a"\r\nb.csv' },
     });
     await createController({ strapi }).export(ctx);
-    expect(ctx.headers['Content-Disposition']).toBe('attachment; filename="ab.csv"');
+    expect(ctx.body.data.fileName).toBe('ab.csv');
   });
 
   it('hides jobs for collections the user cannot read', async () => {

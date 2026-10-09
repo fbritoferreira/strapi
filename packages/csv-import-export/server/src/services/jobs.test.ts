@@ -116,7 +116,7 @@ describe('jobs', () => {
     });
   });
 
-  it('pages jobs newest first, limited to readable uids, without errors or config', async () => {
+  it('pages jobs newest first, limited to readable uids, without the stored error rows', async () => {
     const { strapi, query } = makeStrapi();
 
     const page = await createJobs(strapi).findPage({ page: 2, pageSize: 20, uids: ['api::a.a'], kind: 'import' });
@@ -131,7 +131,7 @@ describe('jobs', () => {
     });
     const { select } = query.findMany.mock.calls[0][0];
     expect(select).not.toContain('errors');
-    expect(select).not.toContain('config');
+    expect(select).toContain('config');
     expect(query.count).toHaveBeenCalledWith({ where });
     expect(page.pagination).toEqual({ page: 2, pageSize: 20, total: 41, pageCount: 3 });
   });

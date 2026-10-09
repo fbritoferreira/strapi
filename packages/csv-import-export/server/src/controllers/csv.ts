@@ -16,7 +16,7 @@ const positiveInt = (value: unknown, fallback: number) => {
   return Number.isInteger(n) && n > 0 ? n : fallback;
 };
 
-/** Keeps a download name safe inside a quoted Content-Disposition value. */
+/** Strips quotes, backslashes and line breaks from a download file name. */
 const safeFileName = (name: unknown, fallback: string) =>
   (typeof name === 'string' ? name.replace(/["\\\r\n]/g, '') : '') || fallback;
 
@@ -137,9 +137,9 @@ export default ({ strapi }: { strapi: any }) => {
           escapeFormulas: config('escapeFormulas') !== false,
         });
         await jobs.finish(job.id, 'completed', { totalRows: rowCount });
-        ctx.set('Content-Type', 'text/csv; charset=utf-8');
-        ctx.set('Content-Disposition', `attachment; filename="${fileName}"`);
-        ctx.body = csv;
+        // JSON, not a text/csv attachment: the admin's useFetchClient().post
+        // always parses the response as JSON. The browser builds the file.
+        ctx.body = { data: { fileName, rowCount, csv } };
       } catch (exportError) {
         await jobs.finish(job.id, 'failed');
         throw exportError;

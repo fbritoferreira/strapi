@@ -9,6 +9,7 @@ const LIST_FIELDS = [
   'targetLocale',
   'targetStatus',
   'fileName',
+  'config',
   'state',
   'totalRows',
   'created',
