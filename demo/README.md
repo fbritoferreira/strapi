@@ -4,6 +4,7 @@ A Strapi 5 app linked to this repo's packages, for trying changes against a
 real Strapi instead of mocks:
 
 - `@fbritoferreira/strapi-admin-api` plugin (`/admin-api/*`)
+- `@fbritoferreira/strapi-csv-import-export` plugin (admin menu **CSV Import / Export**)
 - `@fbritoferreira/strapi-provider-email-cloudflare` (only when Cloudflare credentials are set)
 - `@fbritoferreira/strapi` client (`pnpm try-client`, `pnpm generate`)
 - `@strapi/plugin-graphql` (`/graphql`)
@@ -29,8 +30,9 @@ pnpm develop
 ```
 
 The admin panel is at http://localhost:1337/admin. On first boot the app seeds
-two published articles, one draft and the homepage, and lets the public role
-read them.
+two published articles, one draft, the homepage, two categories (`news`,
+`sport`) and three tags (`strapi`, `typescript`, `csv`), and lets the public
+role read the articles and the homepage.
 
 Create an admin from the CLI instead of the browser:
 
@@ -45,7 +47,9 @@ and the email provider) and restart `pnpm develop`.
 
 | UID | Kind | Notes |
 | --- | --- | --- |
-| `api::article.article` | collection | Draft & Publish on: `title`, `slug`, `body` |
+| `api::article.article` | collection | Draft & Publish on: `title`, `slug`, `body`, `views`, `featured`, `category` (manyToOne), `tags` (manyToMany), `cover` (media) |
+| `api::category.category` | collection | `name`, `slug`; no Draft & Publish |
+| `api::tag.tag` | collection | `label` (unique); no Draft & Publish |
 | `api::homepage.homepage` | single | `title`, `description` |
 
 ## Try the admin API plugin
@@ -58,6 +62,21 @@ curl -s localhost:1337/admin-api/users -H "Authorization: Bearer $TOKEN"
 curl -s -X POST localhost:1337/admin-api/tokens -H "Authorization: Bearer $TOKEN" \
   -H 'content-type: application/json' -d '{"name":"demo","type":"full-access"}'
 ```
+
+## Try the CSV import/export plugin
+
+With the app running and the admin created:
+
+```bash
+pnpm try-csv
+```
+
+It imports `scripts/articles.csv` twice through the plugin's admin API and
+fails unless the second run creates nothing. It also checks that a missing
+relation target aborts its batch when `onMissingRelation` is `fail`, and that an
+export re-imports on `documentId` as updates only. In the admin panel the same
+flow is under **CSV Import / Export**, and the Article list view has **Import
+CSV** and **Export CSV** buttons.
 
 ## Try the client
 

@@ -2,6 +2,9 @@ export default ({ env }) => ({
   // @fbritoferreira/strapi-admin-api, linked from packages/admin-api
   'admin-api': { enabled: true },
 
+  // @fbritoferreira/strapi-csv-import-export, linked from packages/csv-import-export
+  'csv-import-export': { enabled: true },
+
   graphql: {
     config: {
       landingPage: true,

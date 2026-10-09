@@ -1,7 +1,6 @@
 {
   "name": "@fbritoferreira/strapi-csv-import-export",
   "version": "0.0.0",
-  "private": true,
   "description": "Strapi 5 plugin to import and export collection types as CSV with column mapping and upsert",
   "type": "commonjs",
   "exports": {
@@ -106,5 +105,9 @@
   },
   "dependencies": {
     "papaparse": "^5.7.0"
+  },
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org/",
+    "access": "public"
   }
 }

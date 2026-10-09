@@ -28,6 +28,20 @@ export default {
       }
     }
 
+    // Relation targets for trying the CSV import/export plugin.
+    const categories = strapi.documents('api::category.category');
+    if ((await categories.count({})) === 0) {
+      for (const name of ['News', 'Sport']) {
+        await categories.create({ data: { name, slug: name.toLowerCase() } });
+      }
+    }
+    const tags = strapi.documents('api::tag.tag');
+    if ((await tags.count({})) === 0) {
+      for (const label of ['strapi', 'typescript', 'csv']) {
+        await tags.create({ data: { label } });
+      }
+    }
+
     const articles = strapi.documents('api::article.article');
     if ((await articles.count({})) === 0) {
       for (const title of ['Hello Strapi', 'Typed clients', 'Draft only']) {

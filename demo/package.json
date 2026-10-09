@@ -9,11 +9,13 @@
     "strapi": "strapi",
     "build:admin": "strapi build",
     "generate": "strapi-client generate --dir . -o types/strapi.ts",
-    "try-client": "node scripts/try-client.mjs"
+    "try-client": "node scripts/try-client.mjs",
+    "try-csv": "node scripts/try-csv.mjs"
   },
   "dependencies": {
     "@fbritoferreira/strapi": "link:../packages/client",
     "@fbritoferreira/strapi-admin-api": "link:../packages/admin-api",
+    "@fbritoferreira/strapi-csv-import-export": "link:../packages/csv-import-export",
     "@fbritoferreira/strapi-provider-email-cloudflare": "link:../packages/provider-email-cloudflare",
     "@strapi/plugin-graphql": "5.57.0",
     "@strapi/plugin-users-permissions": "5.57.0",
