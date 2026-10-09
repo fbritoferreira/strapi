@@ -123,4 +123,10 @@ describe('failuresToCsv', () => {
       'row,error,title,slug\r\n3,"bad, really",x,y'
     );
   });
+
+  it('escapes formula-looking cells, since another admin may open the file', () => {
+    expect(failuresToCsv(['title'], [{ row: 1, data: { title: '=HYPERLINK("x")' }, message: 'm' }])).toBe(
+      'row,error,title\r\n1,m,"\'=HYPERLINK(""x"")"'
+    );
+  });
 });

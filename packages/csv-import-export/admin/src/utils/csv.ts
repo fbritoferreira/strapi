@@ -95,11 +95,18 @@ export const chunk = <T,>(items: T[], size: number): T[][] => {
   return batches;
 };
 
+/** Same prefixes the server escapes on export (OWASP CSV injection). */
+const FORMULA_PATTERN = /^[=+\-@\t\r]/;
+
+/** Failed rows as CSV; formula-looking cells get a leading ', which the import strips again. */
 export const failuresToCsv = (headers: string[], failures: Failure[]) =>
-  Papa.unparse({
-    fields: ['row', 'error', ...headers],
-    data: failures.map((f) => [f.row, f.message, ...headers.map((h) => f.data?.[h] ?? '')]),
-  });
+  Papa.unparse(
+    {
+      fields: ['row', 'error', ...headers],
+      data: failures.map((f) => [f.row, f.message, ...headers.map((h) => f.data?.[h] ?? '')]),
+    },
+    { escapeFormulae: FORMULA_PATTERN }
+  );
 
 /** Saves text as a file. The BOM makes Excel read the CSV as UTF-8. */
 export const download = (fileName: string, text: string) => {

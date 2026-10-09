@@ -120,12 +120,20 @@ export const ImportWizard = ({ contentTypes, maxFileSizeMb, initialUid, onShowHi
   const goToMapping = async () => {
     if (!csv) return;
     try {
-      const schema = await api.schema(source.uid);
-      const relationFields = schema.filter((f) => f.type === 'relation');
+      const all = await api.schema(source.uid);
+      // A relation whose target the user cannot read is left out of the mapping.
       const targetEntries = await Promise.all(
-        relationFields.map(async (f) => [f.name, await api.schema(f.relation!.target)] as const)
+        all
+          .filter((f) => f.type === 'relation')
+          .map(async (f) => [f.name, await api.schema(f.relation!.target).catch(() => null)] as const)
       );
-      const targetMap = Object.fromEntries(targetEntries);
+      const hidden = new Set(targetEntries.filter(([, t]) => t === null).map(([name]) => name));
+      const targetMap = Object.fromEntries(targetEntries.filter(([, t]) => t !== null)) as Record<
+        string,
+        FieldDescription[]
+      >;
+      const schema = all.filter((f) => !hidden.has(f.name));
+      const relationFields = schema.filter((f) => f.type === 'relation');
 
       const history = await api.jobs({ page: 1, pageSize: 20, uid: source.uid, kind: 'import' });
       const previous = history.data.find((job) => job.config?.headers && sameHeaders(job.config.headers, csv.headers));
@@ -241,12 +249,15 @@ export const ImportWizard = ({ contentTypes, maxFileSizeMb, initialUid, onShowHi
 
       const body = request(batch, state.processed, false, jobId);
       let result: ImportResult;
+      // No automatic retry: a request that timed out may still have written its rows,
+      // and resending rows without a match value would create them twice.
       try {
-        result = await api.importBatch(source.uid, body).catch(() => api.importBatch(source.uid, body));
+        result = await api.importBatch(source.uid, body);
       } catch (error) {
         await stop(
           'failed',
-          `Rows ${state.processed + 1} to ${state.processed + batch.length} failed twice: ${errorMessage(error)}. Earlier rows stay imported.`
+          `Rows ${state.processed + 1} to ${state.processed + batch.length} failed: ${errorMessage(error)}. ` +
+            'Some of them may have been written. Earlier rows stay imported; importing the file again updates the rows that match.'
         );
         return;
       }

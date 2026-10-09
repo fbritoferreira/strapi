@@ -52,12 +52,18 @@ export const ExportPanel = ({ contentTypes, initialUid }: Props) => {
     if (!source.uid) return;
     let current = true;
     (async () => {
-      const fields = await api.schema(source.uid);
-      const relationTargets = Object.fromEntries(
-        await Promise.all(
-          fields.filter((f) => f.type === 'relation').map(async (f) => [f.name, await api.schema(f.relation!.target)])
-        )
+      const all = await api.schema(source.uid);
+      // A relation whose target the user cannot read is left out.
+      const targetEntries = await Promise.all(
+        all
+          .filter((f) => f.type === 'relation')
+          .map(async (f) => [f.name, await api.schema(f.relation!.target).catch(() => null)] as const)
       );
+      const relationTargets = Object.fromEntries(targetEntries.filter(([, t]) => t !== null)) as Record<
+        string,
+        FieldDescription[]
+      >;
+      const fields = all.filter((f) => f.type !== 'relation' || relationTargets[f.name]);
       if (!current) return;
       setTargets(relationTargets);
       setColumns(
