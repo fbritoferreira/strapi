@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { FieldDescription } from '../types';
-import { coerce, splitMulti } from './coerce';
+import { coerce, splitMulti, unescapeFormula } from './coerce';
 
 const field = (type: string, extra: Partial<FieldDescription> = {}): FieldDescription => ({
   name: 'f',
@@ -86,5 +86,18 @@ describe('splitMulti', () => {
   it('splits on |, trims, drops blanks and duplicates', () => {
     expect(splitMulti(' a | b ||a ')).toEqual(['a', 'b']);
     expect(splitMulti('')).toEqual([]);
+  });
+});
+
+describe('unescapeFormula', () => {
+  it('drops the quote the export adds before formula characters', () => {
+    expect(unescapeFormula("'=1+1")).toBe('=1+1');
+    expect(unescapeFormula("'+44 20 7946 0000")).toBe('+44 20 7946 0000');
+    expect(unescapeFormula("'-5")).toBe('-5');
+  });
+
+  it('keeps other leading quotes and plain values', () => {
+    expect(unescapeFormula("'quoted'")).toBe("'quoted'");
+    expect(unescapeFormula('=1+1')).toBe('=1+1');
   });
 });

@@ -29,6 +29,7 @@ export const validateImportRequest = (fields: FieldDescription[], body: any, fie
     return 'every row must be an object of strings';
   }
   if (!Number.isInteger(body.rowOffset) || body.rowOffset < 0) return 'rowOffset must be a non-negative integer';
+  if (body.dryRun !== true && !Number.isInteger(body.jobId)) return 'jobId is required unless dryRun is true';
   if (!isPlainObject(body.mapping)) return 'mapping must be an object';
 
   const byName = new Map(fields.map((field) => [field.name, field]));

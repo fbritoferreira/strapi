@@ -79,6 +79,13 @@ export const coerce = (field: FieldDescription, raw: string): Coerced => {
   }
 };
 
+/**
+ * Undoes the export's formula escaping: `'=1+1` comes back as `=1+1`, so an
+ * exported file re-imports unchanged. A value that really starts with `'=`
+ * loses its quote; that is the price of round-tripping.
+ */
+export const unescapeFormula = (cell: string): string => (/^'[=+\-@\t\r]/.test(cell) ? cell.slice(1) : cell);
+
 /** Splits a relation or media cell on `|`, trimming and dropping blanks and duplicates. */
 export const splitMulti = (cell: string): string[] => [
   ...new Set(

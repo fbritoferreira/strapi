@@ -15,6 +15,7 @@ const importBody = (overrides: Record<string, unknown> = {}) => ({
   relations: { category: { matchOn: 'slug' } },
   onMissingRelation: 'skip',
   dryRun: false,
+  jobId: 1,
   rowOffset: 0,
   rows: [{ Title: 'a', Slug: 'a', Category: 'news' }],
   ...overrides,
@@ -39,6 +40,7 @@ group('validateImportRequest', () => {
     [{ relations: {} }, 'relation "category" needs a matchOn field'],
     [{ relations: { category: { matchOn: 'colour' } } }, 'relation "category" cannot match on "colour"'],
     [{ rows: ['not a row'] }, 'every row must be an object of strings'],
+    [{ jobId: undefined }, 'jobId is required unless dryRun is true'],
   ])('rejects %j', (overrides, message) => {
     expect(validateImportRequest(fields, importBody(overrides), fieldsOf)).toBe(message);
   });
@@ -55,6 +57,22 @@ group('validateImportRequest', () => {
         fieldsOf
       )
     ).toBeNull();
+  });
+
+  it('does not need a jobId for a dry run', () => {
+    expect(validateImportRequest(fields, importBody({ jobId: undefined, dryRun: true }), fieldsOf)).toBeNull();
+  });
+
+  it('rejects private attributes as relation match fields', () => {
+    const withPrivate = { ...contentTypes };
+    withPrivate['api::category.category'] = {
+      ...contentTypes['api::category.category'],
+      attributes: { ...contentTypes['api::category.category'].attributes, token: { type: 'string', private: true } },
+    };
+    const of = (uid: string) => describe({ contentTypes: withPrivate }, uid);
+    expect(
+      validateImportRequest(fields, importBody({ relations: { category: { matchOn: 'token' } } }), of)
+    ).toBe('relation "category" cannot match on "token"');
   });
 
   it('does not need matchOn for media columns', () => {

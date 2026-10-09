@@ -34,6 +34,8 @@ export const isImportable = (contentType: any): boolean =>
 
 const describeAttribute = (name: string, attribute: any): FieldDescription | null => {
   if (SYSTEM_FIELDS.has(name) || UNSUPPORTED_TYPES.has(attribute.type)) return null;
+  // Private attributes (reset tokens, internal notes) never leave the server through the REST API either.
+  if (attribute.private === true) return null;
 
   const base: FieldDescription = {
     name,

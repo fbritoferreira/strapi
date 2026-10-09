@@ -21,6 +21,7 @@ export const contentTypes: Record<string, any> = {
       seo: { type: 'component', component: 'shared.seo' },
       blocks: { type: 'dynamiczone', components: [] },
       secret: { type: 'password' },
+      internalNote: { type: 'string', private: true },
       owner: { type: 'relation', relation: 'oneToOne', target: 'admin::user' },
       related: { type: 'relation', relation: 'morphToMany' },
       createdAt: { type: 'datetime' },

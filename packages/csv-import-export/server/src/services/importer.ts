@@ -1,5 +1,5 @@
 import type { FieldDescription, ImportRequest, ImportResult, RowResult } from '../types';
-import { coerce, splitMulti } from './coerce';
+import { coerce, splitMulti, unescapeFormula } from './coerce';
 import { type LookupIndex, loadIndex, resolveCell } from './relations';
 
 interface PreparedRow {
@@ -31,7 +31,7 @@ const prepareRow = (
   let key = '';
 
   for (const { column, field } of columns) {
-    const cell = cells[column] ?? '';
+    const cell = unescapeFormula(cells[column] ?? '');
     if (field.name === request.matchField) key = cell.trim();
     if (field.name === 'documentId') continue;
 
@@ -80,7 +80,7 @@ export const importBatch = async (
   const indexes = new Map<string, LookupIndex>();
   for (const { column, field } of columns) {
     if (field.type !== 'relation' && field.type !== 'media') continue;
-    const values = [...new Set(request.rows.flatMap((cells) => splitMulti(cells[column] ?? '')))];
+    const values = [...new Set(request.rows.flatMap((cells) => splitMulti(unescapeFormula(cells[column] ?? ''))))];
     indexes.set(
       field.name,
       values.length > 0 ? await loadIndex(strapi, field, request.relations[field.name]?.matchOn, values) : new Map()

@@ -319,6 +319,18 @@ group('importBatch', () => {
     expect(result.results).toEqual([{ row: 1, action: 'error', error: 'title: title must be defined.' }]);
   });
 
+  it("reads cells the export escaped with a leading ' as their original value", async () => {
+    const { strapi, writes } = makeStrapi({ existing: [{ documentId: 'd1', slug: '-draft' }] });
+    const result = await importBatch(
+      strapi,
+      ARTICLE,
+      fields(),
+      request({ rows: [{ Title: "'=SUM(A1)", Slug: "'-draft" }] })
+    );
+    expect(result.results).toEqual([{ row: 1, action: 'updated', documentId: 'd1' }]);
+    expect(writes[0].data).toEqual({ title: '=SUM(A1)', slug: '-draft' });
+  });
+
   it('decides actions but writes nothing on a dry run', async () => {
     const { strapi, writes } = makeStrapi({ existing: [{ documentId: 'd1', slug: 'a' }] });
     const result = await importBatch(

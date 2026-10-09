@@ -1,7 +1,8 @@
-import type { PublicationStatus } from '../types';
+import type { FieldDescription, PublicationStatus } from '../types';
 import { exportCsv } from '../services/exporter';
 import { importBatch } from '../services/importer';
 import { createJobs } from '../services/jobs';
+import { createGuard } from '../services/permissions';
 import { describe, listCollectionTypes } from '../services/schema';
 import { isStatus, validateExportRequest, validateImportRequest } from '../services/validate';
 
@@ -24,12 +25,45 @@ export default ({ strapi }: { strapi: any }) => {
   const jobs = createJobs(strapi);
   const config = (key: string) => strapi.plugin(PLUGIN).config(key);
 
+  /** Any rule for the collection: enough to list it, not to touch its entries. */
   const can = (ctx: any, action: string, uid: string) =>
     ctx.state.userAbility?.can(`${CONTENT_MANAGER}${action}`, uid) === true;
 
-  const requireCan = (ctx: any, uid: string, actions: string[]) => {
+  const isLocalized = (uid: string) => strapi.contentTypes[uid]?.pluginOptions?.i18n?.localized === true;
+
+  /** The locale a request acts on: the one asked for, or the default locale for localized types. */
+  const resolveLocale = async (uid: string, locale?: string) => {
+    if (!isLocalized(uid)) return undefined;
+    return locale ?? (await strapi.plugin('i18n')?.service('locales')?.getDefaultLocale());
+  };
+
+  /** Field- and locale-aware check (see services/permissions.ts). */
+  const requireCan = (
+    ctx: any,
+    uid: string,
+    actions: string[],
+    scope: { locale?: string; fields?: string[] } = {}
+  ) => {
+    const guard = createGuard(strapi, ctx.state.userAbility);
     for (const action of actions) {
-      if (!can(ctx, action, uid)) ctx.throw(403, `missing content-manager ${action} permission on ${uid}`);
+      if (!guard.can(action, uid, scope)) {
+        const fields = scope.fields?.filter((f) => f !== 'documentId') ?? [];
+        ctx.throw(
+          403,
+          `missing content-manager ${action} permission on ${uid}` +
+            (fields.length ? ` for ${fields.join(', ')}` : '') +
+            (scope.locale ? ` in locale ${scope.locale}` : '')
+        );
+      }
+    }
+  };
+
+  /** Reading a relation's target field needs read permission on the related collection too. */
+  const requireRelationReads = async (ctx: any, fields: FieldDescription[], pairs: Array<[string, string]>) => {
+    for (const [name, matchOn] of pairs) {
+      const target = fields.find((f) => f.name === name)?.relation?.target;
+      if (!target) continue;
+      requireCan(ctx, target, ['read'], { locale: await resolveLocale(target), fields: [matchOn] });
     }
   };
 
@@ -54,7 +88,8 @@ export default ({ strapi }: { strapi: any }) => {
     async schema(ctx: any) {
       const { uid } = ctx.params;
       const fields = fieldsOr404(ctx, uid);
-      requireCan(ctx, uid, ['read']);
+      // Field names only; the actions that touch entries check fields and locale themselves.
+      if (!can(ctx, 'read', uid)) ctx.throw(403, `missing content-manager read permission on ${uid}`);
       ctx.body = { data: fields };
     },
 
@@ -63,12 +98,13 @@ export default ({ strapi }: { strapi: any }) => {
       fieldsOr404(ctx, uid);
       if (!isStatus(status)) ctx.throw(400, 'status must be "draft" or "published"');
       if (!Number.isInteger(totalRows) || totalRows < 0) ctx.throw(400, 'totalRows must be a non-negative integer');
-      requireCan(ctx, uid, importActions(status));
+      const targetLocale = await resolveLocale(uid, locale);
+      requireCan(ctx, uid, importActions(status), { locale: targetLocale });
 
       const job = await jobs.create({
         kind: 'import',
         targetUid: uid,
-        targetLocale: locale,
+        targetLocale,
         targetStatus: status,
         fileName,
         config: jobConfig,
@@ -85,17 +121,30 @@ export default ({ strapi }: { strapi: any }) => {
       const body = ctx.request.body;
       const error = validateImportRequest(fields, body, fieldsOf);
       if (error) ctx.throw(400, error);
-      requireCan(ctx, uid, importActions(body.status));
+      const locale = await resolveLocale(uid, body.locale);
+      const mapped = Object.values(body.mapping as Record<string, string>);
+      requireCan(ctx, uid, importActions(body.status), { locale, fields: mapped });
+      await requireRelationReads(
+        ctx,
+        fields,
+        mapped.filter((name) => body.relations?.[name]).map((name) => [name, body.relations[name].matchOn])
+      );
 
-      const logged = body.jobId !== undefined && !body.dryRun;
+      const logged = !body.dryRun;
       if (logged) {
         const job = await jobs.findOne(body.jobId);
-        if (!job || job.targetUid !== uid || job.state !== 'running') {
-          ctx.throw(400, 'jobId does not reference a running import job for this collection');
+        if (
+          !job ||
+          job.kind !== 'import' ||
+          job.targetUid !== uid ||
+          job.state !== 'running' ||
+          job.startedById !== ctx.state.user.id
+        ) {
+          ctx.throw(400, 'jobId does not reference your running import job for this collection');
         }
       }
 
-      const result = await importBatch(strapi, uid, fields, body);
+      const result = await importBatch(strapi, uid, fields, { ...body, locale });
       if (logged) await jobs.record(body.jobId, result.results, body.rows, body.rowOffset);
       ctx.body = { data: result };
     },
@@ -116,7 +165,13 @@ export default ({ strapi }: { strapi: any }) => {
       const body = ctx.request.body;
       const error = validateExportRequest(fields, body, fieldsOf);
       if (error) ctx.throw(400, error);
-      requireCan(ctx, uid, ['read']);
+      const locale = await resolveLocale(uid, body.locale);
+      requireCan(ctx, uid, ['read'], { locale, fields: body.columns.map((c: any) => c.field) });
+      await requireRelationReads(
+        ctx,
+        fields,
+        body.columns.map((c: any) => [c.field, c.matchOn ?? 'documentId'])
+      );
 
       const fileName = safeFileName(
         body.fileName,
@@ -125,7 +180,7 @@ export default ({ strapi }: { strapi: any }) => {
       const job = await jobs.create({
         kind: 'export',
         targetUid: uid,
-        targetLocale: body.locale,
+        targetLocale: locale,
         targetStatus: body.status,
         fileName,
         config: { columns: body.columns },
@@ -133,7 +188,7 @@ export default ({ strapi }: { strapi: any }) => {
       });
 
       try {
-        const { csv, rowCount } = await exportCsv(strapi, uid, fields, body, {
+        const { csv, rowCount } = await exportCsv(strapi, uid, fields, { ...body, locale }, {
           escapeFormulas: config('escapeFormulas') !== false,
         });
         await jobs.finish(job.id, 'completed', { totalRows: rowCount });

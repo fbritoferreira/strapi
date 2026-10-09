@@ -6,7 +6,11 @@ import createController from './csv';
 const ARTICLE = 'api::article.article';
 const CM = 'plugin::content-manager.explorer.';
 
-/** koa context stand-in; `throw` always throws, like koa's. */
+/**
+ * koa context stand-in; `throw` always throws, like koa's.
+ * `denied` entries are `action@uid` or `action@uid#field`; subjects arrive as a
+ * uid string or as the guard's stand-in entry `{ __type: uid, ... }`.
+ */
 const makeCtx = ({ params = {}, body = {}, query = {}, denied = [] as string[] } = {}): any => {
   return {
     params,
@@ -14,7 +18,12 @@ const makeCtx = ({ params = {}, body = {}, query = {}, denied = [] as string[] }
     request: { body },
     state: {
       user: { id: 3, firstname: 'Ada', lastname: 'L' },
-      userAbility: { can: (action: string, uid: string) => !denied.includes(`${action}@${uid}`) },
+      userAbility: {
+        can: (action: string, target: any, field?: string) => {
+          const uid = typeof target === 'string' ? target : target.__type;
+          return !denied.includes(`${action}@${uid}`) && !(field && denied.includes(`${action}@${uid}#${field}`));
+        },
+      },
     },
     throw: (status: number, message: string) => {
       throw Object.assign(new Error(message), { status });
@@ -44,9 +53,16 @@ const makeStrapi = (job: any = null) => {
         uid === 'plugin::csv-import-export.job' ? jobQuery : { findMany: async () => [] }
       ),
     },
-    plugin: vi.fn(() => ({
-      config: (key: string) => ({ escapeFormulas: true, maxFileSizeMb: 10 })[key],
-    })),
+    plugin: vi.fn((name: string) =>
+      name === 'i18n'
+        ? { service: () => ({ getDefaultLocale: async () => 'en' }) }
+        : { config: (key: string) => ({ escapeFormulas: true, maxFileSizeMb: 10 })[key] }
+    ),
+    service: () => ({
+      createPermissionsManager: ({ model }: { model: string }) => ({
+        toSubject: (target: object, type = model) => ({ __type: type, ...target }),
+      }),
+    }),
   };
   return { strapi, jobQuery, documents };
 };
@@ -58,6 +74,7 @@ const importBody = (overrides: Record<string, unknown> = {}) => ({
   relations: {},
   onMissingRelation: 'skip',
   dryRun: false,
+  jobId: 9,
   rowOffset: 0,
   rows: [{ Slug: 'a' }],
   ...overrides,
@@ -106,6 +123,8 @@ group('csv controller', () => {
   it('imports a batch and records it on a running job for the same collection', async () => {
     const { strapi, jobQuery } = makeStrapi({
       id: 9,
+      kind: 'import',
+      startedById: 3,
       targetUid: ARTICLE,
       state: 'running',
       created: 0,
@@ -114,7 +133,7 @@ group('csv controller', () => {
       errored: 0,
       errors: [],
     });
-    const ctx = makeCtx({ params: { uid: ARTICLE }, body: importBody({ jobId: 9 }) });
+    const ctx = makeCtx({ params: { uid: ARTICLE }, body: importBody() });
 
     await createController({ strapi }).import(ctx);
 
@@ -125,18 +144,72 @@ group('csv controller', () => {
   });
 
   it('rejects a jobId that belongs to another collection or is finished', async () => {
-    const { strapi, documents } = makeStrapi({ id: 9, targetUid: 'api::category.category', state: 'running' });
-    const ctx = makeCtx({ params: { uid: ARTICLE }, body: importBody({ jobId: 9 }) });
+    const { strapi, documents } = makeStrapi({
+      id: 9,
+      kind: 'import',
+      startedById: 3,
+      targetUid: 'api::category.category',
+      state: 'running',
+    });
+    const ctx = makeCtx({ params: { uid: ARTICLE }, body: importBody() });
     await expect(createController({ strapi }).import(ctx)).rejects.toMatchObject({ status: 400 });
     expect(documents.create).not.toHaveBeenCalled();
   });
 
   it('does not touch the job on a dry run', async () => {
     const { strapi, jobQuery } = makeStrapi();
-    const ctx = makeCtx({ params: { uid: ARTICLE }, body: importBody({ jobId: 9, dryRun: true }) });
+    const ctx = makeCtx({ params: { uid: ARTICLE }, body: importBody({ dryRun: true }) });
     await createController({ strapi }).import(ctx);
     expect(jobQuery.findOne).not.toHaveBeenCalled();
     expect(jobQuery.update).not.toHaveBeenCalled();
+  });
+
+  it("refuses to log a batch into another user's job", async () => {
+    const { strapi, documents } = makeStrapi({
+      id: 9,
+      kind: 'import',
+      startedById: 4,
+      targetUid: ARTICLE,
+      state: 'running',
+    });
+    const ctx = makeCtx({ params: { uid: ARTICLE }, body: importBody() });
+    await expect(createController({ strapi }).import(ctx)).rejects.toMatchObject({ status: 400 });
+    expect(documents.create).not.toHaveBeenCalled();
+  });
+
+  it('refuses to import a column into a field the role cannot update', async () => {
+    const { strapi, documents } = makeStrapi();
+    const ctx = makeCtx({
+      params: { uid: ARTICLE },
+      body: importBody({ mapping: { Slug: 'slug', Views: 'views' } }),
+      denied: [`${CM}update@${ARTICLE}#views`],
+    });
+    await expect(createController({ strapi }).import(ctx)).rejects.toMatchObject({
+      status: 403,
+      message: `missing content-manager update permission on ${ARTICLE} for slug, views in locale en`,
+    });
+    expect(documents.create).not.toHaveBeenCalled();
+  });
+
+  it('refuses to link a relation by a field of a collection the user cannot read', async () => {
+    const { strapi } = makeStrapi();
+    const ctx = makeCtx({
+      params: { uid: ARTICLE },
+      body: importBody({ mapping: { Slug: 'slug', Cat: 'category' }, relations: { category: { matchOn: 'slug' } } }),
+      denied: [`${CM}read@api::category.category`],
+    });
+    await expect(createController({ strapi }).import(ctx)).rejects.toMatchObject({ status: 403 });
+  });
+
+  it('refuses to export a field the role cannot read', async () => {
+    const { strapi, jobQuery } = makeStrapi();
+    const ctx = makeCtx({
+      params: { uid: ARTICLE },
+      body: { status: 'draft', columns: [{ field: 'title', header: 't' }, { field: 'views', header: 'v' }] },
+      denied: [`${CM}read@${ARTICLE}#views`],
+    });
+    await expect(createController({ strapi }).export(ctx)).rejects.toMatchObject({ status: 403 });
+    expect(jobQuery.create).not.toHaveBeenCalled();
   });
 
   it('creates an import job for the current user', async () => {
