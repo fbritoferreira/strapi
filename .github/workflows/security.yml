@@ -27,4 +27,6 @@ jobs:
           # High threshold: the admin-api plugin's dev tree transitively includes
           # @strapi/strapi peer deps (1300+ packages) whose known medium-severity
           # issues are not exploitable in a published library context.
-          args: --all-projects --severity-threshold=high
+          # demo/ is a private local test app with its own lockfile: Strapi's
+          # transitive advisories there are not ours to fix, so it is excluded.
+          args: --all-projects --exclude=demo --severity-threshold=high
