@@ -1,6 +1,6 @@
 {
 	"name": "@fbritoferreira/strapi-provider-email-cloudflare",
-	"version": "1.0.0",
+	"version": "1.0.1",
 	"description": "Cloudflare Email Sending provider for the Strapi Email feature: send transactional email through Cloudflare's REST API, no SMTP relay needed.",
 	"type": "commonjs",
 	"main": "./strapi-provider.js",
