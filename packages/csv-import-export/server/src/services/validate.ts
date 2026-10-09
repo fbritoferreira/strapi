@@ -6,7 +6,7 @@ type FieldsOf = (uid: string) => FieldDescription[] | null;
 
 export const isStatus = (value: unknown): value is PublicationStatus => value === 'draft' || value === 'published';
 
-const isPlainObject = (value: unknown): value is Record<string, unknown> =>
+const isPlainObject = (value: unknown): value is Record<string, any> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
 /** A relation can match on any non-relation, non-media field of its target, documentId included. */
