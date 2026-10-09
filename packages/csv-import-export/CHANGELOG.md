@@ -1,5 +1,11 @@
 # @fbritoferreira/strapi-csv-import-export
 
+## 0.2.0
+
+### Minor Changes
+
+- 68e5890: Release package via OIDC
+
 ## 0.1.0
 
 ### Minor Changes

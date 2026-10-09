@@ -1,6 +1,6 @@
 {
   "name": "@fbritoferreira/strapi-csv-import-export",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Strapi 5 plugin to import and export collection types as CSV with column mapping and upsert",
   "type": "commonjs",
   "exports": {
