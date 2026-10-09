@@ -74,6 +74,16 @@ describe("AuthClient", () => {
 		expect(refreshed.jwt).toBe("j4");
 	});
 
+	it("sends the refresh cookie when no refresh token is given", async () => {
+		fetchMock.mockImplementation(() => Promise.resolve(jsonResponse({ jwt: "j5" })));
+		await strapi.auth.refresh();
+		expect(lastCall(fetchMock).init.credentials).toBe("include");
+		expect(body()).toEqual({});
+
+		await strapi.auth.refresh({ refreshToken: "r" });
+		expect(lastCall(fetchMock).init.credentials).toBeUndefined();
+	});
+
 	it("explains that refresh needs the refresh mode when Strapi answers 404", async () => {
 		fetchMock.mockResolvedValueOnce(new Response("Not Found", { status: 404 }));
 		const [err] = await strapi.auth.refresh({ refreshToken: "r" });

@@ -53,7 +53,7 @@ jobs:
         if: matrix.node == 24
         run: pnpm package:check
 
-      # Every publishable package has a jsr.json next to its package.json;
+      # Every package that ships to JSR has a jsr.json next to its package.json;
       # verify they stay in sync. Discovers packages dynamically so adding a
       # new one needs no workflow change.
       - name: Check jsr.json versions match package.json versions

@@ -3,8 +3,8 @@ layout: home
 
 hero:
   name: Strapi Tooling
-  text: Client & Admin API
-  tagline: Typed Strapi 5 REST/GraphQL client, plus a plugin exposing admin user and token management over REST.
+  text: Client, Admin API & Email
+  tagline: Typed Strapi 5 REST/GraphQL client, a plugin exposing admin user and token management over REST, and a Cloudflare email provider.
   actions:
     - theme: brand
       text: Client

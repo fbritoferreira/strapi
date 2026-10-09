@@ -1,6 +1,6 @@
-import type { ServiceError } from "./errors";
+import { graphqlError, type ServiceError } from "./errors";
 import { backoffFor, resolveRetry, retryAfterMs, shouldRetry, type ResolvedRetry, type RetryOptions } from "./retry";
-import type { FetchInit, RefreshedSession } from "./types";
+import type { FetchInit, GraphqlError, RefreshedSession } from "./types";
 
 /** Connection settings shared by every request. */
 export interface HttpConfig {
@@ -107,7 +107,15 @@ export class HttpClient {
 
 		const delay = backoffFor(this.retry, made, headers === null ? null : retryAfterMs(headers, Date.now()));
 		this.retry.onRetry?.({ attempt: made + 1, delay, status });
-		await new Promise((resolve) => setTimeout(resolve, delay));
+		await new Promise<void>((resolve) => {
+			const done = () => {
+				clearTimeout(timer);
+				signal?.removeEventListener("abort", done);
+				resolve();
+			};
+			const timer = setTimeout(done, delay);
+			signal?.addEventListener("abort", done);
+		});
 		return !aborted();
 	}
 
@@ -128,10 +136,14 @@ export class HttpClient {
 	}
 
 	private async dispatch<R>(path: string, init: FetchInit, refreshed: boolean): Promise<HttpResult<R>> {
-		const url = /^https?:\/\//i.test(path) ? path : `${this.baseURL}/${path.replace(/^\/+/, "")}`;
+		const absolute = /^https?:\/\//i.test(path);
+		const url = absolute ? path : `${this.baseURL}/${path.replace(/^\/+/, "")}`;
 
 		const headers = new Headers(this.headers);
-		if (this.token) headers.set("Authorization", `Bearer ${this.token}`);
+		// The token is for Strapi alone, not for an absolute URL elsewhere such as a media bucket.
+		if (this.token && (!absolute || new URL(url).origin === new URL(this.baseURL).origin)) {
+			headers.set("Authorization", `Bearer ${this.token}`);
+		}
 		if (typeof init.body === "string") headers.set("Content-Type", "application/json");
 		new Headers(init.headers).forEach((value, key) => headers.set(key, value));
 
@@ -205,20 +217,26 @@ export class HttpClient {
 		return typeof this.token === "string" && this.token !== "";
 	}
 
+	/**
+	 * Joins the shared rotation. It runs on its own timeout, not on any one
+	 * caller's signal, so an abort only stops the waiter that aborted.
+	 */
 	private refreshUnauthorized(
 		options: RefreshOnUnauthorized,
 		signal: AbortSignal | null | undefined
 	): Promise<ServiceError | null> {
-		this.refreshing ??= this.rotate(options, signal).finally(() => {
+		const refreshing = (this.refreshing ??= this.rotate(options).finally(() => {
 			this.refreshing = null;
+		}));
+		if (!signal) return refreshing;
+		return new Promise((resolve, reject) => {
+			const onAbort = () => resolve(toNetworkError(signal.reason, this.timeout));
+			signal.addEventListener("abort", onAbort, { once: true });
+			refreshing.then(resolve, reject).finally(() => signal.removeEventListener("abort", onAbort));
 		});
-		return this.refreshing;
 	}
 
-	private async rotate(
-		options: RefreshOnUnauthorized,
-		signal: AbortSignal | null | undefined
-	): Promise<ServiceError | null> {
+	private async rotate(options: RefreshOnUnauthorized): Promise<ServiceError | null> {
 		const provided = typeof options.token === "function" ? options.token() : options.token;
 		const hasToken = typeof provided === "string" && provided !== "";
 		if (!hasToken && options.cookie !== true) {
@@ -227,8 +245,6 @@ export class HttpClient {
 
 		const headers = new Headers(this.headers);
 		headers.set("Content-Type", "application/json");
-		const timeoutSignal = AbortSignal.timeout(this.timeout);
-		const combined = signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal;
 
 		let response: Response;
 		try {
@@ -236,7 +252,7 @@ export class HttpClient {
 				method: "POST",
 				headers,
 				body: JSON.stringify(hasToken ? { refreshToken: provided } : {}),
-				signal: combined,
+				signal: AbortSignal.timeout(this.timeout),
 				...(options.cookie === true && { credentials: "include" as const }),
 			});
 		} catch (thrown) {
@@ -300,6 +316,8 @@ interface ParsedErrorBody {
 		message: string;
 		details?: unknown;
 	};
+	/** A GraphQL error response, e.g. a 400 for a query that does not validate. */
+	errors?: GraphqlError[];
 }
 
 function toHttpError(response: Response, text: string): ServiceError {
@@ -313,6 +331,9 @@ function toHttpError(response: Response, text: string): ServiceError {
 			};
 			if (body.error.details !== undefined) error.details = body.error.details;
 			return error;
+		}
+		if (body && typeof body === "object" && Array.isArray(body.errors) && typeof body.errors[0]?.message === "string") {
+			return { status: response.status, ...graphqlError(body.errors) };
 		}
 	} catch {
 		// not JSON, fall through

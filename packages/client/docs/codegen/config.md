@@ -36,7 +36,7 @@ Every section is optional. They run in order, each writing its own file. A faili
 
 Configs are looked up, in order, as `strapi-codegen.config.ts`, `.mts`, `.js`, `.mjs`, then `.json`. Pass a path to skip the lookup: `--config config/strapi.ts`. A bare `--config` with no value uses the lookup. Relative paths resolve against the current working directory.
 
-A `.ts` config needs a Node that strips types (22.6 or newer). On anything older the command says so, and a `.mjs` or `.json` config works instead.
+A `.ts` config needs a Node that strips types: 22.18+ or 23.6+, where it is on by default, or 22.6+ run with `--experimental-strip-types`. Otherwise the command says so, and a `.mjs` or `.json` config works instead.
 
 ## Credentials
 

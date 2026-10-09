@@ -23,6 +23,27 @@ Copy the JWT from the response and include it in the Authorization header:
 Authorization: Bearer YOUR_JWT_TOKEN
 ```
 
+### Permissions
+
+Every route checks the caller's admin permissions, the same ones Strapi uses for its own Users and API Tokens settings pages. Super admins hold all of them; other roles need them granted under **Settings → Roles**.
+
+| Route | Required permission |
+| --- | --- |
+| `GET /admin-api/users`, `GET /admin-api/users/:id` | `admin::users.read` |
+| `POST /admin-api/users` | `admin::users.create` |
+| `PUT /admin-api/users/:id`, `POST /admin-api/users/:id/reset-password` | `admin::users.update` |
+| `DELETE /admin-api/users/:id` | `admin::users.delete` |
+| `GET /admin-api/tokens`, `GET /admin-api/tokens/:id` | `admin::api-tokens.read` |
+| `POST /admin-api/tokens` | `admin::api-tokens.create` |
+| `PUT /admin-api/tokens/:id`, `POST /admin-api/tokens/:id/refresh` | `admin::api-tokens.update` |
+| `DELETE /admin-api/tokens/:id`, `POST /admin-api/tokens/:id/revoke` | `admin::api-tokens.delete` |
+
+Callers without the permission get `403 Forbidden`.
+
+### Passwords
+
+`password` on create, update and reset-password must follow Strapi's admin password rule: at least 8 characters, at most 72 bytes, with at least one lowercase letter, one uppercase letter and one digit. Anything else returns `400`.
+
 ---
 
 ## Users API
@@ -35,13 +56,14 @@ Authorization: Bearer YOUR_JWT_TOKEN
 #### List All Users
 **GET** `/admin-api/users`
 
-Lists all admin users with pagination and filtering.
+Lists admin users. Returns a plain JSON array (no `data`/`meta` envelope).
 
 **Query Parameters:**
-- `start` (number, default: 0) - Pagination start
-- `limit` (number, default: 25) - Items per page
-- `sort` (string, default: `createdAt:desc`) - Sort field
-- `populate` (string) - Populate related data
+- `start`, `limit` or `page`, `pageSize` - Pagination
+- `sort` (string or string[], e.g. `email:asc`) - Sort; no default order is applied
+- `filters` - Strapi filters on `id`, `email`, `firstname`, `lastname`, `username`, `isActive`, `blocked`, `createdAt`, `updatedAt` (combinable with `$and`/`$or`/`$not`)
+
+Any other parameter, and any filter or sort on another field, is ignored. Roles are always populated.
 
 **Example:**
 ```bash
@@ -51,33 +73,24 @@ curl -X GET http://localhost:1337/admin-api/users \
 
 **Response:**
 ```json
-{
-  "data": [
-    {
+[
+  {
+    "id": 1,
+    "email": "admin@example.com",
+    "username": "admin",
+    "firstName": "Admin",
+    "lastName": "User",
+    "isActive": true,
+    "blocked": false,
+    "role": {
       "id": 1,
-      "email": "admin@example.com",
-      "username": "admin",
-      "firstName": "Admin",
-      "lastName": "User",
-      "isActive": true,
-      "blocked": false,
-      "role": {
-        "id": 1,
-        "name": "Super Admin",
-        "code": "super-admin"
-      },
-      "createdAt": "2024-01-01T00:00:00.000Z",
-      "updatedAt": "2024-01-01T00:00:00.000Z"
-    }
-  ],
-  "meta": {
-    "pagination": {
-      "total": 1,
-      "page": 1,
-      "pageSize": 25
-    }
+      "name": "Super Admin",
+      "code": "strapi-super-admin"
+    },
+    "createdAt": "2024-01-01T00:00:00.000Z",
+    "updatedAt": "2024-01-01T00:00:00.000Z"
   }
-}
+]
 ```
 
 #### Get Single User
@@ -100,9 +113,12 @@ curl -X GET http://localhost:1337/admin-api/users/1 \
   "password": "SecurePassword123!",
   "firstName": "John",
   "lastName": "Doe",
-  "isActive": true
+  "isActive": true,
+  "roles": [2]
 }
 ```
+
+`roles` (array of admin role ids) or `role` (a single id) is required; `400` if missing or if a role does not exist. Built-in role codes are `strapi-super-admin`, `strapi-editor` and `strapi-author`.
 
 **Example:**
 ```bash
@@ -114,7 +130,8 @@ curl -X POST http://localhost:1337/admin-api/users \
     "username": "newuser",
     "password": "SecurePassword123!",
     "firstName": "John",
-    "lastName": "Doe"
+    "lastName": "Doe",
+    "role": 2
   }'
 ```
 
@@ -155,7 +172,7 @@ curl -X DELETE http://localhost:1337/admin-api/users/2 \
 **Request Body:**
 ```json
 {
-  "password": "newSecurePassword456"
+  "password": "NewSecurePassword456"
 }
 ```
 
@@ -240,6 +257,8 @@ curl -X POST http://localhost:1337/admin-api/tokens \
 }
 ```
 
+`lifespan` must be `null` or 7, 30 or 90 days in ms (`604800000`, `2592000000`, `7776000000`); anything else returns `400`. Changing it resets `expiresAt` from now.
+
 **Note:** The access key cannot be changed. Delete and create a new token instead.
 
 #### Delete Token
@@ -282,7 +301,7 @@ Resets the token's expiration.
 }
 ```
 
-- `lifespan` (number, optional) - One of `null` (unlimited), 7d, 30d, 90d (default: `null` = no expiration)
+- `lifespan` (number, optional) - One of `null` (unlimited), 7d, 30d, 90d in ms (default: `null` = no expiration); other values return `400`
 - `expiresAt` (string, optional) - Explicit ISO 8601 expiry overrides `lifespan`
 
 **Example:**
@@ -312,6 +331,7 @@ All endpoints return standard HTTP status codes:
 - `200` - Success
 - `400` - Bad request
 - `401` - Unauthorized (missing or invalid token)
+- `403` - Forbidden (missing the admin permission for the route)
 - `404` - Not found
 - `500` - Internal server error
 

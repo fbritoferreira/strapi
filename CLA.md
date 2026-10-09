@@ -1,7 +1,7 @@
 # Contributor License Agreement
 
 This agreement is between you and Filipe Brito Ferreira, the copyright holder of
-`@fbritoferreira/strapi`.
+the packages in this repository.
 
 By submitting a contribution to
 [fbritoferreira/strapi](https://github.com/fbritoferreira/strapi) you agree that:

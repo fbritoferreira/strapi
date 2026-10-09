@@ -91,14 +91,15 @@ export class AuthClient<T extends object = StrapiUser> {
 	 *
 	 * Only mounted when `jwtManagement` is `"refresh"`; otherwise Strapi answers
 	 * 404 and this says so. With an httpOnly refresh cookie the token travels in
-	 * the cookie and the response carries no `refreshToken`.
+	 * the cookie and the response carries no `refreshToken`: without a
+	 * `refreshToken`, the call is sent with `credentials: "include"`.
 	 */
 	async refresh(options: { refreshToken?: string; init?: FetchInit } = {}): Promise<Result<RefreshedSession>> {
 		const { refreshToken, init } = options;
 		const [err, body] = await this.request<RefreshedSession>(
 			"auth/refresh",
 			refreshToken === undefined ? {} : { refreshToken },
-			init
+			refreshToken === undefined ? { credentials: "include", ...init } : init
 		);
 		if (err) return fail(err.status === 404 ? { ...err, message: REFRESH_MODE_HINT } : err);
 		if (!body) return fail({ name: "HTTPError", message: "Strapi: refresh answered with an empty body" });

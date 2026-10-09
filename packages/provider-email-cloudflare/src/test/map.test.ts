@@ -62,6 +62,15 @@ describe('mapSendOptions', () => {
     expect(body.text).toBe('plain');
   });
 
+  it('falls back to defaultReplyTo when replyTo is an empty string (users-permissions sends "")', async () => {
+    const body = await mapSendOptions(
+      { ...base, replyTo: '' },
+      { defaultFrom: 'no-reply@example.com', defaultReplyTo: 'support@example.com' }
+    );
+
+    expect(body.reply_to).toBe('support@example.com');
+  });
+
   it('maps recipient lists and headers', async () => {
     const body = await mapSendOptions({
       ...base,

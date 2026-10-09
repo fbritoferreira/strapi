@@ -71,6 +71,13 @@ describe("Strapi.graphql", () => {
 		expect(err?.name).toBe("GraphQLError");
 	});
 
+	it("keeps the GraphQL error messages of an HTTP 400", async () => {
+		const errors = [{ message: 'Cannot query field "nope" on type "Query".', extensions: { code: "GRAPHQL_VALIDATION_FAILED" } }];
+		fetchMock.mockResolvedValueOnce(jsonResponse({ errors }, 400));
+		const [err] = await strapi.graphql("{ nope }");
+		expect(err).toEqual({ status: 400, name: "GRAPHQL_VALIDATION_FAILED", message: errors[0]?.message, details: errors });
+	});
+
 	it("reports a missing plugin as an error tuple", async () => {
 		fetchMock.mockResolvedValueOnce(new Response("Not Found", { status: 404 }));
 		const [err] = await strapi.graphql("{ articles { title } }");

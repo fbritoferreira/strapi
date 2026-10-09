@@ -63,11 +63,12 @@ export async function loadGraphqlSchema(options: GraphqlSource): Promise<Introsp
 	if (response.status === 404) {
 		throw new Error(`No GraphQL endpoint at ${options.url}; install @strapi/plugin-graphql or pass the configured endpoint`);
 	}
+	const text = await response.text();
 	if (!response.ok) {
-		throw new Error(`POST ${options.url} failed (${response.status}): ${response.statusText || "unknown error"}`);
+		const reason = graphqlMessages(text) || response.statusText || "unknown error";
+		throw new Error(`POST ${options.url} failed (${response.status}): ${reason}`);
 	}
 
-	const text = await response.text();
 	let body: IntrospectionBody;
 	try {
 		// Typed boundary: the endpoint's JSON, narrowed by the checks below.
@@ -84,4 +85,15 @@ export async function loadGraphqlSchema(options: GraphqlSource): Promise<Introsp
 		throw new Error(`${options.url} answered without a __schema`);
 	}
 	return schema;
+}
+
+/** The messages of a GraphQL `errors` body, e.g. a 400 for a query that does not validate. */
+function graphqlMessages(text: string): string | undefined {
+	try {
+		// Typed boundary: an error body of unknown shape, narrowed below.
+		const errors = (JSON.parse(text) as IntrospectionBody).errors;
+		return Array.isArray(errors) ? errors.map((e) => e.message).join("; ") : undefined;
+	} catch {
+		return undefined;
+	}
 }

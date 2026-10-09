@@ -34,6 +34,20 @@ describe("loadGraphqlSchema", () => {
 		await expect(loadGraphqlSchema({ url: "http://h/graphql", fetch: fetchImpl })).rejects.toThrow(/500/);
 	});
 
+	it("reports the GraphQL errors of an HTTP failure", async () => {
+		const fetchImpl = vi
+			.fn()
+			.mockResolvedValue(new Response(JSON.stringify({ errors: [{ message: "GraphQL introspection is not allowed" }] }), { status: 400 }));
+		await expect(loadGraphqlSchema({ url: "http://h/graphql", fetch: fetchImpl })).rejects.toThrow(
+			/400.*GraphQL introspection is not allowed/
+		);
+	});
+
+	it("reports an HTTP failure whose JSON body has no errors", async () => {
+		const fetchImpl = vi.fn().mockResolvedValue(new Response(JSON.stringify({ message: "nope" }), { status: 500 }));
+		await expect(loadGraphqlSchema({ url: "http://h/graphql", fetch: fetchImpl })).rejects.toThrow(/500/);
+	});
+
 	it("reports GraphQL errors, e.g. introspection turned off", async () => {
 		const fetchImpl = vi
 			.fn()

@@ -1,4 +1,4 @@
-import type { StrapiMeta } from "./types";
+import type { GraphqlError, StrapiMeta } from "./types";
 
 /** Error value returned as the first element of a {@link Result} tuple. Never thrown. */
 export interface ServiceError {
@@ -94,4 +94,10 @@ export function ok<T>(data: T, meta: StrapiMeta = null): Result<T> {
 /** Builds a failed {@link Result}. */
 export function fail<T = never>(error: ServiceError): Result<T> {
 	return [error, null, null];
+}
+
+/** One error for a GraphQL `errors` list: a lone error is named by its `extensions.code`. */
+export function graphqlError(errors: GraphqlError[]): ServiceError {
+	const name = errors.length === 1 ? (errors[0]?.extensions?.code ?? "GraphQLError") : "GraphQLError";
+	return { name, message: errors.map((e) => e.message).join("; "), details: errors };
 }

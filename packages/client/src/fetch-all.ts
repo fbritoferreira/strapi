@@ -32,7 +32,9 @@ const DEFAULT_LIMIT = 25;
  */
 export async function fetchAll<TRow, TDoc = TRow>(options: FetchAllOptions<TRow, TDoc>): Promise<Result<TRow[]>> {
 	const { http, path, params = {}, locale, defaultLocale, concurrency, init = {} } = options;
-	const pagination = params.pagination ?? {};
+	// The count is what tells how many pages remain, so `withCount: false` is dropped.
+	const pagination = { ...params.pagination };
+	delete pagination.withCount;
 	const offsetMode = pagination.start !== undefined || pagination.limit !== undefined;
 
 	const getPage = async (page: QueryParams<TDoc>["pagination"]): Promise<Result<StrapiResponse<TRow>>> => {
@@ -43,11 +45,12 @@ export async function fetchAll<TRow, TDoc = TRow>(options: FetchAllOptions<TRow,
 		return ok(body ?? { data: [] });
 	};
 
-	const [firstErr, first] = await getPage(params.pagination);
+	const [firstErr, first] = await getPage(params.pagination === undefined ? undefined : pagination);
 	if (firstErr) return fail(firstErr);
 
 	const meta = first.meta?.pagination;
 	if (!meta) return ok(first.data, null);
+	if (first.data.length >= meta.total) return ok(first.data, { pagination: meta });
 
 	const rest: NonNullable<QueryParams<TDoc>["pagination"]>[] = [];
 	let start = 0;
@@ -55,7 +58,10 @@ export async function fetchAll<TRow, TDoc = TRow>(options: FetchAllOptions<TRow,
 
 	if (offsetMode || "start" in meta) {
 		start = pagination.start ?? ("start" in meta ? meta.start : 0);
-		limit = pagination.limit ?? ("limit" in meta ? meta.limit : DEFAULT_LIMIT);
+		// Strapi caps the limit at its maxLimit, so step by the limit it applied.
+		limit = "limit" in meta ? meta.limit : (pagination.limit ?? DEFAULT_LIMIT);
+		// A limit of -1 (or 0) asks for everything in one page: nothing to step by.
+		if (limit <= 0) return ok(first.data, { pagination: meta });
 		for (let next = start + limit; next < meta.total; next += limit) {
 			rest.push({ ...pagination, start: next, limit });
 		}

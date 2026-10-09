@@ -140,7 +140,7 @@ export const toCloudflareAttachment = async (attachment: Attachment): Promise<Cl
  */
 export const mapSendOptions = async (options: SendOptions, settings: Settings = {}): Promise<CloudflareBody> => {
   const from = options.from ?? settings.defaultFrom;
-  const replyTo = options.replyTo ?? settings.defaultReplyTo;
+  const replyTo = options.replyTo || settings.defaultReplyTo; // users-permissions sends replyTo: ""
 
   if (!from) throw new Error('No sender address: pass `from` or set `settings.defaultFrom`');
   if (!options.to) throw new Error('Missing recipient: `to` is required');

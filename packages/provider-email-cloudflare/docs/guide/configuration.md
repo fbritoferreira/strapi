@@ -107,7 +107,7 @@ The admin panel's *Settings → Email feature → Configuration* page shows this
 | `Cloudflare email sending failed: 10101 …unauthorized` | Bad or expired `apiToken` |
 | `Cloudflare email sending failed: 10102 …forbidden` | Token lacks Email Sending permission, or the account isn't entitled |
 | `Cloudflare email sending failed: 10004 …throttled` | Rate limited — retry with backoff |
-| `No sender address: pass 'from' or set settings.defaultFrom` | Neither a `from` argument nor `settings.defaultFrom` was provided |
+| `Cloudflare email sending failed: …` rejecting the sender (e.g. `forbidden` / sender not verified) | `settings.defaultFrom` is unset, so Strapi's own default `Strapi <no-reply@strapi.io>` is used — set `defaultFrom` to an address on your [verified sending domain](/packages/provider-email-cloudflare/guide/cloudflare-setup#_2-onboard-your-sending-domain) |
 | `Invalid email address: "…"` | A malformed address in `from`, `to`, `cc`, `bcc`, or `replyTo` |
 
 Next: [Sending email](/packages/provider-email-cloudflare/guide/sending).

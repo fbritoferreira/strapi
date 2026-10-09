@@ -22,7 +22,7 @@ These are exported from `@fbritoferreira/strapi`. Generated files augment the em
 
 `StrapiMeta` is `{ pagination?: StrapiPagination } | null`. Pagination is page-shaped (`page`, `pageSize`, `pageCount`, `total`) or offset-shaped (`start`, `limit`, `total`).
 
-`validationIssues(error)` returns `{ path, message, name? }[]`. `isValidationDetails` narrows `details`.
+`validationIssues(error)` returns `{ path, message, name, value? }[]`. `isValidationDetails` narrows `details`.
 
 ## Documents
 

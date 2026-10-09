@@ -8,7 +8,7 @@ declare const strapi: any;
  * backed by Strapi's official api-token service.
  */
 
-interface TokenController {
+export interface TokenController {
   find(ctx: Context): Promise<unknown>;
   findOne(ctx: Context): Promise<unknown>;
   create(ctx: Context): Promise<unknown>;
@@ -34,6 +34,27 @@ const sanitize = (token: any) => ({
   updatedAt: token.updatedAt,
 });
 
+// Strapi's allowed API token lifespans (API_TOKEN_LIFESPANS): unlimited, 7, 30, 90 days.
+const DAY_MS = 24 * 60 * 60 * 1000;
+const LIFESPANS = [null, 7 * DAY_MS, 30 * DAY_MS, 90 * DAY_MS];
+
+const assertLifespan = (ctx: Context, lifespan: unknown) => {
+  if (!LIFESPANS.includes(lifespan as number | null)) {
+    ctx.throw(400, `lifespan must be one of: ${LIFESPANS.join(', ')}`);
+  }
+};
+
+// Strapi 5.x api-token service.update() only writes name/description/type, so
+// expiration fields are persisted directly.
+const persistExpiration = async (id: unknown, lifespan: number | null, expiresAt: Date | null) => {
+  await strapi.db.query('admin::api-token').update({ where: { id }, data: { lifespan, expiresAt } });
+  return { lifespan, expiresAt };
+};
+
+// Koa HttpErrors carry a status; Strapi's ValidationError has none but its
+// error middleware turns it into a 400, so both must escape the 500 wrapper.
+const isClientError = (error: any) => Boolean(error.status) || error.name === 'ValidationError';
+
 const tokenController: TokenController = {
   /**
    * List all API tokens
@@ -44,7 +65,7 @@ const tokenController: TokenController = {
         ctx.throw(401, 'Authentication required');
       }
 
-      const tokens = await apiTokenService().list();
+      const tokens = await apiTokenService().list(ctx.state.user);
       return (tokens ?? []).map(sanitize);
     } catch (error: any) {
       if (error.status === 401) throw error;
@@ -99,13 +120,16 @@ const tokenController: TokenController = {
         ctx.throw(400, 'Name already taken');
       }
 
-      const token = await service.create({
-        name,
-        description: body.description ?? '',
-        type,
-        lifespan: body.lifespan ?? null,
-        ...(type === 'custom' ? { permissions: body.permissions ?? [] } : {}),
-      });
+      const token = await service.create(
+        {
+          name,
+          description: body.description ?? '',
+          type,
+          lifespan: body.lifespan ?? null,
+          ...(type === 'custom' ? { permissions: body.permissions ?? [] } : {}),
+        },
+        ctx.state.user
+      );
 
       // accessKey is only available on creation
       return {
@@ -114,7 +138,7 @@ const tokenController: TokenController = {
         message: 'Token created successfully',
       };
     } catch (error: any) {
-      if (error.status === 400 || error.status === 401) throw error;
+      if (isClientError(error)) throw error;
       ctx.throw(500, `Failed to create token: ${error.message}`);
     }
   },
@@ -136,19 +160,28 @@ const tokenController: TokenController = {
         ctx.throw(404, 'Token not found');
       }
 
+      if (body.lifespan !== undefined) assertLifespan(ctx, body.lifespan);
+
       const updateData: any = {};
-      for (const key of ['name', 'description', 'type', 'lifespan', 'permissions']) {
+      for (const key of ['name', 'description', 'type', 'permissions']) {
         if (body[key] !== undefined) updateData[key] = body[key];
       }
+
+      const token = Object.keys(updateData).length
+        ? await service.update(id, updateData)
+        : existingToken;
       // Service only recomputes expiration on create, do it here for lifespan changes
       if (body.lifespan !== undefined) {
-        updateData.expiresAt = body.lifespan ? new Date(Date.now() + body.lifespan) : null;
+        const expiration = await persistExpiration(
+          id,
+          body.lifespan,
+          body.lifespan ? new Date(Date.now() + body.lifespan) : null
+        );
+        return sanitize({ ...token, ...expiration });
       }
-
-      const token = await service.update(id, updateData);
       return sanitize(token);
     } catch (error: any) {
-      if (error.status === 401 || error.status === 404) throw error;
+      if (isClientError(error)) throw error;
       ctx.throw(500, `Failed to update token: ${error.message}`);
     }
   },
@@ -175,7 +208,7 @@ const tokenController: TokenController = {
         message: 'Token deleted successfully',
       };
     } catch (error: any) {
-      if (error.status === 401 || error.status === 404) throw error;
+      if (isClientError(error)) throw error;
       ctx.throw(500, `Failed to delete token: ${error.message}`);
     }
   },
@@ -202,7 +235,7 @@ const tokenController: TokenController = {
         message: 'Token revoked successfully',
       };
     } catch (error: any) {
-      if (error.status === 401 || error.status === 404) throw error;
+      if (isClientError(error)) throw error;
       ctx.throw(500, `Failed to revoke token: ${error.message}`);
     }
   },
@@ -218,26 +251,30 @@ const tokenController: TokenController = {
         ctx.throw(401, 'Authentication required');
       }
 
-      const service = apiTokenService();
-      if (!(await service.getById(id))) {
+      const token = await apiTokenService().getById(id);
+      if (!token) {
         ctx.throw(404, 'Token not found');
       }
 
       const lifespan = body.lifespan ?? null;
+      assertLifespan(ctx, lifespan);
       const expiresAt = body.expiresAt
         ? new Date(body.expiresAt)
         : lifespan
           ? new Date(Date.now() + lifespan)
           : null;
+      if (expiresAt && Number.isNaN(expiresAt.getTime())) {
+        ctx.throw(400, 'expiresAt must be a valid date');
+      }
 
-      const token = await service.update(id, { lifespan, expiresAt });
+      const expiration = await persistExpiration(id, lifespan, expiresAt);
 
       return {
-        ...sanitize(token),
+        ...sanitize({ ...token, ...expiration }),
         message: 'Token expiration refreshed successfully',
       };
     } catch (error: any) {
-      if (error.status === 401 || error.status === 404) throw error;
+      if (isClientError(error)) throw error;
       ctx.throw(500, `Failed to refresh token: ${error.message}`);
     }
   },

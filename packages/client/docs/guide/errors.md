@@ -29,7 +29,7 @@ for (const issue of validationIssues(err)) {
 }
 ```
 
-Each issue is `{ path: (string | number)[], message: string, name?: string }`. The function returns `[]` for any error without that shape, including `null`. `isValidationDetails` narrows `details` directly.
+Each issue is `{ path: (string | number)[], message: string, name: string, value?: unknown }`. `value` is there only when the validator captured what was rejected. The function returns `[]` for any error without that shape, including `null`. `isValidationDetails` narrows `details` directly.
 
 ```ts
 const [err, created] = await articles.create({ payload: { data: { title: "" } } });

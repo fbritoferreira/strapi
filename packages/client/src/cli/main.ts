@@ -262,6 +262,19 @@ export async function run(argv: string[], io: Io): Promise<number> {
 			io.stderr(USAGE);
 			return 2;
 		}
+		if (
+			parsed.output !== undefined ||
+			parsed.includePlugins ||
+			parsed.token !== undefined ||
+			parsed.email !== undefined ||
+			parsed.password !== undefined
+		) {
+			io.stderr(
+				"Error: --config cannot be combined with --output, --include-plugins, --token, --email or --password; set them in the config file"
+			);
+			io.stderr(USAGE);
+			return 2;
+		}
 		if (!parsed.watch) return runConfig(parsed, io);
 		let version = 0;
 		return watch({

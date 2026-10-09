@@ -105,7 +105,7 @@ async function importConfig(file: string, options: LoadConfigOptions): Promise<u
 	} catch (error) {
 		if ((error as { code?: string }).code === "ERR_UNKNOWN_FILE_EXTENSION") {
 			throw new Error(
-				`${file} needs a Node that strips types (22.6 or newer); use a .mjs or .json config instead`,
+				`${file} needs a Node that strips types (22.18+ or 23.6+, or 22.6+ with --experimental-strip-types); use a .mjs or .json config instead`,
 				{ cause: error }
 			);
 		}
