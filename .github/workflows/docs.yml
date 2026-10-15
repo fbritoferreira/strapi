@@ -62,7 +62,7 @@ jobs:
 
       # Hand the build to the deploy job via artifact
       - name: Upload docs artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: docs-build
           path: ${{ env.BUILD_OUTPUT_DIR }}
