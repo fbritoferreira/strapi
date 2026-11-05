@@ -80,7 +80,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Download docs artifact
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: docs-build
           path: ${{ env.BUILD_OUTPUT_DIR }}
@@ -110,7 +110,7 @@ jobs:
 
       - name: Download preview artifact
         if: github.event.action != 'closed'
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: docs-build
           path: ${{ env.BUILD_OUTPUT_DIR }}
